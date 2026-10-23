@@ -1,6 +1,6 @@
 import { createFileRoute, redirect, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { CheckCircle2, Loader2 } from "lucide-react";
+import { CheckCircle2, Eye, EyeOff, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +32,8 @@ function ResetPasswordPage() {
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [pending, setPending] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   useEffect(() => {
     if (!isRecovery) return;
@@ -81,11 +83,33 @@ function ResetPasswordPage() {
               <form onSubmit={submit} className="space-y-3">
                 <div className="space-y-1.5">
                   <label htmlFor="new-password" className="text-sm font-medium">Nova senha</label>
-                  <Input id="new-password" type="password" required autoComplete="new-password" minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Mínimo de 6 caracteres" />
+                  <div className="relative">
+                    <Input id="new-password" type={showNew ? "text" : "password"} required autoComplete="new-password" minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Mínimo de 6 caracteres" className="pr-11" />
+                    <button
+                      type="button"
+                      aria-label={showNew ? "Esconder a senha" : "Mostrar a senha"}
+                      aria-pressed={showNew}
+                      onClick={() => setShowNew((v) => !v)}
+                      className="absolute right-1 top-1/2 grid size-9 -translate-y-1/2 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    >
+                      {showNew ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                    </button>
+                  </div>
                 </div>
                 <div className="space-y-1.5">
                   <label htmlFor="confirm-password" className="text-sm font-medium">Confirmar nova senha</label>
-                  <Input id="confirm-password" type="password" required autoComplete="new-password" minLength={6} value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+                  <div className="relative">
+                    <Input id="confirm-password" type={showConfirm ? "text" : "password"} required autoComplete="new-password" minLength={6} value={confirm} onChange={(e) => setConfirm(e.target.value)} className="pr-11" />
+                    <button
+                      type="button"
+                      aria-label={showConfirm ? "Esconder a confirmação" : "Mostrar a confirmação"}
+                      aria-pressed={showConfirm}
+                      onClick={() => setShowConfirm((v) => !v)}
+                      className="absolute right-1 top-1/2 grid size-9 -translate-y-1/2 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    >
+                      {showConfirm ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                    </button>
+                  </div>
                 </div>
                 {error && <p className="text-sm font-medium text-danger">{error}</p>}
                 <Button type="submit" className="w-full" disabled={pending}>
