@@ -500,6 +500,32 @@ export type Database = {
           },
         ]
       }
+      workspace_state: {
+        Row: {
+          data: Json
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          data: Json
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          data?: Json
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_state_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: true
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workspaces: {
         Row: {
           created_at: string
