@@ -1,5 +1,13 @@
 {
   "version": "7",
   "dialect": "postgresql",
-  "entries": []
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1792784633498,
+      "tag": "0000_fatura_flow_schema",
+      "breakpoints": true
+    }
+  ]
 }
