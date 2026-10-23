@@ -7,5 +7,5 @@
 - [x] Aumentar o botão de abrir o menu (SidebarTrigger) na versão celular
 - [x] Olho para mostrar/esconder a senha nas telas de senha — verificado
 - [x] Cadastro sem confirmação de e-mail: entra logo após cadastrar (auto-confirmar) — verificado
-- [ ] Testar desconexão (Sair) no perfil
-- [ ] Papel « administrateur master » pour tiago3228@yahoo.com.br (attribué à la création du compte)
+- [x] Testar desconexão (Sair) no perfil — verificado
+- [x] Papel « administrateur master » pour tiago3228@yahoo.com.br (trigger à l'inscription) — aplicado
