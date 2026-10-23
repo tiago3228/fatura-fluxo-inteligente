@@ -1,4 +1,5 @@
 import type { FinanceState } from "./types";
+import type { Json } from "@/integrations/supabase/types";
 import { supabase } from "@/integrations/supabase/client";
 
 const DEFAULT_WORKSPACE_NAME = "Fatura da família";
@@ -36,7 +37,7 @@ export async function loadCloudState(workspaceId: string): Promise<FinanceState 
 export async function saveCloudState(workspaceId: string, state: FinanceState): Promise<boolean> {
   const { error } = await supabase
     .from("workspace_state")
-    .upsert({ workspace_id: workspaceId, data: state as unknown as Record<string, unknown> });
+    .upsert({ workspace_id: workspaceId, data: state as unknown as Json });
   if (error) console.error("Falha ao salvar na nuvem", error);
   return !error;
 }

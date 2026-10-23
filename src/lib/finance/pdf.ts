@@ -23,10 +23,12 @@ export type ExtractedPdfInvoice = {
 function isoDate(value: string, fallbackMonth: string) {
   const parts = value.split(/[\/.-]/).map(Number);
   if (parts.length < 2 || parts.some((x) => !Number.isFinite(x))) return null;
-  const [d, m, y] = parts;
+  const d = parts[0] ?? NaN;
+  const m = parts[1] ?? NaN;
+  const y = parts[2];
   const year = y && y > 2000 ? y : Number(fallbackMonth.slice(0, 4));
   const month = m || Number(fallbackMonth.slice(5, 7));
-  if (d < 1 || d > 31 || month < 1 || month > 12) return null;
+  if (!(d >= 1 && d <= 31) || !(month >= 1 && month <= 12)) return null;
   return `${year}-${String(month).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
 
@@ -70,7 +72,7 @@ export function parseInvoiceText(rawText: string, fallbackMonth: string): Extrac
 export async function extractPdfText(file: File) {
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
   const data = new Uint8Array(await file.arrayBuffer());
-  const pdf = await pdfjs.getDocument({ data, useWorkerFetch: false, isEvalSupported: false }).promise;
+  const pdf = await pdfjs.getDocument({ data, useWorkerFetch: false }).promise;
   const pages: string[] = [];
   for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
     const page = await pdf.getPage(pageNumber);
