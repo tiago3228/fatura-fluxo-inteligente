@@ -27,9 +27,7 @@ npm run dev
 
 ## Estado da persistência
 
-O aplicativo possui hoje uma base local inicial e salva alterações no `localStorage` do navegador. Isso não é sincronização entre computadores. A integração com Supabase depende de um projeto configurado e das variáveis públicas `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`, conforme `.env.example`; nenhuma chave real deve ser commitada.
-
-O schema inicial do banco está em `supabase/schema.sql` e deve ser validado no SQL Editor antes da integração do cliente. Enquanto as variáveis não estiverem configuradas, o aplicativo não deve afirmar que os dados estão sincronizados entre dispositivos.
+O aplicativo usa o Lovable Cloud (banco de dados + contas). O acesso exige login com e-mail e senha: cada conta tem o próprio workspace e os dados (faturas, cartões, pessoas, lançamentos, parcelamentos e preferências) ficam salvos na nuvem, sincronizados entre dispositivos. Uma cópia local no navegador serve de cache offline; desligar « Guardar dados » em Configurações desativa o cache. O schema inicial validado está em `supabase/schema.sql` (aplicado ao banco) e o estado do aplicativo é salvo por workspace em `workspace_state`.
 
 ## PWA
 

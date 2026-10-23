@@ -22,7 +22,7 @@ import {
 import { PageHeader, Panel } from "@/components/app/common";
 import { Button } from "@/components/ui/button";
 
-export const Route = createFileRoute("/como-funciona")({
+export const Route = createFileRoute("/_authenticated/como-funciona")({
   head: () => ({
     meta: [
       { title: "Como Funciona — Fatura em Dia" },

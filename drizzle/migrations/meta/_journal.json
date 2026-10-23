@@ -1,5 +1,27 @@
 {
   "version": "7",
   "dialect": "postgresql",
-  "entries": []
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1792784633498,
+      "tag": "0000_fatura_flow_schema",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792784647054,
+      "tag": "0001_workspace_state_document",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792785498276,
+      "tag": "0002_user_roles_master",
+      "breakpoints": true
+    }
+  ]
 }

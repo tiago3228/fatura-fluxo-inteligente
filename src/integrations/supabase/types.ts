@@ -14,16 +14,576 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      cards: {
+        Row: {
+          active: boolean
+          brand: string | null
+          closing_day: number
+          created_at: string
+          credit_limit: number | null
+          due_day: number
+          id: string
+          issuer: string
+          last4: string
+          name: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          active?: boolean
+          brand?: string | null
+          closing_day: number
+          created_at?: string
+          credit_limit?: number | null
+          due_day: number
+          id?: string
+          issuer: string
+          last4: string
+          name: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          active?: boolean
+          brand?: string | null
+          closing_day?: number
+          created_at?: string
+          credit_limit?: number | null
+          due_day?: number
+          id?: string
+          issuer?: string
+          last4?: string
+          name?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cards_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      installment_plan_shares: {
+        Row: {
+          id: string
+          percentage: number
+          person_id: string
+          plan_id: string
+          workspace_id: string
+        }
+        Insert: {
+          id?: string
+          percentage: number
+          person_id: string
+          plan_id: string
+          workspace_id: string
+        }
+        Update: {
+          id?: string
+          percentage?: number
+          person_id?: string
+          plan_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "installment_plan_shares_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "installment_plan_shares_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "installment_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "installment_plan_shares_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      installment_plans: {
+        Row: {
+          card_id: string
+          created_at: string
+          description: string
+          first_month: string
+          id: string
+          installment_amounts: Json
+          purchase_date: string
+          total: number
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          card_id: string
+          created_at?: string
+          description: string
+          first_month: string
+          id?: string
+          installment_amounts?: Json
+          purchase_date: string
+          total: number
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          card_id?: string
+          created_at?: string
+          description?: string
+          first_month?: string
+          id?: string
+          installment_amounts?: Json
+          purchase_date?: string
+          total?: number
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "installment_plans_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "installment_plans_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invoices: {
+        Row: {
+          card_id: string
+          created_at: string
+          due_date: string
+          id: string
+          imported_at: string | null
+          official_total: number
+          original_filename: string | null
+          payments: Json
+          reference_month: string
+          source: string
+          status: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          card_id: string
+          created_at?: string
+          due_date: string
+          id?: string
+          imported_at?: string | null
+          official_total: number
+          original_filename?: string | null
+          payments?: Json
+          reference_month: string
+          source?: string
+          status?: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          card_id?: string
+          created_at?: string
+          due_date?: string
+          id?: string
+          imported_at?: string | null
+          official_total?: number
+          original_filename?: string | null
+          payments?: Json
+          reference_month?: string
+          source?: string
+          status?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoices_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      people: {
+        Row: {
+          active: boolean
+          created_at: string
+          id: string
+          monthly_limit: number
+          name: string
+          notes: string | null
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          monthly_limit?: number
+          name: string
+          notes?: string | null
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          monthly_limit?: number
+          name?: string
+          notes?: string | null
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "people_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      person_cards: {
+        Row: {
+          card_id: string
+          person_id: string
+          workspace_id: string
+        }
+        Insert: {
+          card_id: string
+          person_id: string
+          workspace_id: string
+        }
+        Update: {
+          card_id?: string
+          person_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "person_cards_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "person_cards_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "person_cards_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      transaction_allocations: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          person_id: string
+          transaction_id: string
+          workspace_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          id?: string
+          person_id: string
+          transaction_id: string
+          workspace_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          person_id?: string
+          transaction_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transaction_allocations_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transaction_allocations_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transaction_allocations_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      transactions: {
+        Row: {
+          adjustment_note: string | null
+          amount: number
+          created_at: string
+          description: string
+          id: string
+          installment_number: number | null
+          installment_total: number | null
+          invoice_id: string
+          plan_id: string | null
+          transaction_date: string
+          transaction_type: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          adjustment_note?: string | null
+          amount: number
+          created_at?: string
+          description: string
+          id?: string
+          installment_number?: number | null
+          installment_total?: number | null
+          invoice_id: string
+          plan_id?: string | null
+          transaction_date: string
+          transaction_type: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          adjustment_note?: string | null
+          amount?: number
+          created_at?: string
+          description?: string
+          id?: string
+          installment_number?: number | null
+          installment_total?: number | null
+          invoice_id?: string
+          plan_id?: string | null
+          transaction_date?: string
+          transaction_type?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transactions_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "installment_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      workspace_members: {
+        Row: {
+          created_at: string
+          role: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          role?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          role?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_members_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workspace_settings: {
+        Row: {
+          compact: boolean
+          csv_separator: string
+          duplicate_check: boolean
+          persist: boolean
+          reference_month: string
+          updated_at: string
+          warn_pct: number
+          workspace_id: string
+        }
+        Insert: {
+          compact?: boolean
+          csv_separator?: string
+          duplicate_check?: boolean
+          persist?: boolean
+          reference_month?: string
+          updated_at?: string
+          warn_pct?: number
+          workspace_id: string
+        }
+        Update: {
+          compact?: boolean
+          csv_separator?: string
+          duplicate_check?: boolean
+          persist?: boolean
+          reference_month?: string
+          updated_at?: string
+          warn_pct?: number
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_settings_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: true
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workspace_state: {
+        Row: {
+          data: Json
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          data: Json
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          data?: Json
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_state_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: true
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workspaces: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      create_workspace: { Args: { p_name: string }; Returns: string }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "master" | "admin" | "user"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +710,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["master", "admin", "user"],
+    },
   },
 } as const

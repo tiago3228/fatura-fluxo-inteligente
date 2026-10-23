@@ -15,20 +15,24 @@ export const isCreditType = (t: TxType) => t === "credito" || t === "estorno";
 
 /* ---------- Meses ---------- */
 export const addMonths = (ym: string, n: number) => {
-  const [y, m] = ym.split("-").map(Number);
+  const y = Number(ym.slice(0, 4));
+  const m = Number(ym.slice(5, 7));
   const d = new Date(Date.UTC(y, m - 1 + n, 1));
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 };
 export const monthDiff = (a: string, b: string) => {
-  const [ya, ma] = a.split("-").map(Number);
-  const [yb, mb] = b.split("-").map(Number);
+  const ya = Number(a.slice(0, 4));
+  const ma = Number(a.slice(5, 7));
+  const yb = Number(b.slice(0, 4));
+  const mb = Number(b.slice(5, 7));
   return (yb - ya) * 12 + (mb - ma);
 };
 export const daysInMonth = (y: number, m: number) => new Date(Date.UTC(y, m, 0)).getUTCDate();
 
 /** Data com o dia limitado ao último dia do mês (ex.: dia 31 em fevereiro → 28/29) */
 export const dateInMonth = (ym: string, day: number) => {
-  const [y, m] = ym.split("-").map(Number);
+  const y = Number(ym.slice(0, 4));
+  const m = Number(ym.slice(5, 7));
   const d = Math.min(day, daysInMonth(y, m));
   return `${ym}-${String(d).padStart(2, "0")}`;
 };

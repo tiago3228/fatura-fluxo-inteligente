@@ -65,7 +65,7 @@ export function ExcelImportDialog({ open, onOpenChange }: { open: boolean; onOpe
 
   const load = (data: unknown[][], name: string) => {
     const clean = data.filter((r) => r.some((c) => String(c ?? "").trim() !== ""));
-    if (clean.length < 2) { setError("A planilha não tem linhas de dados."); return; }
+    if (clean.length < 2 || !clean[0]) { setError("A planilha não tem linhas de dados."); return; }
     const headers = clean[0].map((h) => String(h ?? ""));
     const guess = {} as Record<FieldKey, number | null>;
     FIELDS.forEach((f) => { const i = headers.findIndex((h) => f.guess.test(h)); guess[f.key] = i >= 0 ? i : null; });
@@ -78,14 +78,17 @@ export function ExcelImportDialog({ open, onOpenChange }: { open: boolean; onOpe
     try {
       const XLSX = await import("xlsx");
       const wb = XLSX.read(await f.arrayBuffer(), { type: "array" });
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      load(XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: "" }) as unknown[][], f.name);
+      const firstSheet = wb.SheetNames[0];
+      if (!firstSheet) throw new Error("planilha vazia");
+      const ws = wb.Sheets[firstSheet];
+      if (!ws) throw new Error("planilha vazia");
+      load(XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, raw: true, defval: "" }) as unknown[][], f.name);
     } catch {
       setError("Não foi possível ler o arquivo. Verifique se ele não está corrompido.");
     }
   };
 
-  const headers = rows?.[0].map((h, i) => String(h || `Coluna ${i + 1}`)) ?? [];
+  const headers = rows?.[0]?.map((h, i) => String(h || `Coluna ${i + 1}`)) ?? [];
   const body = rows?.slice(1) ?? [];
   const get = (r: unknown[], k: FieldKey) => (map[k] === null ? "" : r[map[k]!]);
   const missingMap = FIELDS.filter((f) => f.required && map[f.key] === null);

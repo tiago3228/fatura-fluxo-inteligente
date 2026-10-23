@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import type { Invoice, InvoicePayment, Person } from "@/lib/finance/types";
 
-export const Route = createFileRoute("/faturas/$id")({
+export const Route = createFileRoute("/_authenticated/faturas/$id")({
   head: () => ({
     meta: [
       { title: "Detalhes da fatura — Fatura em Dia" },

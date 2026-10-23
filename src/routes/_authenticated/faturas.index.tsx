@@ -12,7 +12,7 @@ import { FilterSelect } from "@/components/app/FilterSelect";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-export const Route = createFileRoute("/faturas/")({
+export const Route = createFileRoute("/_authenticated/faturas/")({
   head: () => ({
     meta: [
       { title: "Faturas — Fatura em Dia" },

@@ -10,7 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-export const Route = createFileRoute("/calculadora")({
+export const Route = createFileRoute("/_authenticated/calculadora")({
   head: () => ({
     meta: [
       { title: "Calculadora — Fatura em Dia" },
@@ -107,7 +107,7 @@ function Calculadora() {
         <Panel title="Resultado" description="Previsão das parcelas da compra simulada.">
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-lg bg-muted p-3"><p className="text-xs text-muted-foreground">Total</p><p className="num mt-1 text-xl font-bold">{fmtBRL(total)}</p></div>
-            <div className="rounded-lg bg-muted p-3"><p className="text-xs text-muted-foreground">Cada parcela</p><p className="num mt-1 text-xl font-bold">{parts.length ? fmtBRL(parts[0]) : "—"}</p></div>
+            <div className="rounded-lg bg-muted p-3"><p className="text-xs text-muted-foreground">Cada parcela</p><p className="num mt-1 text-xl font-bold">{parts.length ? fmtBRL(parts[0] ?? 0) : "—"}</p></div>
           </div>
 
           <div className="mt-5 space-y-2">

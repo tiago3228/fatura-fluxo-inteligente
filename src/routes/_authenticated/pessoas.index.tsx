@@ -15,7 +15,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { cn } from "@/lib/utils";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 
-export const Route = createFileRoute("/pessoas/")({
+export const Route = createFileRoute("/_authenticated/pessoas/")({
   head: () => ({
     meta: [
       { title: "Pessoas — Fatura em Dia" },

@@ -80,7 +80,7 @@ export function KpiCard({
   );
 }
 
-export function Panel({ title, description, actions, children, className }: { title?: string; description?: string; actions?: ReactNode; children: ReactNode; className?: string }) {
+export function Panel({ title, description, actions, children, className }: { title?: string; description?: string | undefined; actions?: ReactNode; children: ReactNode; className?: string }) {
   return (
     <section className={cn("rounded-xl border bg-card shadow-xs", className)}>
       {(title || actions) && (
@@ -112,7 +112,7 @@ export function LimitBar({ total, limit }: { total: number; limit: number }) {
   );
 }
 
-export function EmptyState({ title, description, action }: { title: string; description?: string; action?: ReactNode }) {
+export function EmptyState({ title, description, action }: { title: string; description?: string | undefined; action?: ReactNode }) {
   return (
     <div className="flex flex-col items-center justify-center gap-2 px-6 py-12 text-center">
       <span className="grid size-10 place-items-center rounded-full bg-muted text-muted-foreground">
@@ -133,7 +133,7 @@ export function DemoTag() {
   );
 }
 
-export function Field({ label, htmlFor, error, hint, required, children }: { label: string; htmlFor?: string; error?: string; hint?: string; required?: boolean; children: ReactNode }) {
+export function Field({ label, htmlFor, error, hint, required, children }: { label: string; htmlFor?: string; error?: string | undefined; hint?: string | undefined; required?: boolean; children: ReactNode }) {
   return (
     <div className="space-y-1.5">
       <label htmlFor={htmlFor} className="text-sm font-medium">

@@ -14,12 +14,14 @@ const MONTHS_FULL = [
 ];
 
 export const fmtMonth = (ym: string) => {
-  const [y, m] = ym.split("-").map(Number);
+  const y = ym.slice(0, 4);
+  const m = Number(ym.slice(5, 7));
   return `${MONTHS[m - 1]}/${y}`;
 };
 export const fmtMonthLong = (ym: string) => {
-  const [y, m] = ym.split("-").map(Number);
-  return `${MONTHS_FULL[m - 1]} de ${y}`;
+  const y = ym.slice(0, 4);
+  const m = Number(ym.slice(5, 7));
+  return `${MONTHS_FULL[m - 1]} de ${Number(y)}`;
 };
 
 export const fmtPct = (v: number) => `${Math.round(v)}%`;

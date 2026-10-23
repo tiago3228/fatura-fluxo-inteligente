@@ -13,7 +13,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-export const Route = createFileRoute("/relatorios")({
+export const Route = createFileRoute("/_authenticated/relatorios")({
   head: () => ({
     meta: [
       { title: "Relatórios — Fatura em Dia" },
@@ -135,7 +135,7 @@ function Relatorios() {
             <div className="mt-3 overflow-x-auto rounded-lg border">
               <table className="w-full text-sm">
                 <thead className="bg-muted/60 text-left text-xs uppercase text-muted-foreground"><tr>{t.headers.map((h) => <th key={h} className="px-3 py-2">{h}</th>)}</tr></thead>
-                <tbody className="divide-y">{t.rows.map((r, i) => <tr key={i}>{r.map((c, j) => <td key={j} className={typeof c === "number" ? "num px-3 py-2 text-right" : "px-3 py-2"}>{typeof c === "number" && !/Parcelas|Lançamentos|Pendentes/.test(t.headers[j]) ? fmtBRL(c) : c}</td>)}</tr>)}</tbody>
+                <tbody className="divide-y">{t.rows.map((r, i) => <tr key={i}>{r.map((c, j) => <td key={j} className={typeof c === "number" ? "num px-3 py-2 text-right" : "px-3 py-2"}>{typeof c === "number" && !/Parcelas|Lançamentos|Pendentes/.test(t.headers[j] ?? "") ? fmtBRL(c) : c}</td>)}</tr>)}</tbody>
                 {t.footer && <tfoot className="border-t bg-muted/40 font-bold"><tr>{t.footer.map((c, j) => <td key={j} className={typeof c === "number" ? "num px-3 py-2 text-right" : "px-3 py-2"}>{typeof c === "number" ? fmtBRL(c) : c}</td>)}</tr></tfoot>}
               </table>
             </div>

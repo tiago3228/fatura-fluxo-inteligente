@@ -9,7 +9,7 @@ import { InvoiceStatusBadge } from "@/components/app/badges";
 import { CardDialog } from "@/components/app/CardDialog";
 import { Button } from "@/components/ui/button";
 
-export const Route = createFileRoute("/cartoes/$id")({
+export const Route = createFileRoute("/_authenticated/cartoes/$id")({
   head: () => ({
     meta: [
       { title: "Detalhes do cartão — Fatura em Dia" },

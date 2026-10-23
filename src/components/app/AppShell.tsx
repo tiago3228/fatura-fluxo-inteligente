@@ -1,9 +1,10 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useRouter, useRouterState } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import {
-  Bell, BookOpen, Calculator, CalendarClock, CreditCard, FileSpreadsheet, FileText, LayoutDashboard, RotateCcw, Settings, ShoppingBag, Users, Wallet,
+  Bell, BookOpen, Calculator, CalendarClock, CreditCard, FileSpreadsheet, FileText, LayoutDashboard, LogOut, Settings, ShoppingBag, Users, Wallet,
 } from "lucide-react";
-import { toast } from "sonner";
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarHeader, SidebarInset, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger,
 } from "@/components/ui/sidebar";
@@ -11,7 +12,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { useFinance } from "@/lib/finance/store";
 import { useAlerts } from "@/lib/finance/alerts";
 import { DemoTag } from "./common";
 import { TxActionsProvider } from "./tx-actions";
@@ -66,7 +66,7 @@ function AppSidebar() {
       </SidebarContent>
       <SidebarFooter>
         <p className="px-2 pb-1 text-[11px] leading-snug opacity-60 group-data-[collapsible=icon]:hidden">
-          Dados salvos apenas neste navegador.
+          Dados salvos na sua conta e sincronizados entre dispositivos.
         </p>
       </SidebarFooter>
     </Sidebar>
@@ -104,31 +104,48 @@ function Notifications() {
 }
 
 function Profile() {
-  const { dispatch } = useFinance();
+  const [email, setEmail] = useState<string | null>(null);
+  const router = useRouter();
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    let active = true;
+    supabase.auth.getUser().then(({ data }) => {
+      if (active) setEmail(data.user?.email ?? null);
+    });
+    return () => { active = false; };
+  }, []);
+
+  const handleSignOut = async () => {
+    // Higiene de saída: interrompe consultas, limpa o cache, encerra a sessão
+    // e substitui a rota para que "Voltar" não restaure dados protegidos.
+    await queryClient.cancelQueries();
+    queryClient.clear();
+    await supabase.auth.signOut();
+    await router.navigate({ to: "/auth", replace: true });
+  };
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" className="gap-2 px-2" aria-label="Menu do perfil">
-          <span className="grid size-7 place-items-center rounded-full bg-primary text-xs font-bold text-primary-foreground">VC</span>
-          <span className="hidden text-sm font-medium sm:inline">Você</span>
+          <span className="grid size-7 place-items-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+            {(email?.[0] ?? "V").toUpperCase()}
+          </span>
+          <span className="hidden max-w-40 truncate text-sm font-medium sm:inline">{email ?? "Sua conta"}</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-60">
         <DropdownMenuLabel>
-          Perfil local
-          <p className="text-xs font-normal text-muted-foreground">Sem login nesta etapa</p>
+          Sua conta
+          <p className="truncate text-xs font-normal text-muted-foreground">{email ?? "Carregando..."}</p>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
           <Link to="/configuracoes"><Settings className="size-4" /> Configurações</Link>
         </DropdownMenuItem>
-        <DropdownMenuItem
-          onSelect={() => {
-            dispatch({ type: "reset" });
-            toast.success("Dados importados restaurados");
-          }}
-        >
-          <RotateCcw className="size-4" /> Restaurar dados importados
+        <DropdownMenuItem onSelect={() => void handleSignOut()}>
+          <LogOut className="size-4" /> Sair
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -161,7 +178,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <AppSidebar />
           <SidebarInset className="min-w-0">
             <header className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b bg-background/85 px-3 backdrop-blur md:px-6">
-              <SidebarTrigger aria-label="Alternar menu" />
+              <SidebarTrigger aria-label="Alternar menu" className="max-md:size-11 max-md:[&_svg]:size-6" />
               <div className="hidden sm:block"><DemoTag /></div>
               <div className="ml-auto flex items-center gap-1">
                 <Notifications />
