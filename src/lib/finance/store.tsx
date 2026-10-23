@@ -88,6 +88,7 @@ const assignmentKey = (value: string) =>
 
 /** Aplica somente correspondências da planilha a lançamentos já existentes e pendentes. */
 const assignOctoberPurchases = (state: FinanceState): FinanceState => {
+  if (state.spreadsheetAssignmentVersion === 2) return state;
   const people = OCTOBER_ASSIGNMENTS.map((item) => {
     const person = state.people.find((candidate) => {
       const candidateName = candidate.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
@@ -100,7 +101,7 @@ const assignOctoberPurchases = (state: FinanceState): FinanceState => {
   for (const { item, person } of people) {
     const wanted = assignmentKey(item.description);
     const candidate = available
-      .filter(({ transaction, used }) => !used && transaction.allocations.length === 0 && Math.abs(transaction.amount - item.amount) < 0.01)
+      .filter(({ transaction, used }) => !used && Math.abs(transaction.amount - item.amount) < 0.01)
       .map((entry) => ({ ...entry, score: assignmentKey(entry.transaction.description).filter((token) => wanted.includes(token)).length }))
       .filter((entry) => entry.score > 0)
       .sort((a, b) => b.score - a.score)[0];
@@ -109,7 +110,11 @@ const assignOctoberPurchases = (state: FinanceState): FinanceState => {
     updates.set(candidate.transaction.id, [{ personId: person.id, amount: item.amount }]);
   }
   if (!updates.size) return state;
-  return { ...state, transactions: state.transactions.map((transaction) => updates.has(transaction.id) ? { ...transaction, allocations: updates.get(transaction.id)! } : transaction) };
+  return {
+    ...state,
+    spreadsheetAssignmentVersion: 2,
+    transactions: state.transactions.map((transaction) => updates.has(transaction.id) ? { ...transaction, allocations: updates.get(transaction.id)! } : transaction),
+  };
 };
 
 const reconcileImportedTransactions = (state: FinanceState, invoice: Invoice, incoming: Transaction[]) => {

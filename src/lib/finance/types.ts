@@ -100,4 +100,6 @@ export interface FinanceState {
   transactions: Transaction[];
   plans: InstallmentPlan[];
   settings: Settings;
+  /** Controle interno das importações automáticas de atribuições. */
+  spreadsheetAssignmentVersion?: number;
 }

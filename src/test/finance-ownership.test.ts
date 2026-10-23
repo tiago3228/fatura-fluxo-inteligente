@@ -41,19 +41,13 @@ describe("separação inicial da fatura por titular", () => {
     expect(migrated.people.find((person) => person.id === "p_tiago")?.cardIds).toContain("c_0548");
   });
 
-  it("aplica uma atribuição da planilha somente a uma compra existente e pendente", () => {
+  it("aplica uma atribuição da planilha a uma compra existente", () => {
     const original = createDemoState();
     const arlete = { id: "p_arlete", name: "Arlete", limit: 5000, active: true, cardIds: [] };
-    const pending = {
-      ...original.transactions[0],
-      id: "tx_pending_october_assignment",
-      description: "CENTRO ODONTOLOGIC12/12",
-      amount: 208.37,
-      allocations: [],
-    };
-    const state = { ...original, people: [...original.people, arlete], transactions: [...original.transactions, pending] };
+    const source = original.transactions.find((transaction) => transaction.description === "CENTRO ODONTOLOGIC12/12")!;
+    const state = { ...original, people: [...original.people, arlete] };
     const migrated = reducer(state, { type: "hydrate", state });
-    expect(migrated.transactions.find((transaction) => transaction.id === pending.id)?.allocations).toEqual([
+    expect(migrated.transactions.find((transaction) => transaction.id === source.id)?.allocations).toEqual([
       { personId: "p_arlete", amount: 208.37 },
     ]);
   });
