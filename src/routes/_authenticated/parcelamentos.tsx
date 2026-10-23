@@ -72,7 +72,7 @@ function Parcelamentos() {
                       <td className="num text-muted-foreground">•••• {c?.last4}</td>
                       <td>{p.shares.map((s) => `${state.people.find((x) => x.id === s.personId)?.name.split(" ")[0] ?? "?"}${p.shares.length > 1 ? ` ${s.pct}%` : ""}`).join(", ") || "—"}</td>
                       <td className="num text-right">{fmtBRL(p.total)}</td>
-                      <td className="num text-right">{st === "ativo" ? fmtBRL(planAmountAt(p, m)) : fmtBRL(p.amounts[0])}{!uniform && <div className="text-xs text-muted-foreground">valores variam</div>}</td>
+                      <td className="num text-right">{st === "ativo" ? fmtBRL(planAmountAt(p, m) ?? 0) : fmtBRL(p.amounts[0] ?? 0)}{!uniform && <div className="text-xs text-muted-foreground">valores variam</div>}</td>
                       <td className="num">{st === "ativo" ? `${n}/${p.amounts.length}` : st === "futuro" ? `— /${p.amounts.length}` : `${p.amounts.length}/${p.amounts.length}`}</td>
                       <td className="num text-right">{planRemainingCount(p, m)}</td>
                       <td>{next ? fmtMonth(next) : "—"}</td>

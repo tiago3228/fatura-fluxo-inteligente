@@ -90,10 +90,10 @@ function EditTransactionDialog({ tx, onClose }: { tx?: Transaction | undefined; 
   const number = installmentNumber.trim() ? Number(installmentNumber) : null;
   const total = installmentTotal.trim() ? Number(installmentTotal) : null;
   const validInstallments = (number === null && total === null) || (number !== null && total !== null && Number.isInteger(number) && Number.isInteger(total) && number > 0 && total > 0 && number <= total);
-  const canSave = description.trim().length > 1 && !!date && value !== undefined && Number.isFinite(value) && value !== 0 && (tx || !!invoiceId) && validInstallments;
+  const canSave = description.trim().length > 1 && !!date && value !== null && Number.isFinite(value) && value !== 0 && (tx || !!invoiceId) && validInstallments;
 
   const save = () => {
-    if (!canSave || value === undefined) return;
+    if (!canSave || value === null) return;
     if (tx) {
       dispatch({ type: "updateTransaction", txId: tx.id, patch: { description: description.trim(), date, amount: value, installmentNumber: number, installmentTotal: total } });
       toast.success("Compra atualizada", { description: "Parcela, valor e demais informações foram corrigidos." });
