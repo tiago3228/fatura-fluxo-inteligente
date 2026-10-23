@@ -212,6 +212,8 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
   stateRef.current = state;
 
   // Cópia local (funciona offline e evita "flash" de dados demonstrativos).
+  const lastSynced = useRef<string | null>(null);
+
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -225,6 +227,27 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
   // Nuvem: carrega os dados da conta ao entrar e passa a salvar a cada alteração.
   useEffect(() => {
     let cancelled = false;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
+    // Recebe na hora as alterações feitas pela outra conta.
+    const subscribeRemote = (ws: string) => {
+      if (channel) void supabase.removeChannel(channel);
+      channel = supabase
+        .channel(`ws-state-${ws}-${Math.random().toString(36).slice(2)}`)
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "workspace_state", filter: `workspace_id=eq.${ws}` },
+          (payload) => {
+            const remote = (payload.new as { data?: unknown } | null)?.data;
+            if (!remote || typeof remote !== "object") return;
+            const json = JSON.stringify(remote);
+            if (json === lastSynced.current) return;
+            lastSynced.current = json;
+            dispatch({ type: "hydrate", state: remote as FinanceState });
+          },
+        )
+        .subscribe();
+    };
 
     const loadFromCloud = async () => {
       const { data } = await supabase.auth.getSession();
@@ -232,9 +255,11 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       const ws = await ensureWorkspace();
       if (!ws || cancelled) return;
       workspaceId.current = ws;
+      subscribeRemote(ws);
       const cloud = await loadCloudState(ws);
       if (cancelled) return;
       if (cloud) {
+        lastSynced.current = JSON.stringify(cloud);
         dispatch({ type: "hydrate", state: cloud });
       } else if (stateRef.current) {
         // Primeira entrada: publica o estado local na nuvem.
@@ -247,6 +272,8 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === "SIGNED_OUT") {
         workspaceId.current = null;
+        lastSynced.current = null;
+        if (channel) { void supabase.removeChannel(channel); channel = null; }
         dispatch({ type: "hydrate", state: createDemoState() });
         try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
       } else if (event === "SIGNED_IN" || event === "USER_UPDATED") {
@@ -257,6 +284,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
       subscription.unsubscribe();
+      if (channel) void supabase.removeChannel(channel);
     };
   }, []);
 
@@ -271,7 +299,11 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     if (!workspaceId.current || !state.settings.persist) return;
     // Salva na nuvem com pequena espera para agrupar alterações em sequência.
     const timer = setTimeout(() => {
-      if (workspaceId.current) void saveCloudState(workspaceId.current, stateRef.current);
+      if (!workspaceId.current) return;
+      const json = JSON.stringify(stateRef.current);
+      if (json === lastSynced.current) return; // nada novo (ou veio da outra conta)
+      lastSynced.current = json;
+      void saveCloudState(workspaceId.current, stateRef.current);
     }, 600);
     return () => clearTimeout(timer);
   }, [state]);
