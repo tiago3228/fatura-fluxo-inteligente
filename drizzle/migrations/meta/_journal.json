@@ -22,6 +22,13 @@
       "when": 1792785498276,
       "tag": "0002_user_roles_master",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792786894723,
+      "tag": "0003_shared_family_workspace",
+      "breakpoints": true
     }
   ]
 }

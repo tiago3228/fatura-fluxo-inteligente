@@ -581,6 +581,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      join_family_workspace: { Args: never; Returns: string }
     }
     Enums: {
       app_role: "master" | "admin" | "user"
