@@ -178,7 +178,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <AppSidebar />
           <SidebarInset className="min-w-0">
             <header className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b bg-background/85 px-3 backdrop-blur md:px-6">
-              <SidebarTrigger aria-label="Alternar menu" />
+              <SidebarTrigger aria-label="Alternar menu" className="max-md:size-11 max-md:[&_svg]:size-6" />
               <div className="hidden sm:block"><DemoTag /></div>
               <div className="ml-auto flex items-center gap-1">
                 <Notifications />

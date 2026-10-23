@@ -28,14 +28,15 @@ export async function loadCloudState(workspaceId: string): Promise<FinanceState 
     .eq("workspace_id", workspaceId)
     .maybeSingle();
   if (error || !data) return null;
-  return (data as { data: FinanceState }).data ?? null;
+  const parsed = (data as unknown as { data: unknown }).data;
+  return parsed && typeof parsed === "object" ? (parsed as FinanceState) : null;
 }
 
 /** Salva o estado completo do aplicativo na nuvem (última versão vence). */
 export async function saveCloudState(workspaceId: string, state: FinanceState): Promise<boolean> {
   const { error } = await supabase
     .from("workspace_state")
-    .upsert({ workspace_id: workspaceId, data: state });
+    .upsert({ workspace_id: workspaceId, data: state as unknown as Record<string, unknown> });
   if (error) console.error("Falha ao salvar na nuvem", error);
   return !error;
 }

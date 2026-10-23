@@ -78,7 +78,7 @@ export function TxActionsProvider({ children }: { children: ReactNode }) {
   );
 }
 
-function EditTransactionDialog({ tx, onClose }: { tx?: Transaction; onClose: () => void }) {
+function EditTransactionDialog({ tx, onClose }: { tx?: Transaction | undefined; onClose: () => void }) {
   const { state, dispatch } = useFinance();
   const [description, setDescription] = useState(tx?.description ?? "");
   const [date, setDate] = useState(tx?.date ?? `${state.settings.month}-01`);
@@ -89,7 +89,7 @@ function EditTransactionDialog({ tx, onClose }: { tx?: Transaction; onClose: () 
   const value = parseBRL(amount);
   const number = installmentNumber.trim() ? Number(installmentNumber) : null;
   const total = installmentTotal.trim() ? Number(installmentTotal) : null;
-  const validInstallments = number === null && total === null || Number.isInteger(number) && Number.isInteger(total) && number > 0 && total > 0 && number <= total;
+  const validInstallments = (number === null && total === null) || (number !== null && total !== null && Number.isInteger(number) && Number.isInteger(total) && number > 0 && total > 0 && number <= total);
   const canSave = description.trim().length > 1 && !!date && value !== undefined && Number.isFinite(value) && value !== 0 && (tx || !!invoiceId) && validInstallments;
 
   const save = () => {
@@ -98,7 +98,7 @@ function EditTransactionDialog({ tx, onClose }: { tx?: Transaction; onClose: () 
       dispatch({ type: "updateTransaction", txId: tx.id, patch: { description: description.trim(), date, amount: value, installmentNumber: number, installmentTotal: total } });
       toast.success("Compra atualizada", { description: "Parcela, valor e demais informações foram corrigidos." });
     } else {
-      dispatch({ type: "addTransaction", transaction: { id: uid("tx"), invoiceId, date, description: description.trim(), amount: value, type: "compra", ...(number !== null ? { installmentNumber: number } : {}), ...(total !== null ? { installmentTotal: total } : {}), allocations: [] } });
+      dispatch({ type: "addTransaction", transaction: { id: uid("tx"), invoiceId, date, description: description.trim(), amount: value, type: "compra", ...(typeof number === "number" ? { installmentNumber: number } : {}), ...(typeof total === "number" ? { installmentTotal: total } : {}), allocations: [] } });
       toast.success("Nova compra adicionada", { description: "Ela ficou pendente até ser direcionada para uma pessoa." });
     }
     onClose();
@@ -139,7 +139,7 @@ function DeleteTransactionDialog({ tx, onClose }: { tx?: Transaction; onClose: (
 function AssignDialog({ txs, onClose }: { txs: Transaction[]; onClose: () => void }) {
   const { state, dispatch } = useFinance();
   const [q, setQ] = useState("");
-  const [sel, setSel] = useState<string | null>(txs.length === 1 && txs[0].allocations.length === 1 ? txs[0].allocations[0].personId : null);
+  const [sel, setSel] = useState<string | null>(txs.length === 1 && txs[0]?.allocations.length === 1 ? txs[0]?.allocations[0]?.personId ?? null : null);
   const [createPerson, setCreatePerson] = useState(false);
   const valid = txs.filter((t) => t.type !== "pagamento");
   const total = round2(valid.reduce((s, t) => s + t.amount, 0));
@@ -172,7 +172,7 @@ function AssignDialog({ txs, onClose }: { txs: Transaction[]; onClose: () => voi
           <DialogDescription>
             {valid.length === 1 ? (
               <>
-                {valid[0].description} · {fmtDate(valid[0].date)}
+                {valid[0]?.description} · {fmtDate(valid[0]?.date ?? "")}
               </>
             ) : (
               <>{valid.length} lançamentos selecionados</>
@@ -285,7 +285,7 @@ function SplitDialog({ tx, onClose }: { tx: Transaction; onClose: () => void }) 
       ...active.filter((p) => p.id !== currentId).map((p) => p.id),
     ].slice(0, 2);
     const parts = splitEqually(tx.amount, ids.length || 1);
-    return ids.map((id, i) => ({ personId: id, value: parts[i].toFixed(2).replace(".", ",") }));
+    return ids.map((id, i) => ({ personId: id, value: (parts[i] ?? 0).toFixed(2).replace(".", ",") }));
   });
   const [isAdjust, setIsAdjust] = useState(!!tx.adjustmentNote);
   const [note, setNote] = useState(tx.adjustmentNote ?? "");
@@ -310,7 +310,7 @@ function SplitDialog({ tx, onClose }: { tx: Transaction; onClose: () => void }) 
     setRows((rs) =>
       rs.map((r, i) => ({
         ...r,
-        value: m === "pct" ? round2((amounts[i] / tx.amount) * 100).toString().replace(".", ",") : (amounts[i] || 0).toFixed(2).replace(".", ","),
+        value: m === "pct" ? round2(((amounts[i] ?? 0) / tx.amount) * 100).toString().replace(".", ",") : (amounts[i] ?? 0).toFixed(2).replace(".", ","),
       })),
     );
     setMode(m);
@@ -318,11 +318,11 @@ function SplitDialog({ tx, onClose }: { tx: Transaction; onClose: () => void }) 
 
   const equal = () => {
     const parts = splitEqually(mode === "valor" ? tx.amount : 100, rows.length);
-    setRows((rs) => rs.map((r, i) => ({ ...r, value: parts[i].toFixed(2).replace(".", ",") })));
+    setRows((rs) => rs.map((r, i) => ({ ...r, value: (parts[i] ?? 0).toFixed(2).replace(".", ",") })));
   };
 
   const confirm = () => {
-    const allocations: Allocation[] = rows.map((r, i) => ({ personId: r.personId, amount: amounts[i] }));
+    const allocations: Allocation[] = rows.map((r, i) => ({ personId: r.personId, amount: amounts[i] ?? 0 }));
     dispatch({ type: "split", txId: tx.id, allocations, adjustmentNote: sumOk ? undefined : note.trim() });
     toast.success("Compra dividida", { description: `${rows.length} pessoas · ${fmtBRL(distributed)} distribuídos.` });
     onClose();
@@ -370,7 +370,7 @@ function SplitDialog({ tx, onClose }: { tx: Transaction; onClose: () => void }) 
                 />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">{mode === "valor" ? "R$" : "%"}</span>
               </div>
-              {mode === "pct" && <span className="num w-24 text-right text-xs text-muted-foreground">{Number.isFinite(amounts[i]) ? fmtBRL(amounts[i]) : "—"}</span>}
+              {mode === "pct" && <span className="num w-24 text-right text-xs text-muted-foreground">{Number.isFinite(amounts[i]) ? fmtBRL(amounts[i] ?? 0) : "—"}</span>}
               <Button variant="ghost" size="icon" aria-label="Remover parte" disabled={rows.length <= 2} onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))}>
                 <Trash2 className="size-4" />
               </Button>
