@@ -121,8 +121,8 @@ export function TransactionTable({
 function Row({
   tx, selectable, checked, onCheck, showCard, showType, cardLabel, personFilter,
 }: {
-  tx: Transaction; selectable?: boolean; checked: boolean; onCheck: (v: boolean) => void; showCard: boolean; showType: boolean;
-  cardLabel: { name: string; last4: string } | null; personFilter?: string;
+  tx: Transaction; selectable?: boolean | undefined; checked: boolean; onCheck?: ((v: boolean) => void) | undefined; showCard: boolean; showType: boolean;
+  cardLabel: { name: string; last4: string } | null; personFilter?: string | undefined;
 }) {
   const { state, dispatch } = useFinance();
   const { openAssign, openSplit, openEdit, deleteTx, unassign } = useTxActions();
@@ -169,7 +169,7 @@ function Row({
         >
           {selectable && (
             <td>
-              <Checkbox aria-label={`Selecionar ${tx.description}`} disabled={isPay} checked={checked} onCheckedChange={(v) => onCheck(!!v)} />
+              <Checkbox aria-label={`Selecionar ${tx.description}`} disabled={isPay} checked={checked} onCheckedChange={(v) => onCheck?.(!!v)} />
             </td>
           )}
           <td className="num text-muted-foreground">{fmtDate(tx.date)}</td>
@@ -193,7 +193,7 @@ function Row({
             {shown.length === 0 ? (
               <span className="text-muted-foreground">{isPay ? "—" : "Sem responsável"}</span>
             ) : shown.length === 1 && !personFilter && people.length === 1 ? (
-              <span className="font-medium">{shown[0].name}</span>
+              <span className="font-medium">{shown[0]?.name}</span>
             ) : (
               <Tooltip>
                 <TooltipTrigger asChild>

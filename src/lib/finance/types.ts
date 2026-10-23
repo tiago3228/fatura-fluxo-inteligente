@@ -58,11 +58,11 @@ export interface Transaction {
   /** Valor original. Créditos/estornos/pagamentos são negativos. */
   amount: number;
   type: TxType;
-  planId?: string;
-  installmentNumber?: number;
-  installmentTotal?: number;
+  planId?: string | undefined;
+  installmentNumber?: number | undefined;
+  installmentTotal?: number | undefined;
   allocations: Allocation[];
-  adjustmentNote?: string;
+  adjustmentNote?: string | undefined;
 }
 
 export interface PlanShare {
