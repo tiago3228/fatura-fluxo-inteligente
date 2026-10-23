@@ -14,7 +14,7 @@ import { ExportButtons } from "@/components/app/ExportButtons";
 import { Button } from "@/components/ui/button";
 import { createPDFBlob, exportPDF } from "@/lib/finance/export";
 
-export const Route = createFileRoute("/pessoas/$id")({
+export const Route = createFileRoute("/_authenticated/pessoas/$id")({
   head: () => ({
     meta: [
       { title: "Detalhes da pessoa — Fatura em Dia" },

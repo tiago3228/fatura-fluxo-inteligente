@@ -10,7 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-export const Route = createFileRoute("/calculadora")({
+export const Route = createFileRoute("/_authenticated/calculadora")({
   head: () => ({
     meta: [
       { title: "Calculadora — Fatura em Dia" },

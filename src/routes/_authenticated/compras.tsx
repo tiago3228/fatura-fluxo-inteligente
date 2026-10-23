@@ -14,7 +14,7 @@ import { FilterSelect, ALL } from "@/components/app/FilterSelect";
 
 type Search = { status?: string; person?: string; card?: string; last4?: string; type?: string; q?: string; month?: string };
 
-export const Route = createFileRoute("/compras")({
+export const Route = createFileRoute("/_authenticated/compras")({
   validateSearch: (s: Record<string, unknown>): Search => ({
     status: typeof s.status === "string" ? s.status : undefined,
     person: typeof s.person === "string" ? s.person : undefined,

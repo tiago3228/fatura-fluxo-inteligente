@@ -13,7 +13,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-export const Route = createFileRoute("/relatorios")({
+export const Route = createFileRoute("/_authenticated/relatorios")({
   head: () => ({
     meta: [
       { title: "Relatórios — Fatura em Dia" },

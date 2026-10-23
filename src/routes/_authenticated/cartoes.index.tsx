@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 
-export const Route = createFileRoute("/cartoes/")({
+export const Route = createFileRoute("/_authenticated/cartoes/")({
   head: () => ({
     meta: [
       { title: "Cartões — Fatura em Dia" },

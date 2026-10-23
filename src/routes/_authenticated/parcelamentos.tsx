@@ -13,7 +13,7 @@ import { FilterSelect } from "@/components/app/FilterSelect";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
-export const Route = createFileRoute("/parcelamentos")({
+export const Route = createFileRoute("/_authenticated/parcelamentos")({
   head: () => ({
     meta: [
       { title: "Parcelamentos — Fatura em Dia" },
