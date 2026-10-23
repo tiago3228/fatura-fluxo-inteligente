@@ -1,0 +1,127 @@
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useState } from "react";
+import { Copy, Eye, MoreHorizontal, Pencil, Trash2, UserPlus } from "lucide-react";
+import { toast } from "sonner";
+import { useFinance } from "@/lib/finance/store";
+import { limitMessage, limitStatus, personMonthTotal } from "@/lib/finance/calc";
+import { fmtBRL, fmtMonthLong, round2 } from "@/lib/finance/format";
+import type { Person } from "@/lib/finance/types";
+import { EmptyState, LimitBar, PageHeader, Panel } from "@/components/app/common";
+import { LimitBadge, Pill } from "@/components/app/badges";
+import { PersonDialog } from "@/components/app/PersonDialog";
+import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { cn } from "@/lib/utils";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
+
+export const Route = createFileRoute("/pessoas/")({
+  head: () => ({
+    meta: [
+      { title: "Pessoas — Fatura em Dia" },
+      { name: "description", content: "Cadastre quem usa seus cartões, defina limites mensais e acompanhe o uso de cada pessoa." },
+      { property: "og:title", content: "Pessoas — Fatura em Dia" },
+      { property: "og:description", content: "Limites e gastos por pessoa." },
+    ],
+  }),
+  component: Pessoas,
+});
+
+function Pessoas() {
+  const { state, dispatch } = useFinance();
+  const m = state.settings.month;
+  const [edit, setEdit] = useState<Person | "new" | null>(null);
+  const [del, setDel] = useState<Person | null>(null);
+
+  return (
+    <>
+      <PageHeader title="Pessoas" description={`Limites e gastos atribuídos em ${fmtMonthLong(m)}`} showMonth actions={<Button onClick={() => setEdit("new")}><UserPlus className="size-4" /> Adicionar pessoa</Button>} />
+      <Panel>
+        {state.people.length === 0 ? (
+          <EmptyState title="Nenhuma pessoa cadastrada" action={<Button onClick={() => setEdit("new")}>Adicionar pessoa</Button>} />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[900px] text-sm">
+              <thead className="border-b bg-muted/60 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                <tr className="[&_th]:px-4 [&_th]:py-2.5">
+                  <th>Nome</th><th>Cartões</th><th className="text-right">Limite</th><th className="text-right">Atribuído</th><th className="text-right">Restante</th><th className="w-44">Uso</th><th>Status</th><th className="w-12" />
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {state.people.map((p) => {
+                  const total = personMonthTotal(state, p.id, m);
+                  const rest = round2(p.limit - total);
+                  const msg = limitMessage(p.name, total, p.limit, state.settings.warnPct);
+                  return (
+                    <ContextMenu key={p.id}>
+                      <ContextMenuTrigger asChild>
+                        <tr className={cn("hover:bg-muted/40 [&_td]:px-4 [&_td]:py-3", !p.active && "opacity-60")}>
+                      <td>
+                        <Link to="/pessoas/$id" params={{ id: p.id }} className="font-semibold hover:underline">{p.name}</Link>
+                        {msg && <p className="text-xs text-muted-foreground">{msg}</p>}
+                      </td>
+                      <td>
+                        <div className="flex flex-wrap gap-1">
+                          {p.cardIds.map((cid) => { const c = state.cards.find((x) => x.id === cid); return c ? <Pill key={cid}>•••• {c.last4}</Pill> : null; })}
+                          {p.cardIds.length === 0 && <span className="text-muted-foreground">—</span>}
+                        </div>
+                      </td>
+                      <td className="num text-right">{fmtBRL(p.limit)}</td>
+                      <td className="num text-right font-semibold">{fmtBRL(total)}</td>
+                      <td className={cn("num text-right", rest < 0 && "font-semibold text-danger")}>{fmtBRL(rest)}</td>
+                      <td><LimitBar total={total} limit={p.limit} /></td>
+                      <td>{p.active ? <LimitBadge status={limitStatus(total, p.limit, state.settings.warnPct)} /> : <Pill>Inativa</Pill>}</td>
+                      <td>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" aria-label={`Ações para ${p.name}`}><MoreHorizontal className="size-4" /></Button></DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem asChild><Link to="/pessoas/$id" params={{ id: p.id }}><Eye className="size-4" /> Ver detalhes</Link></DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => setEdit(p)}><Pencil className="size-4" /> Editar</DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem className="text-danger" onSelect={() => setDel(p)}><Trash2 className="size-4" /> Excluir</DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </td>
+                        </tr>
+                      </ContextMenuTrigger>
+                      <ContextMenuContent className="w-64">
+                        <ContextMenuItem asChild><Link to="/pessoas/$id" params={{ id: p.id }}><Eye className="size-4" /> Ver detalhes</Link></ContextMenuItem>
+                        <ContextMenuItem onSelect={() => setEdit(p)}><Pencil className="size-4" /> Editar pessoa</ContextMenuItem>
+                        <ContextMenuItem onSelect={async () => { await navigator.clipboard?.writeText(p.name); toast.success("Nome copiado"); }}><Copy className="size-4" /> Copiar nome</ContextMenuItem>
+                        <ContextMenuSeparator />
+                        <ContextMenuItem onSelect={() => { dispatch({ type: "upsertPerson", person: { ...p, active: !p.active } }); toast.success(p.active ? "Pessoa desativada" : "Pessoa reativada"); }}><UserPlus className="size-4" /> {p.active ? "Desativar pessoa" : "Reativar pessoa"}</ContextMenuItem>
+                        <ContextMenuItem className="text-danger" onSelect={() => setDel(p)}><Trash2 className="size-4" /> Excluir pessoa</ContextMenuItem>
+                      </ContextMenuContent>
+                    </ContextMenu>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Panel>
+
+      {edit && <PersonDialog person={edit === "new" ? undefined : edit} onClose={() => setEdit(null)} />}
+
+      <AlertDialog open={!!del} onOpenChange={(o) => !o && setDel(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir {del?.name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              As compras atribuídas a esta pessoa ({state.transactions.filter((t) => t.allocations.some((a) => a.personId === del?.id)).length}) voltarão para as pendências. Os valores originais das faturas não mudam.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => { if (del) { dispatch({ type: "deletePerson", personId: del.id }); toast.success(`${del.name} foi excluída`); } setDel(null); }}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}

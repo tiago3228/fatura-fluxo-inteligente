@@ -1,0 +1,17 @@
+{
+  "routes": [
+    { "path": "/", "title": "Visão geral" },
+    { "path": "/faturas", "title": "Faturas" },
+    { "path": "/faturas/:id", "title": "Detalhes da fatura" },
+    { "path": "/compras", "title": "Compras" },
+    { "path": "/pessoas", "title": "Pessoas" },
+    { "path": "/pessoas/:id", "title": "Detalhes da pessoa" },
+    { "path": "/cartoes", "title": "Cartões" },
+    { "path": "/cartoes/:id", "title": "Detalhes do cartão" },
+    { "path": "/parcelamentos", "title": "Parcelamentos" },
+    { "path": "/calculadora", "title": "Calculadora" },
+    { "path": "/relatorios", "title": "Relatórios" },
+    { "path": "/como-funciona", "title": "Como Funciona" },
+    { "path": "/configuracoes", "title": "Configurações" }
+  ]
+}
