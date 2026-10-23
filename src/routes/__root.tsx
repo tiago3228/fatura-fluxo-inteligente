@@ -13,8 +13,8 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { FinanceProvider } from "@/lib/finance/store";
-import { AppShell } from "@/components/app/AppShell";
 import { Toaster } from "@/components/ui/sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 function NotFoundComponent() {
   return (
@@ -126,6 +126,17 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const router = useRouter();
+
+  useEffect(() => {
+    // Reage a entrar/sair: revalida o roteador (o portão de login redireciona).
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event !== "SIGNED_IN" && event !== "SIGNED_OUT" && event !== "USER_UPDATED") return;
+      router.invalidate();
+      if (event !== "SIGNED_OUT") queryClient.invalidateQueries();
+    });
+    return () => subscription.unsubscribe();
+  }, [router, queryClient]);
 
   useEffect(() => {
     if (typeof navigator !== "undefined" && "serviceWorker" in navigator && import.meta.env.PROD) {
@@ -139,9 +150,7 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <FinanceProvider>
-        <AppShell>
-          <Outlet />
-        </AppShell>
+        <Outlet />
         <Toaster richColors position="bottom-right" />
       </FinanceProvider>
     </QueryClientProvider>
