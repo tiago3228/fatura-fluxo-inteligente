@@ -2,22 +2,13 @@ import type { FinanceState } from "./types";
 import type { Json } from "@/integrations/supabase/types";
 import { supabase } from "@/integrations/supabase/client";
 
-const DEFAULT_WORKSPACE_NAME = "Fatura da família";
-
-/** Garante que o usuário autenticado tenha um workspace; cria um na primeira vez. */
+/** Entra no espaço compartilhado da família (o mesmo para todas as contas). */
 export async function ensureWorkspace(): Promise<string | null> {
-  const { data: members, error } = await supabase
-    .from("workspace_members")
-    .select("workspace_id")
-    .limit(1);
-  if (error) return null;
-  const existing = members?.[0]?.workspace_id;
-  if (existing) return existing as string;
-
-  const { data, error: rpcError } = await supabase.rpc("create_workspace", {
-    p_name: DEFAULT_WORKSPACE_NAME,
-  });
-  if (rpcError) return null;
+  const { data, error } = await supabase.rpc("join_family_workspace");
+  if (error) {
+    console.error("Falha ao entrar no espaço da família", error);
+    return null;
+  }
   return typeof data === "string" ? data : null;
 }
 
