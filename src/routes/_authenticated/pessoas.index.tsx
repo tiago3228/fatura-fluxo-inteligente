@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { Copy, Eye, MoreHorizontal, Pencil, Trash2, UserPlus } from "lucide-react";
+import { Copy, Eye, MoreHorizontal, Pencil, Trash2, UserCheck, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { useFinance } from "@/lib/finance/store";
 import { limitMessage, limitStatus, personMonthTotal } from "@/lib/finance/calc";
@@ -87,6 +87,7 @@ function Pessoas() {
                       <ContextMenuContent className="w-64">
                         <ContextMenuItem asChild><Link to="/pessoas/$id" params={{ id: p.id }}><Eye className="size-4" /> Ver detalhes</Link></ContextMenuItem>
                         <ContextMenuItem onSelect={() => setEdit(p)}><Pencil className="size-4" /> Editar pessoa</ContextMenuItem>
+                        <ContextMenuItem asChild><Link to="/compras" search={{ assignTo: p.id, status: "pendente" }}><UserCheck className="size-4" /> Atribuir compras</Link></ContextMenuItem>
                         <ContextMenuItem onSelect={async () => { await navigator.clipboard?.writeText(p.name); toast.success("Nome copiado"); }}><Copy className="size-4" /> Copiar nome</ContextMenuItem>
                         <ContextMenuSeparator />
                         <ContextMenuItem onSelect={() => { dispatch({ type: "upsertPerson", person: { ...p, active: !p.active } }); toast.success(p.active ? "Pessoa desativada" : "Pessoa reativada"); }}><UserPlus className="size-4" /> {p.active ? "Desativar pessoa" : "Reativar pessoa"}</ContextMenuItem>
