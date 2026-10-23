@@ -5,7 +5,6 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   Bell, BookOpen, Calculator, CalendarClock, CreditCard, FileSpreadsheet, FileText, LayoutDashboard, LogOut, Settings, ShoppingBag, Users, Wallet,
 } from "lucide-react";
-import { toast } from "sonner";
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarHeader, SidebarInset, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger,
 } from "@/components/ui/sidebar";

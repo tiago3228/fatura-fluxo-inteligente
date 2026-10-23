@@ -73,8 +73,7 @@ function Configuracoes() {
         <Panel title="Sobre esta versão" className="lg:col-span-2">
           <div className="divide-y">
             <div className="space-y-2 px-4 py-3 text-sm text-muted-foreground">
-              <DemoTag />
-              <p>Esta é uma versão local, sem servidor e sem login. Os dados ficam apenas neste navegador e <b>não são sincronizados entre computadores</b>.</p>
+              <p>Entre com seu e-mail e senha e seus dados ficam salvos na nuvem da sua conta, <b>sincronizados entre computadores</b> automaticamente. Quem entrar com a mesma conta vê as mesmas faturas, cartões e pessoas.</p>
               <p>A importação de PDF lê localmente PDFs com texto selecionável e sempre exige conferência. PDFs escaneados ou com layout não reconhecido são sinalizados para revisão manual. A planilha Excel também é lida localmente no navegador.</p>
             </div>
             <Row title="Guardar dados neste navegador" desc="Desligado, as alterações se perdem ao recarregar a página"><Switch checked={s.persist} onCheckedChange={(v) => set({ persist: v })} aria-label="Guardar dados neste navegador" /></Row>
