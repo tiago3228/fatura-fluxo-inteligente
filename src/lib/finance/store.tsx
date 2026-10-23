@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { ensureWorkspace, loadCloudState, saveCloudState } from "./cloud";
 import { createDemoState } from "./mock";
 import { planStatusAt } from "./calc";
+import { OCTOBER_ASSIGNMENTS } from "./octoberAssignments";
 import type {
   Allocation, CreditCard, FinanceState, InstallmentPlan, Invoice, Person, Settings, Transaction, TxType,
 } from "./types";
@@ -73,6 +74,44 @@ const assignInitialCardholders = (state: FinanceState): FinanceState => ({
   }),
 });
 
+const assignmentKey = (value: string) =>
+  value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\b\d{1,2}\s*\/\s*\d{1,2}\b/g, " ")
+    .replace(/\b\d+[\d.,]*\b/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter((token) => token.length >= 4 && !["para", "santa", "loja"].includes(token));
+
+/** Aplica somente correspondências da planilha a lançamentos já existentes e pendentes. */
+const assignOctoberPurchases = (state: FinanceState): FinanceState => {
+  const people = OCTOBER_ASSIGNMENTS.map((item) => {
+    const person = state.people.find((candidate) => {
+      const candidateName = candidate.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+      return candidateName === item.personName.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() || candidateName.startsWith(item.personName.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase());
+    });
+    return { item, person };
+  }).filter((entry): entry is { item: (typeof OCTOBER_ASSIGNMENTS)[number]; person: Person } => Boolean(entry.person));
+  const available = state.transactions.map((transaction) => ({ transaction, used: false }));
+  const updates = new Map<string, Allocation[]>();
+  for (const { item, person } of people) {
+    const wanted = assignmentKey(item.description);
+    const candidate = available
+      .filter(({ transaction, used }) => !used && transaction.allocations.length === 0 && Math.abs(transaction.amount - item.amount) < 0.01)
+      .map((entry) => ({ ...entry, score: assignmentKey(entry.transaction.description).filter((token) => wanted.includes(token)).length }))
+      .filter((entry) => entry.score > 0)
+      .sort((a, b) => b.score - a.score)[0];
+    if (!candidate) continue;
+    candidate.used = true;
+    updates.set(candidate.transaction.id, [{ personId: person.id, amount: item.amount }]);
+  }
+  if (!updates.size) return state;
+  return { ...state, transactions: state.transactions.map((transaction) => updates.has(transaction.id) ? { ...transaction, allocations: updates.get(transaction.id)! } : transaction) };
+};
+
 const reconcileImportedTransactions = (state: FinanceState, invoice: Invoice, incoming: Transaction[]) => {
   const previous = previousInvoiceFor(state, invoice);
   if (!previous) return incoming;
@@ -98,7 +137,7 @@ const reconcileImportedTransactions = (state: FinanceState, invoice: Invoice, in
 export function reducer(s: FinanceState, a: Action): FinanceState {
   switch (a.type) {
     case "hydrate":
-      return assignInitialCardholders(ensure0548(a.state));
+      return assignInitialCardholders(assignOctoberPurchases(ensure0548(a.state)));
     case "reset":
       return createDemoState();
     case "setMonth":
