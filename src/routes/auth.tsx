@@ -1,6 +1,6 @@
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { Loader2, LogIn, UserPlus, Wallet } from "lucide-react";
+import { Eye, EyeOff, Loader2, LogIn, UserPlus, Wallet } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,6 +41,7 @@ function AuthPage() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [checkEmail, setCheckEmail] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -117,7 +118,18 @@ function AuthPage() {
                 </div>
                 <div className="space-y-1.5">
                   <label htmlFor="auth-password" className="text-sm font-medium">Senha</label>
-                  <Input id="auth-password" type="password" required autoComplete={mode === "entrar" ? "current-password" : "new-password"} minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Mínimo de 6 caracteres" />
+                  <div className="relative">
+                    <Input id="auth-password" type={showPassword ? "text" : "password"} required autoComplete={mode === "entrar" ? "current-password" : "new-password"} minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Mínimo de 6 caracteres" className="pr-11" />
+                    <button
+                      type="button"
+                      aria-label={showPassword ? "Esconder a senha" : "Mostrar a senha"}
+                      aria-pressed={showPassword}
+                      onClick={() => setShowPassword((v) => !v)}
+                      className="absolute right-1 top-1/2 grid size-9 -translate-y-1/2 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    >
+                      {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                    </button>
+                  </div>
                 </div>
                 {error && <p className="text-sm font-medium text-danger">{error}</p>}
                 <Button type="submit" className="w-full" disabled={pending}>
