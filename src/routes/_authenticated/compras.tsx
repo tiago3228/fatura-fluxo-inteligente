@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
+import { toast } from "sonner";
 import { Plus, Scissors, Search, UserCheck, UserX, X } from "lucide-react";
 import { useFinance } from "@/lib/finance/store";
 import { TX_TYPE_LABEL, monthTxs, txCard, txStatus, availableMonths } from "@/lib/finance/calc";
@@ -12,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { FilterSelect, ALL } from "@/components/app/FilterSelect";
 
-type Search = { status?: string; person?: string; card?: string; last4?: string; type?: string; q?: string; month?: string };
+type Search = { status?: string; person?: string; card?: string; last4?: string; type?: string; q?: string; month?: string; assignTo?: string };
 
 export const Route = createFileRoute("/_authenticated/compras")({
   validateSearch: (s: Record<string, unknown>): Search => ({
@@ -23,6 +24,7 @@ export const Route = createFileRoute("/_authenticated/compras")({
     type: typeof s["type"] === "string" ? s["type"] : undefined,
     q: typeof s["q"] === "string" ? s["q"] : undefined,
     month: typeof s["month"] === "string" ? s["month"] : undefined,
+    assignTo: typeof s["assignTo"] === "string" ? s["assignTo"] : undefined,
   }),
   head: () => ({
     meta: [
@@ -37,8 +39,9 @@ export const Route = createFileRoute("/_authenticated/compras")({
 
 
 function Compras() {
-  const { state } = useFinance();
+  const { state, dispatch } = useFinance();
   const search = Route.useSearch();
+  const assignPerson = search.assignTo ? state.people.find((p) => p.id === search.assignTo) : undefined;
   const navigate = useNavigate({ from: "/compras" });
   const { openAssign, openCreate, openSplit, unassign } = useTxActions();
   const [selected, setSelected] = useState<string[]>([]);
@@ -95,10 +98,23 @@ function Compras() {
           <KpiCard label="Por pessoa" value={personTotals.length === 0 ? "—" : personTotals.map(({ person, total: value }) => `${person.name.split(" ")[0]} ${fmtBRL(value)}`).join(" · ")} hint="Totais recalculados pelos direcionamentos" />
         </div>
 
+        {assignPerson && (
+          <div className="flex flex-wrap items-center gap-2 border-b bg-primary/10 px-3 py-2 text-sm">
+            <UserCheck className="size-4 text-primary" />
+            <span>Atribuindo compras para <strong>{assignPerson.name}</strong> — use os filtros, marque as compras e clique em “Atribuir a {assignPerson.name.split(" ")[0]}”.</span>
+            <Button size="sm" variant="ghost" className="ml-auto" onClick={() => set({ assignTo: undefined })}><X className="size-4" /> Sair do modo</Button>
+          </div>
+        )}
+
         {selValid.length > 0 && (
           <div className="flex flex-wrap items-center gap-2 border-b bg-accent/60 px-3 py-2 text-sm fade-in-up">
             <span className="font-semibold">{selValid.length} selecionado(s)</span>
-            <Button size="sm" onClick={() => openAssign(selValid)}><UserCheck className="size-4" /> Direcionar para pessoa</Button>
+            {assignPerson && (
+              <Button size="sm" onClick={() => { dispatch({ type: "allocate", txIds: selValid, personId: assignPerson.id }); toast.success(`${selValid.length} compra(s) atribuída(s) a ${assignPerson.name}`); setSelected([]); }}>
+                <UserCheck className="size-4" /> Atribuir a {assignPerson.name.split(" ")[0]}
+              </Button>
+            )}
+            <Button size="sm" variant={assignPerson ? "outline" : "default"} onClick={() => openAssign(selValid)}><UserCheck className="size-4" /> Direcionar para pessoa</Button>
             {selValid.length === 1 && <Button size="sm" variant="outline" onClick={() => openSplit(selValid[0] ?? "")}><Scissors className="size-4" /> Dividir compra</Button>}
             <Button size="sm" variant="outline" onClick={() => { unassign(selValid); setSelected([]); }}><UserX className="size-4" /> Remover atribuição</Button>
             <Button size="sm" variant="ghost" onClick={() => setSelected([])}>Limpar seleção</Button>
