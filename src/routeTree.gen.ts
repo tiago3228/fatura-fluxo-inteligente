@@ -9,6 +9,9 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
+import { Route as AuthRouteImport } from './routes/auth'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
 import { Route as AuthenticatedCalculadoraRouteImport } from './routes/_authenticated/calculadora'
 import { Route as AuthenticatedComoFuncionaRouteImport } from './routes/_authenticated/como-funciona'
@@ -23,87 +26,103 @@ import { Route as AuthenticatedFaturasIdRouteImport } from './routes/_authentica
 import { Route as AuthenticatedPessoasIndexRouteImport } from './routes/_authenticated/pessoas.index'
 import { Route as AuthenticatedPessoasIdRouteImport } from './routes/_authenticated/pessoas.$id'
 
-const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
-  id: '/_authenticated/',
-  path: '/',
+const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
+  id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedCalculadoraRoute =
   AuthenticatedCalculadoraRouteImport.update({
-    id: '/_authenticated/calculadora',
+    id: '/calculadora',
     path: '/calculadora',
-    getParentRoute: () => rootRouteImport,
+    getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedComoFuncionaRoute =
   AuthenticatedComoFuncionaRouteImport.update({
-    id: '/_authenticated/como-funciona',
+    id: '/como-funciona',
     path: '/como-funciona',
-    getParentRoute: () => rootRouteImport,
+    getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedComprasRoute = AuthenticatedComprasRouteImport.update({
-  id: '/_authenticated/compras',
+  id: '/compras',
   path: '/compras',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedConfiguracoesRoute =
   AuthenticatedConfiguracoesRouteImport.update({
-    id: '/_authenticated/configuracoes',
+    id: '/configuracoes',
     path: '/configuracoes',
-    getParentRoute: () => rootRouteImport,
+    getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedParcelamentosRoute =
   AuthenticatedParcelamentosRouteImport.update({
-    id: '/_authenticated/parcelamentos',
+    id: '/parcelamentos',
     path: '/parcelamentos',
-    getParentRoute: () => rootRouteImport,
+    getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedRelatoriosRoute = AuthenticatedRelatoriosRouteImport.update({
-  id: '/_authenticated/relatorios',
+  id: '/relatorios',
   path: '/relatorios',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedCartoesIndexRoute =
   AuthenticatedCartoesIndexRouteImport.update({
-    id: '/_authenticated/cartoes/',
+    id: '/cartoes/',
     path: '/cartoes/',
-    getParentRoute: () => rootRouteImport,
+    getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedCartoesIdRoute = AuthenticatedCartoesIdRouteImport.update({
-  id: '/_authenticated/cartoes/$id',
+  id: '/cartoes/$id',
   path: '/cartoes/$id',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedFaturasIndexRoute =
   AuthenticatedFaturasIndexRouteImport.update({
-    id: '/_authenticated/faturas/',
+    id: '/faturas/',
     path: '/faturas/',
-    getParentRoute: () => rootRouteImport,
+    getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedFaturasIdRoute = AuthenticatedFaturasIdRouteImport.update({
-  id: '/_authenticated/faturas/$id',
+  id: '/faturas/$id',
   path: '/faturas/$id',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedPessoasIndexRoute =
   AuthenticatedPessoasIndexRouteImport.update({
-    id: '/_authenticated/pessoas/',
+    id: '/pessoas/',
     path: '/pessoas/',
-    getParentRoute: () => rootRouteImport,
+    getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedPessoasIdRoute = AuthenticatedPessoasIdRouteImport.update({
-  id: '/_authenticated/pessoas/$id',
+  id: '/pessoas/$id',
   path: '/pessoas/$id',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
+  '/': typeof AuthenticatedIndexRoute
+  '/auth': typeof AuthRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/calculadora': typeof AuthenticatedCalculadoraRoute
   '/como-funciona': typeof AuthenticatedComoFuncionaRoute
   '/compras': typeof AuthenticatedComprasRoute
   '/configuracoes': typeof AuthenticatedConfiguracoesRoute
   '/parcelamentos': typeof AuthenticatedParcelamentosRoute
   '/relatorios': typeof AuthenticatedRelatoriosRoute
-  '/': typeof AuthenticatedIndexRoute
   '/cartoes/$id': typeof AuthenticatedCartoesIdRoute
   '/faturas/$id': typeof AuthenticatedFaturasIdRoute
   '/pessoas/$id': typeof AuthenticatedPessoasIdRoute
@@ -112,6 +131,8 @@ export interface FileRoutesByFullPath {
   '/pessoas/': typeof AuthenticatedPessoasIndexRoute
 }
 export interface FileRoutesByTo {
+  '/auth': typeof AuthRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/calculadora': typeof AuthenticatedCalculadoraRoute
   '/como-funciona': typeof AuthenticatedComoFuncionaRoute
   '/compras': typeof AuthenticatedComprasRoute
@@ -128,6 +149,9 @@ export interface FileRoutesByTo {
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
+  '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
+  '/auth': typeof AuthRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/_authenticated/calculadora': typeof AuthenticatedCalculadoraRoute
   '/_authenticated/como-funciona': typeof AuthenticatedComoFuncionaRoute
   '/_authenticated/compras': typeof AuthenticatedComprasRoute
@@ -145,13 +169,15 @@ export interface FileRoutesById {
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
+    | '/'
+    | '/auth'
+    | '/reset-password'
     | '/calculadora'
     | '/como-funciona'
     | '/compras'
     | '/configuracoes'
     | '/parcelamentos'
     | '/relatorios'
-    | '/'
     | '/cartoes/$id'
     | '/faturas/$id'
     | '/pessoas/$id'
@@ -160,6 +186,8 @@ export interface FileRouteTypes {
     | '/pessoas/'
   fileRoutesByTo: FileRoutesByTo
   to:
+    | '/auth'
+    | '/reset-password'
     | '/calculadora'
     | '/como-funciona'
     | '/compras'
@@ -175,6 +203,9 @@ export interface FileRouteTypes {
     | '/pessoas'
   id:
     | '__root__'
+    | '/_authenticated'
+    | '/auth'
+    | '/reset-password'
     | '/_authenticated/calculadora'
     | '/_authenticated/como-funciona'
     | '/_authenticated/compras'
@@ -191,6 +222,129 @@ export interface FileRouteTypes {
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
+  AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
+  AuthRoute: typeof AuthRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
+}
+
+declare module '@tanstack/react-router' {
+  interface FileRoutesByPath {
+    '/_authenticated': {
+      id: '/_authenticated'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/': {
+      id: '/_authenticated/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/calculadora': {
+      id: '/_authenticated/calculadora'
+      path: '/calculadora'
+      fullPath: '/calculadora'
+      preLoaderRoute: typeof AuthenticatedCalculadoraRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/como-funciona': {
+      id: '/_authenticated/como-funciona'
+      path: '/como-funciona'
+      fullPath: '/como-funciona'
+      preLoaderRoute: typeof AuthenticatedComoFuncionaRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/compras': {
+      id: '/_authenticated/compras'
+      path: '/compras'
+      fullPath: '/compras'
+      preLoaderRoute: typeof AuthenticatedComprasRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/configuracoes': {
+      id: '/_authenticated/configuracoes'
+      path: '/configuracoes'
+      fullPath: '/configuracoes'
+      preLoaderRoute: typeof AuthenticatedConfiguracoesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/parcelamentos': {
+      id: '/_authenticated/parcelamentos'
+      path: '/parcelamentos'
+      fullPath: '/parcelamentos'
+      preLoaderRoute: typeof AuthenticatedParcelamentosRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/relatorios': {
+      id: '/_authenticated/relatorios'
+      path: '/relatorios'
+      fullPath: '/relatorios'
+      preLoaderRoute: typeof AuthenticatedRelatoriosRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/cartoes/': {
+      id: '/_authenticated/cartoes/'
+      path: '/cartoes'
+      fullPath: '/cartoes/'
+      preLoaderRoute: typeof AuthenticatedCartoesIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/cartoes/$id': {
+      id: '/_authenticated/cartoes/$id'
+      path: '/cartoes/$id'
+      fullPath: '/cartoes/$id'
+      preLoaderRoute: typeof AuthenticatedCartoesIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/faturas/': {
+      id: '/_authenticated/faturas/'
+      path: '/faturas'
+      fullPath: '/faturas/'
+      preLoaderRoute: typeof AuthenticatedFaturasIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/faturas/$id': {
+      id: '/_authenticated/faturas/$id'
+      path: '/faturas/$id'
+      fullPath: '/faturas/$id'
+      preLoaderRoute: typeof AuthenticatedFaturasIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/pessoas/': {
+      id: '/_authenticated/pessoas/'
+      path: '/pessoas'
+      fullPath: '/pessoas/'
+      preLoaderRoute: typeof AuthenticatedPessoasIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/pessoas/$id': {
+      id: '/_authenticated/pessoas/$id'
+      path: '/pessoas/$id'
+      fullPath: '/pessoas/$id'
+      preLoaderRoute: typeof AuthenticatedPessoasIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+  }
+}
+
+interface AuthenticatedRouteRouteChildren {
   AuthenticatedCalculadoraRoute: typeof AuthenticatedCalculadoraRoute
   AuthenticatedComoFuncionaRoute: typeof AuthenticatedComoFuncionaRoute
   AuthenticatedComprasRoute: typeof AuthenticatedComprasRoute
@@ -206,103 +360,7 @@ export interface RootRouteChildren {
   AuthenticatedPessoasIndexRoute: typeof AuthenticatedPessoasIndexRoute
 }
 
-declare module '@tanstack/react-router' {
-  interface FileRoutesByPath {
-    '/_authenticated/': {
-      id: '/_authenticated/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof AuthenticatedIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/_authenticated/calculadora': {
-      id: '/_authenticated/calculadora'
-      path: '/calculadora'
-      fullPath: '/calculadora'
-      preLoaderRoute: typeof AuthenticatedCalculadoraRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/_authenticated/como-funciona': {
-      id: '/_authenticated/como-funciona'
-      path: '/como-funciona'
-      fullPath: '/como-funciona'
-      preLoaderRoute: typeof AuthenticatedComoFuncionaRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/_authenticated/compras': {
-      id: '/_authenticated/compras'
-      path: '/compras'
-      fullPath: '/compras'
-      preLoaderRoute: typeof AuthenticatedComprasRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/_authenticated/configuracoes': {
-      id: '/_authenticated/configuracoes'
-      path: '/configuracoes'
-      fullPath: '/configuracoes'
-      preLoaderRoute: typeof AuthenticatedConfiguracoesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/_authenticated/parcelamentos': {
-      id: '/_authenticated/parcelamentos'
-      path: '/parcelamentos'
-      fullPath: '/parcelamentos'
-      preLoaderRoute: typeof AuthenticatedParcelamentosRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/_authenticated/relatorios': {
-      id: '/_authenticated/relatorios'
-      path: '/relatorios'
-      fullPath: '/relatorios'
-      preLoaderRoute: typeof AuthenticatedRelatoriosRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/_authenticated/cartoes/': {
-      id: '/_authenticated/cartoes/'
-      path: '/cartoes'
-      fullPath: '/cartoes/'
-      preLoaderRoute: typeof AuthenticatedCartoesIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/_authenticated/cartoes/$id': {
-      id: '/_authenticated/cartoes/$id'
-      path: '/cartoes/$id'
-      fullPath: '/cartoes/$id'
-      preLoaderRoute: typeof AuthenticatedCartoesIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/_authenticated/faturas/': {
-      id: '/_authenticated/faturas/'
-      path: '/faturas'
-      fullPath: '/faturas/'
-      preLoaderRoute: typeof AuthenticatedFaturasIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/_authenticated/faturas/$id': {
-      id: '/_authenticated/faturas/$id'
-      path: '/faturas/$id'
-      fullPath: '/faturas/$id'
-      preLoaderRoute: typeof AuthenticatedFaturasIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/_authenticated/pessoas/': {
-      id: '/_authenticated/pessoas/'
-      path: '/pessoas'
-      fullPath: '/pessoas/'
-      preLoaderRoute: typeof AuthenticatedPessoasIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/_authenticated/pessoas/$id': {
-      id: '/_authenticated/pessoas/$id'
-      path: '/pessoas/$id'
-      fullPath: '/pessoas/$id'
-      preLoaderRoute: typeof AuthenticatedPessoasIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-  }
-}
-
-const rootRouteChildren: RootRouteChildren = {
+const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedCalculadoraRoute: AuthenticatedCalculadoraRoute,
   AuthenticatedComoFuncionaRoute: AuthenticatedComoFuncionaRoute,
   AuthenticatedComprasRoute: AuthenticatedComprasRoute,
@@ -316,6 +374,15 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedCartoesIndexRoute: AuthenticatedCartoesIndexRoute,
   AuthenticatedFaturasIndexRoute: AuthenticatedFaturasIndexRoute,
   AuthenticatedPessoasIndexRoute: AuthenticatedPessoasIndexRoute,
+}
+
+const AuthenticatedRouteRouteWithChildren =
+  AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
+
+const rootRouteChildren: RootRouteChildren = {
+  AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
+  AuthRoute: AuthRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

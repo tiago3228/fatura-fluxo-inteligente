@@ -1,4 +1,6 @@
 import { createContext, useContext, useEffect, useReducer, useRef, type ReactNode } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { ensureWorkspace, loadCloudState, saveCloudState } from "./cloud";
 import { createDemoState } from "./mock";
 import { planStatusAt } from "./calc";
 import type {
@@ -205,7 +207,11 @@ const Ctx = createContext<{ state: FinanceState; dispatch: React.Dispatch<Action
 export function FinanceProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, undefined, createDemoState);
   const hydrated = useRef(false);
+  const workspaceId = useRef<string | null>(null);
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
+  // Cópia local (funciona offline e evita "flash" de dados demonstrativos).
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -216,6 +222,44 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     hydrated.current = true;
   }, []);
 
+  // Nuvem: carrega os dados da conta ao entrar e passa a salvar a cada alteração.
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadFromCloud = async () => {
+      const { data } = await supabase.auth.getSession();
+      if (!data.session || cancelled) return;
+      const ws = await ensureWorkspace();
+      if (!ws || cancelled) return;
+      workspaceId.current = ws;
+      const cloud = await loadCloudState(ws);
+      if (cancelled) return;
+      if (cloud) {
+        dispatch({ type: "hydrate", state: cloud });
+      } else if (stateRef.current) {
+        // Primeira entrada: publica o estado local na nuvem.
+        await saveCloudState(ws, stateRef.current);
+      }
+    };
+
+    void loadFromCloud();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_OUT") {
+        workspaceId.current = null;
+        dispatch({ type: "hydrate", state: createDemoState() });
+        try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+      } else if (event === "SIGNED_IN" || event === "USER_UPDATED") {
+        void loadFromCloud();
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
+  }, []);
+
   useEffect(() => {
     if (!hydrated.current) return;
     try {
@@ -224,6 +268,12 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     } catch {
       /* ignore */
     }
+    if (!workspaceId.current || !state.settings.persist) return;
+    // Salva na nuvem com pequena espera para agrupar alterações em sequência.
+    const timer = setTimeout(() => {
+      if (workspaceId.current) void saveCloudState(workspaceId.current, stateRef.current);
+    }, 600);
+    return () => clearTimeout(timer);
   }, [state]);
 
   return <Ctx.Provider value={{ state, dispatch }}>{children}</Ctx.Provider>;
