@@ -4,7 +4,7 @@ export interface Person {
   id: string;
   name: string;
   limit: number;
-  notes?: string;
+  notes?: string | undefined;
   active: boolean;
   cardIds: string[];
 }
@@ -13,9 +13,9 @@ export interface CreditCard {
   id: string;
   name: string;
   issuer: string;
-  brand?: string;
+  brand?: string | undefined;
   last4: string;
-  creditLimit?: number;
+  creditLimit?: number | undefined;
   closingDay: number;
   dueDay: number;
   active: boolean;
