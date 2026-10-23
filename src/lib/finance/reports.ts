@@ -29,7 +29,7 @@ export function personReport(s: FinanceState, personId: string, month: string) {
         plan: pl,
         pct,
         current: planNumberAt(pl, month),
-        monthValue: round2((planAmountAt(pl, month) * pct) / 100),
+        monthValue: round2(((planAmountAt(pl, month) ?? 0) * pct) / 100),
         future: round2((planFutureCommitted(pl, month) * pct) / 100),
       };
     });

@@ -81,7 +81,7 @@ export function ExcelImportDialog({ open, onOpenChange }: { open: boolean; onOpe
       const firstSheet = wb.SheetNames[0];
       if (!firstSheet) throw new Error("planilha vazia");
       const ws = wb.Sheets[firstSheet];
-      load(XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: "" }) as unknown[][], f.name);
+      load(XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, raw: true, defval: "" }) as unknown[][], f.name);
     } catch {
       setError("Não foi possível ler o arquivo. Verifique se ele não está corrompido.");
     }

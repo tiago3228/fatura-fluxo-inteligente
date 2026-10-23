@@ -16,13 +16,13 @@ type Search = { status?: string; person?: string; card?: string; last4?: string;
 
 export const Route = createFileRoute("/_authenticated/compras")({
   validateSearch: (s: Record<string, unknown>): Search => ({
-    status: typeof s.status === "string" ? s.status : undefined,
-    person: typeof s.person === "string" ? s.person : undefined,
-    card: typeof s.card === "string" ? s.card : undefined,
-    last4: typeof s.last4 === "string" ? s.last4 : undefined,
-    type: typeof s.type === "string" ? s.type : undefined,
-    q: typeof s.q === "string" ? s.q : undefined,
-    month: typeof s.month === "string" ? s.month : undefined,
+    status: typeof s["status"] === "string" ? s["status"] : undefined,
+    person: typeof s["person"] === "string" ? s["person"] : undefined,
+    card: typeof s["card"] === "string" ? s["card"] : undefined,
+    last4: typeof s["last4"] === "string" ? s["last4"] : undefined,
+    type: typeof s["type"] === "string" ? s["type"] : undefined,
+    q: typeof s["q"] === "string" ? s["q"] : undefined,
+    month: typeof s["month"] === "string" ? s["month"] : undefined,
   }),
   head: () => ({
     meta: [
@@ -99,7 +99,7 @@ function Compras() {
           <div className="flex flex-wrap items-center gap-2 border-b bg-accent/60 px-3 py-2 text-sm fade-in-up">
             <span className="font-semibold">{selValid.length} selecionado(s)</span>
             <Button size="sm" onClick={() => openAssign(selValid)}><UserCheck className="size-4" /> Direcionar para pessoa</Button>
-            {selValid.length === 1 && <Button size="sm" variant="outline" onClick={() => openSplit(selValid[0])}><Scissors className="size-4" /> Dividir compra</Button>}
+            {selValid.length === 1 && <Button size="sm" variant="outline" onClick={() => openSplit(selValid[0] ?? "")}><Scissors className="size-4" /> Dividir compra</Button>}
             <Button size="sm" variant="outline" onClick={() => { unassign(selValid); setSelected([]); }}><UserX className="size-4" /> Remover atribuição</Button>
             <Button size="sm" variant="ghost" onClick={() => setSelected([])}>Limpar seleção</Button>
           </div>
