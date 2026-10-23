@@ -202,7 +202,10 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
   }
 }
 
-const Ctx = createContext<{ state: FinanceState; dispatch: React.Dispatch<Action> } | null>(null);
+type FinanceCtx = { state: FinanceState; dispatch: React.Dispatch<Action> } | null;
+// Contexto único mesmo quando o arquivo é recarregado durante a edição (evita "fora do FinanceProvider").
+const g = globalThis as unknown as { __financeCtx?: React.Context<FinanceCtx> };
+const Ctx = g.__financeCtx ?? (g.__financeCtx = createContext<FinanceCtx>(null));
 
 export function FinanceProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, undefined, createDemoState);
