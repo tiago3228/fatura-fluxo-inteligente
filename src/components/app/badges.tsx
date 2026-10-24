@@ -58,11 +58,19 @@ export function LimitBadge({ status }: { status: LimitStatus }) {
   return <Pill tone={tone}>{label}</Pill>;
 }
 
+export function PaymentStatusBadge({ status }: { status: "pendente" | "parcial" | "pago" }) {
+  const map = { pendente: ["warning", "Pendente"], parcial: ["info", "Parcial"], pago: ["success", "Pago"] } as const;
+  const [tone, label] = map[status];
+  return <Pill tone={tone}>{label}</Pill>;
+}
+
 export function InvoiceStatusBadge({ status }: { status: InvoiceStatus }) {
   const map: Record<InvoiceStatus, [Tone, string]> = {
     conferida: ["success", "Conferida"],
     em_revisao: ["warning", "Em revisão"],
     inconsistente: ["danger", "Inconsistente"],
+    paga: ["success", "Paga"],
+    paga: ["success", "Paga"],
   };
   const [tone, label] = map[status];
   return <Pill tone={tone}>{label}</Pill>;

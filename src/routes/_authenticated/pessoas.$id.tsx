@@ -3,8 +3,8 @@ import { useState } from "react";
 import { ArrowLeft, Download, Pencil, Share2 } from "lucide-react";
 import { toast } from "sonner";
 import { useFinance } from "@/lib/finance/store";
-import { limitMessage, limitStatus, monthTxs, totalFutureCommitted } from "@/lib/finance/calc";
-import { fmtBRL, fmtMonth, fmtMonthLong, round2 } from "@/lib/finance/format";
+import { addMonths, limitMessage, limitStatus, monthTxs, personDebtTotal, personMonthPaid, personMonthRemaining, personMonthTotal, planRemainingCount, totalFutureCommitted } from "@/lib/finance/calc";
+import { fmtBRL, fmtDate, fmtMonth, fmtMonthLong, round2 } from "@/lib/finance/format";
 import { personAllTransactionsTable, personReport, personReportTable } from "@/lib/finance/reports";
 import { EmptyState, KpiCard, LimitBar, MonthSelect, Panel } from "@/components/app/common";
 import { LimitBadge, Pill } from "@/components/app/badges";
@@ -84,8 +84,10 @@ function PessoaDetalhe() {
       {msg && <p className="mb-4 rounded-lg bg-warning-soft px-3 py-2 text-sm font-medium text-warning">{msg}</p>}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <KpiCard label="Gasto no mês" value={fmtBRL(r.total)} hint={<LimitBar total={r.total} limit={p.limit} />} />
-        <KpiCard label="Limite mensal" value={fmtBRL(p.limit)} hint={`Saldo ${fmtBRL(round2(p.limit - r.total))}`} tone={r.total > p.limit ? "danger" : "default"} />
+        <KpiCard label="Devedor total" value={fmtBRL(personDebtTotal(state, p.id))} hint="Obrigações menos pagamentos" />
+        <KpiCard label="Obrigação no mês" value={fmtBRL(personMonthTotal(state, p.id, m))} hint={`Pago ${fmtBRL(personMonthPaid(state, p.id, m))}`} />
+        <KpiCard label="Restante no mês" value={fmtBRL(personMonthRemaining(state, p.id, m))} hint={<LimitBar total={r.total} limit={p.limit} />} />
+        <KpiCard label="Limite cadastrado" value={fmtBRL(p.limit)} hint="Referência administrativa" tone={r.total > p.limit ? "danger" : "default"} />
         <KpiCard label="Compras divididas" value={fmtBRL(r.splitTotal)} hint={`${r.rows.filter((x) => x.split).length} lançamento(s)`} />
         <KpiCard label="Parcelas futuras" value={fmtBRL(totalFutureCommitted(state, m, p.id))} hint="Comprometido após este mês" />
       </div>
@@ -119,9 +121,9 @@ function PessoaDetalhe() {
         <Panel title="Parcelamentos ativos">
           {r.plans.length === 0 ? <EmptyState title="Nenhum parcelamento ativo" /> : (
             <table className="w-full text-sm">
-              <thead className="border-b bg-muted/60 text-left text-xs uppercase text-muted-foreground"><tr className="[&_th]:px-4 [&_th]:py-2"><th>Compra</th><th>Parcela</th><th className="text-right">Neste mês</th><th className="text-right">Futuro</th></tr></thead>
+              <thead className="border-b bg-muted/60 text-left text-xs uppercase text-muted-foreground"><tr className="[&_th]:px-4 [&_th]:py-2"><th>Compra</th><th>Parcela</th><th>Faltam</th><th>Termina</th><th className="text-right">Neste mês</th><th className="text-right">Futuro</th></tr></thead>
               <tbody className="divide-y">{r.plans.map((x) => (
-                <tr key={x.plan.id} className="[&_td]:px-4 [&_td]:py-2.5"><td>{x.plan.description}{x.pct < 100 && <span className="text-xs text-muted-foreground"> ({x.pct}%)</span>}</td><td className="num">{x.current}/{x.plan.amounts.length}</td><td className="num text-right">{fmtBRL(x.monthValue)}</td><td className="num text-right">{fmtBRL(x.future)}</td></tr>
+                <tr key={x.plan.id} className="[&_td]:px-4 [&_td]:py-2.5"><td>{x.plan.description}{x.pct < 100 && <span className="text-xs text-muted-foreground"> ({x.pct}%)</span>}</td><td className="num">{x.current}/{x.plan.amounts.length}</td><td className="num">{planRemainingCount(x.plan, m)}</td><td>{fmtMonth(addMonths(x.plan.firstMonth, x.plan.amounts.length - 1))}</td><td className="num text-right">{fmtBRL(x.monthValue)}</td><td className="num text-right">{fmtBRL(x.future)}</td></tr>
               ))}</tbody>
             </table>
           )}
@@ -132,6 +134,10 @@ function PessoaDetalhe() {
           </ul>
         </Panel>
       </div>
+
+      <Panel className="mt-6" title="Histórico de pagamentos" description="Cada pagamento fica vinculado à competência.">
+        {(state.payments ?? []).filter((payment) => payment.personId === p.id).length === 0 ? <p className="p-4 text-sm text-muted-foreground">Nenhum pagamento registrado.</p> : <div className="divide-y text-sm">{(state.payments ?? []).filter((payment) => payment.personId === p.id).sort((a, b) => b.paidAt.localeCompare(a.paidAt)).map((payment) => <div key={payment.id} className="flex justify-between gap-2 px-4 py-3"><span>{fmtMonthLong(payment.month)} · {fmtDate(payment.paidAt.slice(0, 10))}</span><span className="num font-semibold text-success">{fmtBRL(payment.amount)}</span></div>)}</div>}
+      </Panel>
 
       <Panel className="mt-6" title="Relatório individual" description="Arquivo gerado no navegador com os dados atuais" actions={<ExportButtons table={() => personReportTable(state, p.id, m)} filename={`relatorio-${p.name.toLowerCase().replace(/\s+/g, "-")}-${m}`} />}>
         <p className="px-4 py-3 text-sm text-muted-foreground">Inclui {r.rows.length} lançamento(s), total de {fmtBRL(r.total)} e saldo de {fmtBRL(round2(p.limit - r.total))}.</p>

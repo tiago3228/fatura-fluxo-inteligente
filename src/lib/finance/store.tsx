@@ -2,10 +2,11 @@ import { createContext, useContext, useEffect, useReducer, useRef, type ReactNod
 import { supabase } from "@/integrations/supabase/client";
 import { ensureWorkspace, loadCloudState, saveCloudState } from "./cloud";
 import { createDemoState } from "./mock";
-import { planStatusAt } from "./calc";
+import { addMonths, dateInMonth, planAmountAt, planNumberAt, planStatusAt } from "./calc";
+import { round2 } from "./format";
 import { OCTOBER_ASSIGNMENTS } from "./octoberAssignments";
 import type {
-  Allocation, CreditCard, FinanceState, InstallmentPlan, Invoice, Person, Settings, SpreadsheetArchive, Transaction, TxType,
+  Allocation, CreditCard, FinanceState, InstallmentPlan, Invoice, Person, PersonPayment, Settings, SpreadsheetArchive, Transaction, TxType,
 } from "./types";
 
 const STORAGE_KEY = "fatura-organizer-real-itau-v2";
@@ -31,10 +32,47 @@ export type Action =
   | { type: "setInvoicePayments"; invoiceId: string; payments: NonNullable<Invoice["payments"]> }
   | { type: "setInvoiceStatus"; invoiceId: string; status: Invoice["status"] }
   | { type: "addSpreadsheet"; spreadsheet: SpreadsheetArchive }
-  | { type: "removeSpreadsheet"; spreadsheetId: string };
+  | { type: "removeSpreadsheet"; spreadsheetId: string }
+  | { type: "recordPersonPayment"; payment: PersonPayment }
+  | { type: "removePersonPayment"; paymentId: string }
+  | { type: "markInvoicePaid"; invoiceId: string; paidAt: string }
+  | { type: "prepareNextInvoice"; invoiceId: string };
 
 const upsert = <T extends { id: string }>(list: T[], item: T) =>
   list.some((x) => x.id === item.id) ? list.map((x) => (x.id === item.id ? item : x)) : [...list, item];
+
+const prepareNextInvoice = (state: FinanceState, invoiceId: string): FinanceState => {
+  const current = state.invoices.find((invoice) => invoice.id === invoiceId);
+  if (!current) return state;
+  const nextMonth = addMonths(current.month, 1);
+  if (state.invoices.some((invoice) => invoice.cardId === current.cardId && invoice.month === nextMonth)) return state;
+  const card = state.cards.find((item) => item.id === current.cardId);
+  if (!card) return state;
+  const nextId = `${current.id}_next_${nextMonth}`;
+  const transactions = state.plans.flatMap((plan) => {
+    if (plan.cardId !== current.cardId) return [];
+    const amount = planAmountAt(plan, nextMonth);
+    if (!amount) return [];
+    const installmentNumber = planNumberAt(plan, nextMonth);
+    return [{
+      id: `${nextId}_${plan.id}`,
+      invoiceId: nextId,
+      date: dateInMonth(nextMonth, card.closingDay),
+      description: `${plan.description} ${installmentNumber}/${plan.amounts.length}`,
+      amount,
+      type: "parcela" as const,
+      planId: plan.id,
+      installmentNumber,
+      installmentTotal: plan.amounts.length,
+      allocations: plan.shares.map((share) => ({ personId: share.personId, amount: round2((amount * share.pct) / 100) })),
+    }];
+  });
+  return {
+    ...state,
+    invoices: [...state.invoices, { id: nextId, cardId: current.cardId, month: nextMonth, dueDate: dateInMonth(nextMonth, card.dueDay), officialTotal: round2(transactions.reduce((sum, transaction) => sum + transaction.amount, 0)), status: "em_revisao", source: "planilha" }],
+    transactions: [...state.transactions, ...transactions],
+  };
+};
 
 const transactionMatchKey = (transaction: Pick<Transaction, "description" | "amount">) =>
   `${transaction.description.toLowerCase().replace(/\b\d{1,2}\s*\/\s*\d{1,2}\b/g, "").replace(/[^a-z0-9]+/g, " ").trim()}|${transaction.amount.toFixed(2)}`;
@@ -156,7 +194,7 @@ const reconcileImportedTransactions = (state: FinanceState, invoice: Invoice, in
 export function reducer(s: FinanceState, a: Action): FinanceState {
   switch (a.type) {
     case "hydrate":
-      return ensureSpreadsheetArchive(assignInitialCardholders(assignOctoberPurchases(ensure0548(a.state))));
+      return ensureSpreadsheetArchive({ ...assignInitialCardholders(assignOctoberPurchases(ensure0548(a.state))), payments: a.state.payments ?? [] });
     case "reset":
       return createDemoState();
     case "setMonth":
@@ -261,6 +299,14 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
       return { ...s, spreadsheets: upsert(s.spreadsheets ?? [], a.spreadsheet) };
     case "removeSpreadsheet":
       return { ...s, spreadsheets: (s.spreadsheets ?? []).filter((item) => item.id !== a.spreadsheetId) };
+    case "recordPersonPayment":
+      return { ...s, payments: upsert(s.payments ?? [], a.payment) };
+    case "removePersonPayment":
+      return { ...s, payments: (s.payments ?? []).filter((payment) => payment.id !== a.paymentId) };
+    case "markInvoicePaid":
+      return { ...s, invoices: s.invoices.map((invoice) => invoice.id === a.invoiceId ? { ...invoice, status: "paga", paidAt: a.paidAt } : invoice) };
+    case "prepareNextInvoice":
+      return prepareNextInvoice(s, a.invoiceId);
   }
 }
 

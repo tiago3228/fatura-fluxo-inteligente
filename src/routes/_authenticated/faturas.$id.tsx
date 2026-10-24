@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { AlertTriangle, ArrowLeft, CheckCircle2, CircleCheckBig } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CalendarPlus, CheckCircle2, CircleCheckBig, CircleDollarSign } from "lucide-react";
 import { toast } from "sonner";
 import { useFinance } from "@/lib/finance/store";
 import { allocatedSum, invoiceAllocatedTotal, invoiceDiff, invoiceLaunchesTotal, invoiceTxs, isCreditType, txStatus } from "@/lib/finance/calc";
@@ -67,6 +67,8 @@ function FaturaDetalhe() {
         <div className="flex flex-wrap items-center gap-2">
           {paidTotal > 0 && <Pill tone={paidTotal >= inv.officialTotal ? "success" : "warning"}><CircleCheckBig className="size-3" /> Pago {fmtBRL(paidTotal)}</Pill>}
           <Button variant="outline" onClick={() => setPaymentsOpen(true)}><CircleCheckBig className="size-4" /> Já pagou</Button>
+          {inv.status !== "paga" && <Button onClick={() => { dispatch({ type: "markInvoicePaid", invoiceId: inv.id, paidAt: new Date().toISOString() }); toast.success("Fatura marcada como paga"); }}><CircleDollarSign className="size-4" /> Marcar fatura como paga</Button>}
+          <Button variant="outline" onClick={() => { const nextMonth = new Date(`${inv.month}-15T12:00:00Z`); nextMonth.setUTCMonth(nextMonth.getUTCMonth() + 1); const label = `${nextMonth.getUTCFullYear()}-${String(nextMonth.getUTCMonth() + 1).padStart(2, "0")}`; const exists = state.invoices.some((item) => item.cardId === inv.cardId && item.month === label); if (exists) { toast.info("A próxima competência já existe"); return; } dispatch({ type: "prepareNextInvoice", invoiceId: inv.id }); toast.success("Próxima competência preparada", { description: label }); }}><CalendarPlus className="size-4" /> Preparar próxima fatura</Button>
           {inv.status !== "conferida" && (
             <Button
               variant="outline"

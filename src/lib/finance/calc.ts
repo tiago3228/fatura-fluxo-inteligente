@@ -95,6 +95,27 @@ export const personMonthTotal = (s: FinanceState, personId: string, month: strin
     ),
   );
 
+export const personMonthPaid = (s: FinanceState, personId: string, month: string) =>
+  round2((s.payments ?? []).filter((payment) => payment.personId === personId && payment.month === month).reduce((sum, payment) => sum + payment.amount, 0));
+
+export const personMonthRemaining = (s: FinanceState, personId: string, month: string) =>
+  Math.max(0, round2(personMonthTotal(s, personId, month) - personMonthPaid(s, personId, month)));
+
+export const personDebtTotal = (s: FinanceState, personId: string) => {
+  const due = round2(s.transactions.reduce((sum, transaction) => sum + transaction.allocations.filter((allocation) => allocation.personId === personId && transaction.amount > 0).reduce((part, allocation) => part + allocation.amount, 0), 0));
+  const paid = round2((s.payments ?? []).filter((payment) => payment.personId === personId).reduce((sum, payment) => sum + payment.amount, 0));
+  return Math.max(0, round2(due - paid));
+};
+
+export type PersonPaymentStatus = "pendente" | "parcial" | "pago";
+export const personPaymentStatus = (s: FinanceState, personId: string, month: string): PersonPaymentStatus => {
+  const due = personMonthTotal(s, personId, month);
+  const paid = personMonthPaid(s, personId, month);
+  if (due > 0 && paid >= due) return "pago";
+  if (paid > 0) return "parcial";
+  return "pendente";
+};
+
 export type LimitStatus = "normal" | "atencao" | "atingido" | "ultrapassado";
 
 export const limitStatus = (total: number, limit: number, warnPct = 80): LimitStatus => {

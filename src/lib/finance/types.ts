@@ -21,7 +21,16 @@ export interface CreditCard {
   active: boolean;
 }
 
-export type InvoiceStatus = "conferida" | "em_revisao" | "inconsistente";
+export type InvoiceStatus = "conferida" | "em_revisao" | "inconsistente" | "paga";
+
+export interface PersonPayment {
+  id: string;
+  personId: string;
+  amount: number;
+  paidAt: string;
+  month: string;
+  transactionId?: string;
+}
 
 export interface Invoice {
   id: string;
@@ -112,6 +121,7 @@ export interface FinanceState {
   plans: InstallmentPlan[];
   settings: Settings;
   spreadsheets?: SpreadsheetArchive[];
+  payments?: PersonPayment[];
   /** Controle interno das importações automáticas de atribuições. */
   spreadsheetAssignmentVersion?: number;
 }

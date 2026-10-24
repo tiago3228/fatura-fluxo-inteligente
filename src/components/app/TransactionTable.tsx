@@ -18,7 +18,7 @@ import { TxStatusBadge, TxTypeBadge } from "./badges";
 import { EmptyState } from "./common";
 import { useTxActions } from "./tx-actions";
 
-export type SortKey = "date" | "amount" | "description";
+export type SortKey = "date" | "amount" | "description" | "card" | "person" | "status";
 
 const TYPES: TxType[] = ["compra", "parcela", "credito", "estorno", "tarifa", "ajuste", "pagamento"];
 
@@ -49,7 +49,14 @@ export function TransactionTable({
 
   const sorted = [...txs].sort((a, b) => {
     const k = sort.key;
-    const v = k === "amount" ? a.amount - b.amount : k === "date" ? a.date.localeCompare(b.date) : a.description.localeCompare(b.description, "pt-BR");
+    const cardName = (tx: Transaction) => txCard(state, tx)?.name ?? "Sem cartão";
+    const personName = (tx: Transaction) => tx.allocations.map((allocation) => state.people.find((person) => person.id === allocation.personId)?.name ?? "Sem responsável").join(", ");
+    const v = k === "amount" ? a.amount - b.amount
+      : k === "date" ? a.date.localeCompare(b.date)
+      : k === "card" ? cardName(a).localeCompare(cardName(b), "pt-BR")
+      : k === "person" ? personName(a).localeCompare(personName(b), "pt-BR")
+      : k === "status" ? txStatus(a).localeCompare(txStatus(b), "pt-BR")
+      : a.description.localeCompare(b.description, "pt-BR");
     return v * sort.dir;
   });
 
@@ -87,11 +94,11 @@ export function TransactionTable({
             )}
             <th className="w-28"><SortBtn k="date">Data</SortBtn></th>
             <th><SortBtn k="description">Descrição</SortBtn></th>
-            {showCard && <th>Cartão</th>}
+            {showCard && <th><SortBtn k="card">Cartão</SortBtn></th>}
             {showType && <th>Tipo</th>}
             <th className="text-right"><SortBtn k="amount" right>Valor</SortBtn></th>
-            <th>Responsável</th>
-            <th>Status</th>
+            <th><SortBtn k="person">Responsável</SortBtn></th>
+            <th><SortBtn k="status">Status</SortBtn></th>
             <th className="w-12"><span className="sr-only">Ações</span></th>
           </tr>
         </thead>

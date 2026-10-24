@@ -3,11 +3,11 @@ import { useState } from "react";
 import { Copy, Eye, MoreHorizontal, Pencil, Trash2, UserCheck, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { useFinance } from "@/lib/finance/store";
-import { limitMessage, limitStatus, personMonthTotal } from "@/lib/finance/calc";
-import { fmtBRL, fmtMonthLong, round2 } from "@/lib/finance/format";
+import { limitMessage, personDebtTotal, personMonthPaid, personMonthRemaining, personMonthTotal, personPaymentStatus } from "@/lib/finance/calc";
+import { fmtBRL, fmtMonthLong, round2, uid } from "@/lib/finance/format";
 import type { Person } from "@/lib/finance/types";
-import { EmptyState, LimitBar, PageHeader, Panel } from "@/components/app/common";
-import { LimitBadge, Pill } from "@/components/app/badges";
+import { EmptyState, PageHeader, Panel } from "@/components/app/common";
+import { PaymentStatusBadge, Pill } from "@/components/app/badges";
 import { PersonDialog } from "@/components/app/PersonDialog";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -44,13 +44,16 @@ function Pessoas() {
             <table className="w-full min-w-[900px] text-sm">
               <thead className="border-b bg-muted/60 text-left text-xs uppercase tracking-wide text-muted-foreground">
                 <tr className="[&_th]:px-4 [&_th]:py-2.5">
-                  <th>Nome</th><th>Cartões</th><th className="text-right">Limite</th><th className="text-right">Atribuído</th><th className="text-right">Restante</th><th className="w-44">Uso</th><th>Status</th><th className="w-12" />
+                  <th>Nome</th><th>Cartões</th><th className="text-right">Devedor total</th><th className="text-right">Competência</th><th className="text-right">Pago</th><th className="text-right">Restante</th><th>Status</th><th className="w-12" />
                 </tr>
               </thead>
               <tbody className="divide-y">
                 {state.people.map((p) => {
                   const total = personMonthTotal(state, p.id, m);
-                  const rest = round2(p.limit - total);
+                  const paid = personMonthPaid(state, p.id, m);
+                  const remaining = personMonthRemaining(state, p.id, m);
+                  const debt = personDebtTotal(state, p.id);
+                  const paymentStatus = personPaymentStatus(state, p.id, m);
                   const msg = limitMessage(p.name, total, p.limit, state.settings.warnPct);
                   return (
                     <ContextMenu key={p.id}>
@@ -66,17 +69,30 @@ function Pessoas() {
                           {p.cardIds.length === 0 && <span className="text-muted-foreground">—</span>}
                         </div>
                       </td>
-                      <td className="num text-right">{fmtBRL(p.limit)}</td>
-                      <td className="num text-right font-semibold">{fmtBRL(total)}</td>
-                      <td className={cn("num text-right", rest < 0 && "font-semibold text-danger")}>{fmtBRL(rest)}</td>
-                      <td><LimitBar total={total} limit={p.limit} /></td>
-                      <td>{p.active ? <LimitBadge status={limitStatus(total, p.limit, state.settings.warnPct)} /> : <Pill>Inativa</Pill>}</td>
+                      <td className="num text-right font-semibold">{fmtBRL(debt)}</td>
+                      <td className="num text-right">{fmtBRL(total)}</td>
+                      <td className="num text-right text-success">{fmtBRL(paid)}</td>
+                      <td className={cn("num text-right", remaining > 0 && "font-semibold text-danger")}>{fmtBRL(remaining)}</td>
+                      <td>{p.active ? <PaymentStatusBadge status={paymentStatus} /> : <Pill>Inativa</Pill>}</td>
                       <td>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" aria-label={`Ações para ${p.name}`}><MoreHorizontal className="size-4" /></Button></DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
+                        <DropdownMenuContent align="end">
                             <DropdownMenuItem asChild><Link to="/pessoas/$id" params={{ id: p.id }}><Eye className="size-4" /> Ver detalhes</Link></DropdownMenuItem>
                             <DropdownMenuItem onSelect={() => setEdit(p)}><Pencil className="size-4" /> Editar</DropdownMenuItem>
+                            <DropdownMenuItem disabled={remaining <= 0} onSelect={() => {
+                              if (remaining <= 0) return;
+                              dispatch({ type: "recordPersonPayment", payment: { id: uid("payment"), personId: p.id, amount: remaining, paidAt: new Date().toISOString(), month: m } });
+                              toast.success(`${p.name} marcada como paga`, { description: `${fmtBRL(remaining)} registrados em ${fmtMonthLong(m)}.` });
+                            }}>Marcar parcela do mês como paga</DropdownMenuItem>
+                            <DropdownMenuItem disabled={remaining <= 0} onSelect={() => {
+                              const raw = window.prompt(`Quanto ${p.name} pagou neste mês?`, String(remaining.toFixed(2)).replace(".", ","));
+                              if (!raw) return;
+                              const amount = Number(raw.replace(/\./g, "").replace(",", "."));
+                              if (!Number.isFinite(amount) || amount <= 0 || amount > remaining) { toast.error("Valor inválido", { description: `Digite um valor entre R$ 0,01 e ${fmtBRL(remaining)}.` }); return; }
+                              dispatch({ type: "recordPersonPayment", payment: { id: uid("payment"), personId: p.id, amount: round2(amount), paidAt: new Date().toISOString(), month: m } });
+                              toast.success("Pagamento parcial registrado", { description: `${fmtBRL(amount)} para ${p.name}.` });
+                            }}>Registrar pagamento parcial</DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem className="text-danger" onSelect={() => setDel(p)}><Trash2 className="size-4" /> Excluir</DropdownMenuItem>
                           </DropdownMenuContent>
