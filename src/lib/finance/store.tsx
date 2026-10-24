@@ -2,11 +2,29 @@ import { createContext, useContext, useEffect, useReducer, useRef, type ReactNod
 import { supabase } from "@/integrations/supabase/client";
 import { ensureWorkspace, loadCloudState, saveCloudState } from "./cloud";
 import { createDemoState } from "./mock";
-import { addMonths, dateInMonth, planAmountAt, planNumberAt, planStatusAt } from "./calc";
+import {
+  addMonths,
+  dateInMonth,
+  planAmountAt,
+  planNumberAt,
+  planStatusAt,
+  recurringChargeAppliesAt,
+} from "./calc";
 import { round2 } from "./format";
 import { OCTOBER_ASSIGNMENTS } from "./octoberAssignments";
 import type {
-  Allocation, CreditCard, FinanceState, InstallmentPlan, Invoice, Person, PersonPayment, Settings, SpreadsheetArchive, Transaction, TxType,
+  Allocation,
+  CreditCard,
+  FinanceState,
+  InstallmentPlan,
+  Invoice,
+  Person,
+  PersonPayment,
+  RecurringCharge,
+  Settings,
+  SpreadsheetArchive,
+  Transaction,
+  TxType,
 } from "./types";
 
 const STORAGE_KEY = "fatura-organizer-real-itau-v2";
@@ -19,7 +37,17 @@ export type Action =
   | { type: "allocate"; txIds: string[]; personId: string }
   | { type: "split"; txId: string; allocations: Allocation[]; adjustmentNote?: string }
   | { type: "unassign"; txIds: string[] }
-  | { type: "updateTransaction"; txId: string; patch: { description: string; date: string; amount: number; installmentNumber: number | null; installmentTotal: number | null } }
+  | {
+      type: "updateTransaction";
+      txId: string;
+      patch: {
+        description: string;
+        date: string;
+        amount: number;
+        installmentNumber: number | null;
+        installmentTotal: number | null;
+      };
+    }
   | { type: "deleteTransaction"; txId: string }
   | { type: "addTransaction"; transaction: Transaction }
   | { type: "setTxType"; txId: string; txType: TxType }
@@ -28,6 +56,8 @@ export type Action =
   | { type: "upsertCard"; card: CreditCard }
   | { type: "upsertPlan"; plan: InstallmentPlan }
   | { type: "deletePlan"; planId: string }
+  | { type: "upsertRecurringCharge"; charge: RecurringCharge }
+  | { type: "cancelRecurringCharge"; chargeId: string; cancelledFromMonth: string }
   | { type: "importInvoice"; invoice: Invoice; transactions: Transaction[] }
   | { type: "setInvoicePayments"; invoiceId: string; payments: NonNullable<Invoice["payments"]> }
   | { type: "setInvoiceStatus"; invoiceId: string; status: Invoice["status"] }
@@ -39,47 +69,169 @@ export type Action =
   | { type: "prepareNextInvoice"; invoiceId: string };
 
 const upsert = <T extends { id: string }>(list: T[], item: T) =>
-  list.some((x) => x.id === item.id) ? list.map((x) => (x.id === item.id ? item : x)) : [...list, item];
+  list.some((x) => x.id === item.id)
+    ? list.map((x) => (x.id === item.id ? item : x))
+    : [...list, item];
 
 const prepareNextInvoice = (state: FinanceState, invoiceId: string): FinanceState => {
   const current = state.invoices.find((invoice) => invoice.id === invoiceId);
   if (!current) return state;
   const nextMonth = addMonths(current.month, 1);
-  if (state.invoices.some((invoice) => invoice.cardId === current.cardId && invoice.month === nextMonth)) return state;
+  if (
+    state.invoices.some(
+      (invoice) => invoice.cardId === current.cardId && invoice.month === nextMonth,
+    )
+  )
+    return state;
   const card = state.cards.find((item) => item.id === current.cardId);
   if (!card) return state;
   const nextId = `${current.id}_next_${nextMonth}`;
-  const transactions = state.plans.flatMap((plan) => {
+  const installmentTransactions = state.plans.flatMap((plan) => {
     if (plan.cardId !== current.cardId) return [];
     const amount = planAmountAt(plan, nextMonth);
     if (!amount) return [];
     const installmentNumber = planNumberAt(plan, nextMonth);
-    return [{
-      id: `${nextId}_${plan.id}`,
+    return [
+      {
+        id: `${nextId}_${plan.id}`,
+        invoiceId: nextId,
+        date: dateInMonth(nextMonth, card.closingDay),
+        description: `${plan.description} ${installmentNumber}/${plan.amounts.length}`,
+        amount,
+        type: "parcela" as const,
+        planId: plan.id,
+        installmentNumber,
+        installmentTotal: plan.amounts.length,
+        allocations: plan.shares.map((share) => ({
+          personId: share.personId,
+          amount: round2((amount * share.pct) / 100),
+        })),
+      },
+    ];
+  });
+  const recurringTransactions = state.recurringCharges
+    .filter(
+      (charge) => charge.cardId === current.cardId && recurringChargeAppliesAt(charge, nextMonth),
+    )
+    .map((charge) => ({
+      id: `${nextId}_${charge.id}`,
       invoiceId: nextId,
       date: dateInMonth(nextMonth, card.closingDay),
-      description: `${plan.description} ${installmentNumber}/${plan.amounts.length}`,
-      amount,
-      type: "parcela" as const,
-      planId: plan.id,
-      installmentNumber,
-      installmentTotal: plan.amounts.length,
-      allocations: plan.shares.map((share) => ({ personId: share.personId, amount: round2((amount * share.pct) / 100) })),
-    }];
-  });
+      description: charge.description,
+      amount: charge.amount,
+      type: "compra" as const,
+      recurringChargeId: charge.id,
+      allocations: charge.shares.map((share) => ({
+        personId: share.personId,
+        amount: round2((charge.amount * share.pct) / 100),
+      })),
+    }));
+  const transactions = [...installmentTransactions, ...recurringTransactions];
   return {
     ...state,
-    invoices: [...state.invoices, { id: nextId, cardId: current.cardId, month: nextMonth, dueDate: dateInMonth(nextMonth, card.dueDay), officialTotal: round2(transactions.reduce((sum, transaction) => sum + transaction.amount, 0)), status: "em_revisao", source: "planilha" }],
+    invoices: [
+      ...state.invoices,
+      {
+        id: nextId,
+        cardId: current.cardId,
+        month: nextMonth,
+        dueDate: dateInMonth(nextMonth, card.dueDay),
+        officialTotal: round2(
+          transactions.reduce((sum, transaction) => sum + transaction.amount, 0),
+        ),
+        status: "em_revisao",
+        source: "planilha",
+      },
+    ],
     transactions: [...state.transactions, ...transactions],
   };
 };
 
+const isForecastInvoice = (invoice: Invoice) =>
+  invoice.source === "planilha" && invoice.id.includes("_next_");
+
+const ensureRecurringProjections = (state: FinanceState): FinanceState => {
+  let result = state;
+  const cardIds = [...new Set(result.recurringCharges.map((charge) => charge.cardId))];
+  for (const cardId of cardIds) {
+    const latestActual = result.invoices
+      .filter((invoice) => invoice.cardId === cardId && !isForecastInvoice(invoice))
+      .sort((a, b) => b.month.localeCompare(a.month))[0];
+    if (!latestActual) continue;
+    const nextMonth = addMonths(latestActual.month, 1);
+    if (
+      !result.recurringCharges.some(
+        (charge) => charge.cardId === cardId && recurringChargeAppliesAt(charge, nextMonth),
+      )
+    )
+      continue;
+    const existing = result.invoices.find(
+      (invoice) => invoice.cardId === cardId && invoice.month === nextMonth,
+    );
+    if (!existing) {
+      result = prepareNextInvoice(result, latestActual.id);
+      continue;
+    }
+    if (!isForecastInvoice(existing)) continue;
+    const card = result.cards.find((item) => item.id === cardId);
+    if (!card) continue;
+    const missing = result.recurringCharges
+      .filter((charge) => charge.cardId === cardId && recurringChargeAppliesAt(charge, nextMonth))
+      .filter(
+        (charge) =>
+          !result.transactions.some(
+            (transaction) => transaction.id === `${existing.id}_${charge.id}`,
+          ),
+      )
+      .map((charge) => ({
+        id: `${existing.id}_${charge.id}`,
+        invoiceId: existing.id,
+        date: dateInMonth(nextMonth, card.closingDay),
+        description: charge.description,
+        amount: charge.amount,
+        type: "compra" as const,
+        recurringChargeId: charge.id,
+        allocations: charge.shares.map((share) => ({
+          personId: share.personId,
+          amount: round2((charge.amount * share.pct) / 100),
+        })),
+      }));
+    if (!missing.length) continue;
+    const transactions = [...result.transactions, ...missing];
+    const officialTotal = round2(
+      transactions
+        .filter(
+          (transaction) =>
+            transaction.invoiceId === existing.id && transaction.type !== "pagamento",
+        )
+        .reduce((sum, transaction) => sum + transaction.amount, 0),
+    );
+    result = {
+      ...result,
+      transactions,
+      invoices: result.invoices.map((invoice) =>
+        invoice.id === existing.id ? { ...invoice, officialTotal } : invoice,
+      ),
+    };
+  }
+  return result;
+};
+
 const transactionMatchKey = (transaction: Pick<Transaction, "description" | "amount">) =>
-  `${transaction.description.toLowerCase().replace(/\b\d{1,2}\s*\/\s*\d{1,2}\b/g, "").replace(/[^a-z0-9]+/g, " ").trim()}|${transaction.amount.toFixed(2)}`;
+  `${transaction.description
+    .toLowerCase()
+    .replace(/\b\d{1,2}\s*\/\s*\d{1,2}\b/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()}|${transaction.amount.toFixed(2)}`;
 
 const previousInvoiceFor = (state: FinanceState, invoice: Invoice) =>
   state.invoices
-    .filter((candidate) => candidate.cardId === invoice.cardId && candidate.id !== invoice.id && candidate.month <= invoice.month)
+    .filter(
+      (candidate) =>
+        candidate.cardId === invoice.cardId &&
+        candidate.id !== invoice.id &&
+        candidate.month < invoice.month,
+    )
     .sort((a, b) => b.month.localeCompare(a.month))[0];
 
 /** Recupera o cartão 0548 da fatura real quando uma versão local antiga não o tinha. */
@@ -89,15 +241,24 @@ const ensure0548 = (state: FinanceState): FinanceState => {
   const baselineInvoice = baseline.invoices.find((invoice) => invoice.cardId === "c_0548");
   if (!baselineCard || !baselineInvoice) return state;
 
-  const cards = state.cards.some((card) => card.id === baselineCard.id) ? state.cards : [...state.cards, baselineCard];
-  const invoices = state.invoices.some((invoice) => invoice.id === baselineInvoice.id) ? state.invoices : [...state.invoices, baselineInvoice];
-  const people = state.people.map((person) => person.id === "p_tiago" && !person.cardIds.includes("c_0548")
-    ? { ...person, cardIds: [...person.cardIds, "c_0548"] }
-    : person);
+  const cards = state.cards.some((card) => card.id === baselineCard.id)
+    ? state.cards
+    : [...state.cards, baselineCard];
+  const invoices = state.invoices.some((invoice) => invoice.id === baselineInvoice.id)
+    ? state.invoices
+    : [...state.invoices, baselineInvoice];
+  const people = state.people.map((person) =>
+    person.id === "p_tiago" && !person.cardIds.includes("c_0548")
+      ? { ...person, cardIds: [...person.cardIds, "c_0548"] }
+      : person,
+  );
   const knownTransactionIds = new Set(state.transactions.map((transaction) => transaction.id));
   const transactions = [
     ...state.transactions,
-    ...baseline.transactions.filter((transaction) => !knownTransactionIds.has(transaction.id) && transaction.invoiceId === baselineInvoice.id),
+    ...baseline.transactions.filter(
+      (transaction) =>
+        !knownTransactionIds.has(transaction.id) && transaction.invoiceId === baselineInvoice.id,
+    ),
   ];
   return { ...state, cards, invoices, people, transactions };
 };
@@ -109,8 +270,12 @@ const assignInitialCardholders = (state: FinanceState): FinanceState => ({
     if (transaction.allocations.length > 0 || transaction.type === "pagamento") return transaction;
     const invoice = state.invoices.find((item) => item.id === transaction.invoiceId);
     const card = invoice ? state.cards.find((item) => item.id === invoice.cardId) : undefined;
-    const holder = card ? state.people.find((person) => person.cardIds.includes(card.id)) : undefined;
-    return holder ? { ...transaction, allocations: [{ personId: holder.id, amount: transaction.amount }] } : transaction;
+    const holder = card
+      ? state.people.find((person) => person.cardIds.includes(card.id))
+      : undefined;
+    return holder
+      ? { ...transaction, allocations: [{ personId: holder.id, amount: transaction.amount }] }
+      : transaction;
   }),
 });
 
@@ -131,18 +296,40 @@ const assignOctoberPurchases = (state: FinanceState): FinanceState => {
   if (state.spreadsheetAssignmentVersion === 2) return state;
   const people = OCTOBER_ASSIGNMENTS.map((item) => {
     const person = state.people.find((candidate) => {
-      const candidateName = candidate.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-      return candidateName === item.personName.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() || candidateName.startsWith(item.personName.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase());
+      const candidateName = candidate.name
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase();
+      return (
+        candidateName ===
+          item.personName
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .toLowerCase() ||
+        candidateName.startsWith(
+          item.personName
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .toLowerCase(),
+        )
+      );
     });
     return { item, person };
-  }).filter((entry): entry is { item: (typeof OCTOBER_ASSIGNMENTS)[number]; person: Person } => Boolean(entry.person));
+  }).filter((entry): entry is { item: (typeof OCTOBER_ASSIGNMENTS)[number]; person: Person } =>
+    Boolean(entry.person),
+  );
   const available = state.transactions.map((transaction) => ({ transaction, used: false }));
   const updates = new Map<string, Allocation[]>();
   for (const { item, person } of people) {
     const wanted = assignmentKey(item.description);
     const candidate = available
       .filter(({ transaction, used }) => !used && Math.abs(transaction.amount - item.amount) < 0.01)
-      .map((entry) => ({ ...entry, score: assignmentKey(entry.transaction.description).filter((token) => wanted.includes(token)).length }))
+      .map((entry) => ({
+        ...entry,
+        score: assignmentKey(entry.transaction.description).filter((token) =>
+          wanted.includes(token),
+        ).length,
+      }))
       .filter((entry) => entry.score > 0)
       .sort((a, b) => b.score - a.score)[0];
     if (!candidate) continue;
@@ -153,29 +340,53 @@ const assignOctoberPurchases = (state: FinanceState): FinanceState => {
   return {
     ...state,
     spreadsheetAssignmentVersion: 2,
-    transactions: state.transactions.map((transaction) => updates.has(transaction.id) ? { ...transaction, allocations: updates.get(transaction.id)! } : transaction),
+    transactions: state.transactions.map((transaction) =>
+      updates.has(transaction.id)
+        ? { ...transaction, allocations: updates.get(transaction.id)! }
+        : transaction,
+    ),
   };
 };
 
 const ensureSpreadsheetArchive = (state: FinanceState): FinanceState => {
   const spreadsheets = state.spreadsheets ?? [];
-  if (spreadsheets.some((item) => item.id === "sheet_outubro_2020")) return { ...state, spreadsheets };
+  if (spreadsheets.some((item) => item.id === "sheet_outubro_2020"))
+    return { ...state, spreadsheets };
   return {
     ...state,
     spreadsheets: [
       ...spreadsheets,
-      { id: "sheet_outubro_2020", fileName: "OUTUBRODE2020.xlsx", month: "2020-10", uploadedAt: "2026-10-23T21:00:00.000Z", publicPath: "/planilhas/OUTUBRODE2020.xlsx" },
+      {
+        id: "sheet_outubro_2020",
+        fileName: "OUTUBRODE2020.xlsx",
+        month: "2020-10",
+        uploadedAt: "2026-10-23T21:00:00.000Z",
+        publicPath: "/planilhas/OUTUBRODE2020.xlsx",
+      },
     ],
   };
 };
 
-const reconcileImportedTransactions = (state: FinanceState, invoice: Invoice, incoming: Transaction[]) => {
+const reconcileImportedTransactions = (
+  state: FinanceState,
+  invoice: Invoice,
+  incoming: Transaction[],
+) => {
+  const prepared = state.invoices.find(
+    (candidate) => candidate.cardId === invoice.cardId && candidate.month === invoice.month,
+  );
   const previous = previousInvoiceFor(state, invoice);
-  if (!previous) return incoming;
-  const candidates = state.transactions.filter((transaction) => transaction.invoiceId === previous.id);
+  const candidates = state.transactions.filter(
+    (transaction) =>
+      transaction.invoiceId === prepared?.id || transaction.invoiceId === previous?.id,
+  );
   const used = new Set<string>();
   const transactions = incoming.map((transaction) => {
-    const match = candidates.find((candidate) => !used.has(candidate.id) && transactionMatchKey(candidate) === transactionMatchKey(transaction));
+    const match = candidates.find(
+      (candidate) =>
+        !used.has(candidate.id) &&
+        transactionMatchKey(candidate) === transactionMatchKey(transaction),
+    );
     if (!match) return transaction;
     used.add(match.id);
     const restored: Transaction = {
@@ -184,8 +395,11 @@ const reconcileImportedTransactions = (state: FinanceState, invoice: Invoice, in
       ...(match.adjustmentNote !== undefined ? { adjustmentNote: match.adjustmentNote } : {}),
     };
     if (match.planId !== undefined) restored.planId = match.planId;
-    if (transaction.installmentNumber === undefined && match.installmentNumber !== undefined) restored.installmentNumber = match.installmentNumber;
-    if (transaction.installmentTotal === undefined && match.installmentTotal !== undefined) restored.installmentTotal = match.installmentTotal;
+    if (match.recurringChargeId !== undefined) restored.recurringChargeId = match.recurringChargeId;
+    if (transaction.installmentNumber === undefined && match.installmentNumber !== undefined)
+      restored.installmentNumber = match.installmentNumber;
+    if (transaction.installmentTotal === undefined && match.installmentTotal !== undefined)
+      restored.installmentTotal = match.installmentTotal;
     return restored;
   });
   return transactions;
@@ -193,10 +407,27 @@ const reconcileImportedTransactions = (state: FinanceState, invoice: Invoice, in
 
 export function reducer(s: FinanceState, a: Action): FinanceState {
   switch (a.type) {
-    case "hydrate":
-      return ensureSpreadsheetArchive({ ...assignInitialCardholders(assignOctoberPurchases(ensure0548(a.state))), payments: a.state.payments ?? [] });
+    case "hydrate": {
+      const raw = a.state as FinanceState & { recurringCharges?: RecurringCharge[] };
+      const seededCharges = createDemoState().recurringCharges.filter((charge) =>
+        raw.transactions.some((transaction) => transaction.id === charge.sourceTransactionId),
+      );
+      const recurringCharges = raw.recurringCharges ?? seededCharges;
+      const transactions = raw.transactions.map((transaction) => {
+        const charge = recurringCharges.find((item) => item.sourceTransactionId === transaction.id);
+        return transaction.recurringChargeId || !charge
+          ? transaction
+          : { ...transaction, recurringChargeId: charge.id };
+      });
+      const normalized = { ...raw, recurringCharges, transactions, payments: raw.payments ?? [] };
+      return ensureRecurringProjections(
+        ensureSpreadsheetArchive({
+          ...assignInitialCardholders(assignOctoberPurchases(ensure0548(normalized))),
+        }),
+      );
+    }
     case "reset":
-      return createDemoState();
+      return ensureRecurringProjections(createDemoState());
     case "setMonth":
       return { ...s, settings: { ...s.settings, month: a.month } };
     case "updateSettings":
@@ -206,7 +437,11 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
         ...s,
         transactions: s.transactions.map((t) =>
           a.txIds.includes(t.id) && t.type !== "pagamento"
-            ? { ...t, allocations: [{ personId: a.personId, amount: t.amount }], adjustmentNote: undefined }
+            ? {
+                ...t,
+                allocations: [{ personId: a.personId, amount: t.amount }],
+                adjustmentNote: undefined,
+              }
             : t,
         ),
       };
@@ -214,7 +449,9 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
       return {
         ...s,
         transactions: s.transactions.map((t) =>
-          t.id === a.txId ? { ...t, allocations: a.allocations, adjustmentNote: a.adjustmentNote } : t,
+          t.id === a.txId
+            ? { ...t, allocations: a.allocations, adjustmentNote: a.adjustmentNote }
+            : t,
         ),
       };
     case "unassign":
@@ -229,7 +466,12 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
         ...s,
         transactions: s.transactions.map((t) => {
           if (t.id !== a.txId) return t;
-          const updated: Transaction = { ...t, description: a.patch.description, date: a.patch.date, amount: a.patch.amount };
+          const updated: Transaction = {
+            ...t,
+            description: a.patch.description,
+            date: a.patch.date,
+            amount: a.patch.amount,
+          };
           if (a.patch.installmentNumber === null) delete updated.installmentNumber;
           else updated.installmentNumber = a.patch.installmentNumber;
           if (a.patch.installmentTotal === null) delete updated.installmentTotal;
@@ -260,7 +502,14 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
         transactions: s.transactions.map((t) =>
           t.allocations.some((x) => x.personId === a.personId) ? { ...t, allocations: [] } : t,
         ),
-        plans: s.plans.map((p) => ({ ...p, shares: p.shares.filter((x) => x.personId !== a.personId) })),
+        plans: s.plans.map((p) => ({
+          ...p,
+          shares: p.shares.filter((x) => x.personId !== a.personId),
+        })),
+        recurringCharges: s.recurringCharges.map((charge) => ({
+          ...charge,
+          shares: charge.shares.filter((share) => share.personId !== a.personId),
+        })),
       };
     case "upsertCard":
       return { ...s, cards: upsert(s.cards, a.card) };
@@ -270,21 +519,88 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
       return {
         ...s,
         plans: s.plans.filter((p) => p.id !== a.planId),
-        transactions: s.transactions.map((t) => (t.planId === a.planId ? { ...t, planId: undefined } : t)),
+        transactions: s.transactions.map((t) =>
+          t.planId === a.planId ? { ...t, planId: undefined } : t,
+        ),
       };
-    case "importInvoice":
-      {
-        const reconciled = reconcileImportedTransactions(s, a.invoice, a.transactions);
-        return {
-          ...s,
-          invoices: upsert(s.invoices, a.invoice),
-          plans: s.plans.filter((plan) => plan.cardId !== a.invoice.cardId || planStatusAt(plan, a.invoice.month) !== "finalizado"),
-          transactions: [
-            ...s.transactions.filter((transaction) => transaction.invoiceId !== a.invoice.id),
-            ...reconciled,
-          ],
-        };
-      }
+    case "upsertRecurringCharge": {
+      const next = {
+        ...s,
+        recurringCharges: upsert(s.recurringCharges, a.charge),
+        transactions: s.transactions.map((transaction) =>
+          transaction.id === a.charge.sourceTransactionId
+            ? { ...transaction, recurringChargeId: a.charge.id }
+            : transaction,
+        ),
+      };
+      return ensureRecurringProjections(next);
+    }
+    case "cancelRecurringCharge": {
+      const charge = s.recurringCharges.find((item) => item.id === a.chargeId);
+      if (!charge) return s;
+      const removedInvoices = new Set<string>();
+      const transactions = s.transactions.filter((transaction) => {
+        const invoice = s.invoices.find((item) => item.id === transaction.invoiceId);
+        const remove =
+          transaction.recurringChargeId === charge.id &&
+          invoice &&
+          isForecastInvoice(invoice) &&
+          invoice.month >= a.cancelledFromMonth &&
+          transaction.id === `${invoice.id}_${charge.id}`;
+        if (remove) removedInvoices.add(invoice.id);
+        return !remove;
+      });
+      const invoices = s.invoices.map((invoice) =>
+        removedInvoices.has(invoice.id)
+          ? {
+              ...invoice,
+              officialTotal: round2(
+                transactions
+                  .filter(
+                    (transaction) =>
+                      transaction.invoiceId === invoice.id && transaction.type !== "pagamento",
+                  )
+                  .reduce((sum, transaction) => sum + transaction.amount, 0),
+              ),
+            }
+          : invoice,
+      );
+      return {
+        ...s,
+        recurringCharges: s.recurringCharges.map((item) =>
+          item.id === charge.id ? { ...item, cancelledFromMonth: a.cancelledFromMonth } : item,
+        ),
+        invoices,
+        transactions,
+      };
+    }
+    case "importInvoice": {
+      const existing = s.invoices.find(
+        (invoice) => invoice.cardId === a.invoice.cardId && invoice.month === a.invoice.month,
+      );
+      const invoice = existing ? { ...a.invoice, id: existing.id } : a.invoice;
+      const incoming = a.transactions.map((transaction) => ({
+        ...transaction,
+        invoiceId: invoice.id,
+      }));
+      const reconciled = reconcileImportedTransactions(s, invoice, incoming);
+      const imported = {
+        ...s,
+        invoices: upsert(s.invoices, invoice),
+        plans: s.plans.filter(
+          (plan) =>
+            plan.cardId !== invoice.cardId || planStatusAt(plan, invoice.month) !== "finalizado",
+        ),
+        transactions: [
+          ...s.transactions.filter(
+            (transaction) =>
+              transaction.invoiceId !== invoice.id && transaction.invoiceId !== a.invoice.id,
+          ),
+          ...reconciled,
+        ],
+      };
+      return ensureRecurringProjections(imported);
+    }
     case "setInvoiceStatus":
       return {
         ...s,
@@ -293,18 +609,28 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
     case "setInvoicePayments":
       return {
         ...s,
-        invoices: s.invoices.map((i) => i.id === a.invoiceId ? { ...i, payments: a.payments } : i),
+        invoices: s.invoices.map((i) =>
+          i.id === a.invoiceId ? { ...i, payments: a.payments } : i,
+        ),
       };
     case "addSpreadsheet":
       return { ...s, spreadsheets: upsert(s.spreadsheets ?? [], a.spreadsheet) };
     case "removeSpreadsheet":
-      return { ...s, spreadsheets: (s.spreadsheets ?? []).filter((item) => item.id !== a.spreadsheetId) };
+      return {
+        ...s,
+        spreadsheets: (s.spreadsheets ?? []).filter((item) => item.id !== a.spreadsheetId),
+      };
     case "recordPersonPayment":
       return { ...s, payments: upsert(s.payments ?? [], a.payment) };
     case "removePersonPayment":
       return { ...s, payments: (s.payments ?? []).filter((payment) => payment.id !== a.paymentId) };
     case "markInvoicePaid":
-      return { ...s, invoices: s.invoices.map((invoice) => invoice.id === a.invoiceId ? { ...invoice, status: "paga", paidAt: a.paidAt } : invoice) };
+      return {
+        ...s,
+        invoices: s.invoices.map((invoice) =>
+          invoice.id === a.invoiceId ? { ...invoice, status: "paga", paidAt: a.paidAt } : invoice,
+        ),
+      };
     case "prepareNextInvoice":
       return prepareNextInvoice(s, a.invoiceId);
   }
@@ -316,7 +642,10 @@ const g = globalThis as unknown as { __financeCtx?: React.Context<FinanceCtx> };
 const Ctx = g.__financeCtx ?? (g.__financeCtx = createContext<FinanceCtx>(null));
 
 export function FinanceProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, undefined, createDemoState);
+  const [state, dispatch] = useReducer(reducer, undefined, () => {
+    const initial = createDemoState();
+    return reducer(initial, { type: "hydrate", state: initial });
+  });
   const hydrated = useRef(false);
   const workspaceId = useRef<string | null>(null);
   const stateRef = useRef(state);
@@ -347,7 +676,12 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         .channel(`ws-state-${ws}-${Math.random().toString(36).slice(2)}`)
         .on(
           "postgres_changes",
-          { event: "*", schema: "public", table: "workspace_state", filter: `workspace_id=eq.${ws}` },
+          {
+            event: "*",
+            schema: "public",
+            table: "workspace_state",
+            filter: `workspace_id=eq.${ws}`,
+          },
           (payload) => {
             const remote = (payload.new as { data?: unknown } | null)?.data;
             if (!remote || typeof remote !== "object") return;
@@ -380,13 +714,22 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
 
     void loadFromCloud();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event) => {
       if (event === "SIGNED_OUT") {
         workspaceId.current = null;
         lastSynced.current = null;
-        if (channel) { void supabase.removeChannel(channel); channel = null; }
+        if (channel) {
+          void supabase.removeChannel(channel);
+          channel = null;
+        }
         dispatch({ type: "hydrate", state: createDemoState() });
-        try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+        try {
+          localStorage.removeItem(STORAGE_KEY);
+        } catch {
+          /* ignore */
+        }
       } else if (event === "SIGNED_IN" || event === "USER_UPDATED") {
         void loadFromCloud();
       }

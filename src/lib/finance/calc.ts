@@ -1,5 +1,13 @@
 import { round2 } from "./format";
-import type { CreditCard, FinanceState, InstallmentPlan, Invoice, Transaction, TxType } from "./types";
+import type {
+  CreditCard,
+  FinanceState,
+  InstallmentPlan,
+  Invoice,
+  RecurringCharge,
+  Transaction,
+  TxType,
+} from "./types";
 
 export const TX_TYPE_LABEL: Record<TxType, string> = {
   compra: "Compra",
@@ -47,7 +55,8 @@ export const nextOccurrence = (day: number, from: Date = new Date()) => {
 /* ---------- Lançamentos ---------- */
 export type TxStatus = "pendente" | "atribuida" | "dividida" | "nao_aplica";
 
-export const allocatedSum = (tx: Transaction) => round2(tx.allocations.reduce((s, a) => s + a.amount, 0));
+export const allocatedSum = (tx: Transaction) =>
+  round2(tx.allocations.reduce((s, a) => s + a.amount, 0));
 
 export const txStatus = (tx: Transaction): TxStatus => {
   if (tx.type === "pagamento") return "nao_aplica";
@@ -55,7 +64,8 @@ export const txStatus = (tx: Transaction): TxStatus => {
   return tx.allocations.length > 1 ? "dividida" : "atribuida";
 };
 
-export const invoiceOf = (s: FinanceState, tx: Transaction) => s.invoices.find((i) => i.id === tx.invoiceId);
+export const invoiceOf = (s: FinanceState, tx: Transaction) =>
+  s.invoices.find((i) => i.id === tx.invoiceId);
 export const cardOf = (s: FinanceState, cardId: string) => s.cards.find((c) => c.id === cardId);
 export const txCard = (s: FinanceState, tx: Transaction): CreditCard | undefined => {
   const inv = invoiceOf(s, tx);
@@ -63,13 +73,19 @@ export const txCard = (s: FinanceState, tx: Transaction): CreditCard | undefined
 };
 export const txMonth = (s: FinanceState, tx: Transaction) => invoiceOf(s, tx)?.month ?? "";
 
-export const invoiceTxs = (s: FinanceState, invoiceId: string) => s.transactions.filter((t) => t.invoiceId === invoiceId);
+export const invoiceTxs = (s: FinanceState, invoiceId: string) =>
+  s.transactions.filter((t) => t.invoiceId === invoiceId);
 
 /** Soma dos lançamentos da fatura (pagamentos de faturas anteriores não entram) */
 export const invoiceLaunchesTotal = (s: FinanceState, inv: Invoice) =>
-  round2(invoiceTxs(s, inv.id).filter((t) => t.type !== "pagamento").reduce((a, t) => a + t.amount, 0));
+  round2(
+    invoiceTxs(s, inv.id)
+      .filter((t) => t.type !== "pagamento")
+      .reduce((a, t) => a + t.amount, 0),
+  );
 
-export const invoiceDiff = (s: FinanceState, inv: Invoice) => round2(inv.officialTotal - invoiceLaunchesTotal(s, inv));
+export const invoiceDiff = (s: FinanceState, inv: Invoice) =>
+  round2(inv.officialTotal - invoiceLaunchesTotal(s, inv));
 
 export const invoiceAllocatedTotal = (s: FinanceState, inv: Invoice) =>
   round2(invoiceTxs(s, inv.id).reduce((a, t) => a + allocatedSum(t), 0));
@@ -77,38 +93,64 @@ export const invoiceAllocatedTotal = (s: FinanceState, inv: Invoice) =>
 export const invoicePendingCount = (s: FinanceState, inv: Invoice) =>
   invoiceTxs(s, inv.id).filter((t) => txStatus(t) === "pendente").length;
 
-export const monthInvoices = (s: FinanceState, month: string) => s.invoices.filter((i) => i.month === month);
+export const monthInvoices = (s: FinanceState, month: string) =>
+  s.invoices.filter((i) => i.month === month);
 export const monthTxs = (s: FinanceState, month: string) => {
   const ids = new Set(monthInvoices(s, month).map((i) => i.id));
   return s.transactions.filter((t) => ids.has(t.invoiceId));
 };
 
 export const availableMonths = (s: FinanceState) =>
-  Array.from(new Set([...s.invoices.map((i) => i.month), s.settings.month])).sort().reverse();
+  Array.from(new Set([...s.invoices.map((i) => i.month), s.settings.month]))
+    .sort()
+    .reverse();
 
 /* ---------- Pessoas / limites ---------- */
 export const personMonthTotal = (s: FinanceState, personId: string, month: string) =>
   round2(
     monthTxs(s, month).reduce(
-      (sum, t) => sum + t.allocations.filter((a) => a.personId === personId).reduce((x, a) => x + a.amount, 0),
+      (sum, t) =>
+        sum +
+        t.allocations.filter((a) => a.personId === personId).reduce((x, a) => x + a.amount, 0),
       0,
     ),
   );
 
 export const personMonthPaid = (s: FinanceState, personId: string, month: string) =>
-  round2((s.payments ?? []).filter((payment) => payment.personId === personId && payment.month === month).reduce((sum, payment) => sum + payment.amount, 0));
+  round2(
+    (s.payments ?? [])
+      .filter((payment) => payment.personId === personId && payment.month === month)
+      .reduce((sum, payment) => sum + payment.amount, 0),
+  );
 
 export const personMonthRemaining = (s: FinanceState, personId: string, month: string) =>
   Math.max(0, round2(personMonthTotal(s, personId, month) - personMonthPaid(s, personId, month)));
 
 export const personDebtTotal = (s: FinanceState, personId: string) => {
-  const due = round2(s.transactions.reduce((sum, transaction) => sum + transaction.allocations.filter((allocation) => allocation.personId === personId && transaction.amount > 0).reduce((part, allocation) => part + allocation.amount, 0), 0));
-  const paid = round2((s.payments ?? []).filter((payment) => payment.personId === personId).reduce((sum, payment) => sum + payment.amount, 0));
+  const due = round2(
+    s.transactions.reduce(
+      (sum, transaction) =>
+        sum +
+        transaction.allocations
+          .filter((allocation) => allocation.personId === personId && transaction.amount > 0)
+          .reduce((part, allocation) => part + allocation.amount, 0),
+      0,
+    ),
+  );
+  const paid = round2(
+    (s.payments ?? [])
+      .filter((payment) => payment.personId === personId)
+      .reduce((sum, payment) => sum + payment.amount, 0),
+  );
   return Math.max(0, round2(due - paid));
 };
 
 export type PersonPaymentStatus = "pendente" | "parcial" | "pago";
-export const personPaymentStatus = (s: FinanceState, personId: string, month: string): PersonPaymentStatus => {
+export const personPaymentStatus = (
+  s: FinanceState,
+  personId: string,
+  month: string,
+): PersonPaymentStatus => {
   const due = personMonthTotal(s, personId, month);
   const paid = personMonthPaid(s, personId, month);
   if (due > 0 && paid >= due) return "pago";
@@ -135,14 +177,16 @@ export const limitMessage = (name: string, total: number, limit: number, warnPct
   if (st === "ultrapassado")
     return `${first} ultrapassou o limite mensal em ${new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(round2(total - limit))}.`;
   if (st === "atingido") return `O limite mensal de ${first} foi atingido.`;
-  if (st === "atencao") return `${first} utilizou ${Math.round(limitPct(total, limit))}% do limite mensal.`;
+  if (st === "atencao")
+    return `${first} utilizou ${Math.round(limitPct(total, limit))}% do limite mensal.`;
   return null;
 };
 
 /* ---------- Parcelamentos ---------- */
 export type PlanStatus = "ativo" | "finalizado" | "futuro";
 
-export const planNumberAt = (p: InstallmentPlan, month: string) => monthDiff(p.firstMonth, month) + 1;
+export const planNumberAt = (p: InstallmentPlan, month: string) =>
+  monthDiff(p.firstMonth, month) + 1;
 export const planCount = (p: InstallmentPlan) => p.amounts.length;
 export const planStatusAt = (p: InstallmentPlan, month: string): PlanStatus => {
   const n = planNumberAt(p, month);
@@ -162,19 +206,32 @@ export const planFutureCommitted = (p: InstallmentPlan, month: string) => {
   return round2(p.amounts.slice(n).reduce((a, b) => a + b, 0));
 };
 export const planNextMonth = (p: InstallmentPlan, month: string) =>
-  planRemainingCount(p, month) > 0 ? (planNumberAt(p, month) < 1 ? p.firstMonth : addMonths(month, 1)) : null;
+  planRemainingCount(p, month) > 0
+    ? planNumberAt(p, month) < 1
+      ? p.firstMonth
+      : addMonths(month, 1)
+    : null;
+
+export const recurringChargeAppliesAt = (charge: RecurringCharge, month: string) =>
+  month >= charge.startMonth && (!charge.cancelledFromMonth || month < charge.cancelledFromMonth);
 
 export const forecast = (s: FinanceState, fromMonth: string, months = 6, personId?: string) =>
   Array.from({ length: months }, (_, i) => {
     const m = addMonths(fromMonth, i + 1);
-    const value = s.plans.reduce((sum, p) => {
+    const planValue = s.plans.reduce((sum, p) => {
       const amt = planAmountAt(p, m);
       if (!amt) return sum;
       if (!personId) return sum + amt;
       const share = p.shares.find((x) => x.personId === personId)?.pct ?? 0;
       return sum + (amt * share) / 100;
     }, 0);
-    return { month: m, value: round2(value) };
+    const recurringValue = (s.recurringCharges ?? []).reduce((sum, charge) => {
+      if (!recurringChargeAppliesAt(charge, m)) return sum;
+      if (!personId) return sum + charge.amount;
+      const share = charge.shares.find((item) => item.personId === personId)?.pct ?? 0;
+      return sum + (charge.amount * share) / 100;
+    }, 0);
+    return { month: m, value: round2(planValue + recurringValue) };
   });
 
 export const totalFutureCommitted = (s: FinanceState, month: string, personId?: string) =>

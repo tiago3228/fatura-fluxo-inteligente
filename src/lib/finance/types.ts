@@ -1,4 +1,5 @@
-export type TxType = "compra" | "parcela" | "pagamento" | "credito" | "estorno" | "tarifa" | "ajuste";
+export type TxType =
+  "compra" | "parcela" | "pagamento" | "credito" | "estorno" | "tarifa" | "ajuste";
 
 export interface Person {
   id: string;
@@ -68,6 +69,7 @@ export interface Transaction {
   amount: number;
   type: TxType;
   planId?: string | undefined;
+  recurringChargeId?: string | undefined;
   installmentNumber?: number | undefined;
   installmentTotal?: number | undefined;
   allocations: Allocation[];
@@ -91,6 +93,19 @@ export interface InstallmentPlan {
   /** YYYY-MM da 1ª parcela */
   firstMonth: string;
   shares: PlanShare[];
+}
+
+export interface RecurringCharge {
+  id: string;
+  description: string;
+  cardId: string;
+  amount: number;
+  /** YYYY-MM da primeira projeção */
+  startMonth: string;
+  /** YYYY-MM em que a projeção deve cessar; meses anteriores permanecem no histórico */
+  cancelledFromMonth?: string | undefined;
+  shares: PlanShare[];
+  sourceTransactionId?: string | undefined;
 }
 
 export interface Settings {
@@ -119,6 +134,7 @@ export interface FinanceState {
   invoices: Invoice[];
   transactions: Transaction[];
   plans: InstallmentPlan[];
+  recurringCharges: RecurringCharge[];
   settings: Settings;
   spreadsheets?: SpreadsheetArchive[];
   payments?: PersonPayment[];
