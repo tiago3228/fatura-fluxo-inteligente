@@ -93,6 +93,17 @@ export interface Settings {
   persist: boolean;
 }
 
+export interface SpreadsheetArchive {
+  id: string;
+  fileName: string;
+  month: string;
+  uploadedAt: string;
+  /** Arquivos enviados pelo usuário ficam em base64 para sincronização no workspace. */
+  dataUrl?: string;
+  /** Arquivos distribuídos com o aplicativo podem usar um caminho público. */
+  publicPath?: string;
+}
+
 export interface FinanceState {
   people: Person[];
   cards: CreditCard[];
@@ -100,6 +111,7 @@ export interface FinanceState {
   transactions: Transaction[];
   plans: InstallmentPlan[];
   settings: Settings;
+  spreadsheets?: SpreadsheetArchive[];
   /** Controle interno das importações automáticas de atribuições. */
   spreadsheetAssignmentVersion?: number;
 }

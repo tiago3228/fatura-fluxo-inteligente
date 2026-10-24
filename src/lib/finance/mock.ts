@@ -1,4 +1,4 @@
-import type { FinanceState, Transaction } from "./types";
+import type { FinanceState, SpreadsheetArchive, Transaction } from "./types";
 
 /** Dados reais extraídos da fatura Itaú anexada pelo usuário. Mantidos localmente para conferência. */
 const people = [
@@ -243,4 +243,5 @@ const transactions: Transaction[] = Object.entries(rowsByCard).flatMap(([last4, 
     allocations: [{ personId, amount: entry.amount }],
   }));
 });
-export const createDemoState = (): FinanceState => ({ settings: { month: "2026-10", warnPct: 80, compact: false, csvSeparator: ";", duplicateCheck: true, persist: true }, people, cards, invoices, transactions, plans: [] });
+const spreadsheets: SpreadsheetArchive[] = [{ id: "sheet_outubro_2020", fileName: "OUTUBRODE2020.xlsx", month: "2020-10", uploadedAt: "2026-10-23T21:00:00.000Z", publicPath: "/planilhas/OUTUBRODE2020.xlsx" }];
+export const createDemoState = (): FinanceState => ({ settings: { month: "2026-10", warnPct: 80, compact: false, csvSeparator: ";", duplicateCheck: true, persist: true }, people, cards, invoices, transactions, plans: [], spreadsheets });

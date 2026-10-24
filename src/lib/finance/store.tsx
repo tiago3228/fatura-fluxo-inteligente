@@ -5,7 +5,7 @@ import { createDemoState } from "./mock";
 import { planStatusAt } from "./calc";
 import { OCTOBER_ASSIGNMENTS } from "./octoberAssignments";
 import type {
-  Allocation, CreditCard, FinanceState, InstallmentPlan, Invoice, Person, Settings, Transaction, TxType,
+  Allocation, CreditCard, FinanceState, InstallmentPlan, Invoice, Person, Settings, SpreadsheetArchive, Transaction, TxType,
 } from "./types";
 
 const STORAGE_KEY = "fatura-organizer-real-itau-v2";
@@ -29,7 +29,9 @@ export type Action =
   | { type: "deletePlan"; planId: string }
   | { type: "importInvoice"; invoice: Invoice; transactions: Transaction[] }
   | { type: "setInvoicePayments"; invoiceId: string; payments: NonNullable<Invoice["payments"]> }
-  | { type: "setInvoiceStatus"; invoiceId: string; status: Invoice["status"] };
+  | { type: "setInvoiceStatus"; invoiceId: string; status: Invoice["status"] }
+  | { type: "addSpreadsheet"; spreadsheet: SpreadsheetArchive }
+  | { type: "removeSpreadsheet"; spreadsheetId: string };
 
 const upsert = <T extends { id: string }>(list: T[], item: T) =>
   list.some((x) => x.id === item.id) ? list.map((x) => (x.id === item.id ? item : x)) : [...list, item];
@@ -117,6 +119,18 @@ const assignOctoberPurchases = (state: FinanceState): FinanceState => {
   };
 };
 
+const ensureSpreadsheetArchive = (state: FinanceState): FinanceState => {
+  const spreadsheets = state.spreadsheets ?? [];
+  if (spreadsheets.some((item) => item.id === "sheet_outubro_2020")) return { ...state, spreadsheets };
+  return {
+    ...state,
+    spreadsheets: [
+      ...spreadsheets,
+      { id: "sheet_outubro_2020", fileName: "OUTUBRODE2020.xlsx", month: "2020-10", uploadedAt: "2026-10-23T21:00:00.000Z", publicPath: "/planilhas/OUTUBRODE2020.xlsx" },
+    ],
+  };
+};
+
 const reconcileImportedTransactions = (state: FinanceState, invoice: Invoice, incoming: Transaction[]) => {
   const previous = previousInvoiceFor(state, invoice);
   if (!previous) return incoming;
@@ -142,7 +156,7 @@ const reconcileImportedTransactions = (state: FinanceState, invoice: Invoice, in
 export function reducer(s: FinanceState, a: Action): FinanceState {
   switch (a.type) {
     case "hydrate":
-      return assignInitialCardholders(assignOctoberPurchases(ensure0548(a.state)));
+      return ensureSpreadsheetArchive(assignInitialCardholders(assignOctoberPurchases(ensure0548(a.state))));
     case "reset":
       return createDemoState();
     case "setMonth":
@@ -243,6 +257,10 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
         ...s,
         invoices: s.invoices.map((i) => i.id === a.invoiceId ? { ...i, payments: a.payments } : i),
       };
+    case "addSpreadsheet":
+      return { ...s, spreadsheets: upsert(s.spreadsheets ?? [], a.spreadsheet) };
+    case "removeSpreadsheet":
+      return { ...s, spreadsheets: (s.spreadsheets ?? []).filter((item) => item.id !== a.spreadsheetId) };
   }
 }
 

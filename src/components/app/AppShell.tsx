@@ -26,6 +26,7 @@ const NAV = [
   { title: "Parcelamentos", url: "/parcelamentos", icon: CalendarClock },
   { title: "Calculadora", url: "/calculadora", icon: Calculator },
   { title: "Relatórios", url: "/relatorios", icon: FileSpreadsheet },
+  { title: "Planilhas", url: "/planilhas", icon: FileSpreadsheet },
   { title: "Como Funciona", url: "/como-funciona", icon: BookOpen },
   { title: "Configurações", url: "/configuracoes", icon: Settings },
 ] as const;

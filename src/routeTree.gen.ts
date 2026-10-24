@@ -18,6 +18,7 @@ import { Route as AuthenticatedComoFuncionaRouteImport } from './routes/_authent
 import { Route as AuthenticatedComprasRouteImport } from './routes/_authenticated/compras'
 import { Route as AuthenticatedConfiguracoesRouteImport } from './routes/_authenticated/configuracoes'
 import { Route as AuthenticatedParcelamentosRouteImport } from './routes/_authenticated/parcelamentos'
+import { Route as AuthenticatedPlanilhasRouteImport } from './routes/_authenticated/planilhas'
 import { Route as AuthenticatedRelatoriosRouteImport } from './routes/_authenticated/relatorios'
 import { Route as AuthenticatedCartoesIndexRouteImport } from './routes/_authenticated/cartoes.index'
 import { Route as AuthenticatedCartoesIdRouteImport } from './routes/_authenticated/cartoes.$id'
@@ -74,6 +75,11 @@ const AuthenticatedParcelamentosRoute =
     path: '/parcelamentos',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedPlanilhasRoute = AuthenticatedPlanilhasRouteImport.update({
+  id: '/planilhas',
+  path: '/planilhas',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedRelatoriosRoute = AuthenticatedRelatoriosRouteImport.update({
   id: '/relatorios',
   path: '/relatorios',
@@ -122,6 +128,7 @@ export interface FileRoutesByFullPath {
   '/compras': typeof AuthenticatedComprasRoute
   '/configuracoes': typeof AuthenticatedConfiguracoesRoute
   '/parcelamentos': typeof AuthenticatedParcelamentosRoute
+  '/planilhas': typeof AuthenticatedPlanilhasRoute
   '/relatorios': typeof AuthenticatedRelatoriosRoute
   '/cartoes/$id': typeof AuthenticatedCartoesIdRoute
   '/faturas/$id': typeof AuthenticatedFaturasIdRoute
@@ -138,6 +145,7 @@ export interface FileRoutesByTo {
   '/compras': typeof AuthenticatedComprasRoute
   '/configuracoes': typeof AuthenticatedConfiguracoesRoute
   '/parcelamentos': typeof AuthenticatedParcelamentosRoute
+  '/planilhas': typeof AuthenticatedPlanilhasRoute
   '/relatorios': typeof AuthenticatedRelatoriosRoute
   '/': typeof AuthenticatedIndexRoute
   '/cartoes/$id': typeof AuthenticatedCartoesIdRoute
@@ -157,6 +165,7 @@ export interface FileRoutesById {
   '/_authenticated/compras': typeof AuthenticatedComprasRoute
   '/_authenticated/configuracoes': typeof AuthenticatedConfiguracoesRoute
   '/_authenticated/parcelamentos': typeof AuthenticatedParcelamentosRoute
+  '/_authenticated/planilhas': typeof AuthenticatedPlanilhasRoute
   '/_authenticated/relatorios': typeof AuthenticatedRelatoriosRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/cartoes/$id': typeof AuthenticatedCartoesIdRoute
@@ -177,6 +186,7 @@ export interface FileRouteTypes {
     | '/compras'
     | '/configuracoes'
     | '/parcelamentos'
+    | '/planilhas'
     | '/relatorios'
     | '/cartoes/$id'
     | '/faturas/$id'
@@ -193,6 +203,7 @@ export interface FileRouteTypes {
     | '/compras'
     | '/configuracoes'
     | '/parcelamentos'
+    | '/planilhas'
     | '/relatorios'
     | '/'
     | '/cartoes/$id'
@@ -211,6 +222,7 @@ export interface FileRouteTypes {
     | '/_authenticated/compras'
     | '/_authenticated/configuracoes'
     | '/_authenticated/parcelamentos'
+    | '/_authenticated/planilhas'
     | '/_authenticated/relatorios'
     | '/_authenticated/'
     | '/_authenticated/cartoes/$id'
@@ -292,6 +304,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedParcelamentosRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/planilhas': {
+      id: '/_authenticated/planilhas'
+      path: '/planilhas'
+      fullPath: '/planilhas'
+      preLoaderRoute: typeof AuthenticatedPlanilhasRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/relatorios': {
       id: '/_authenticated/relatorios'
       path: '/relatorios'
@@ -350,6 +369,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedComprasRoute: typeof AuthenticatedComprasRoute
   AuthenticatedConfiguracoesRoute: typeof AuthenticatedConfiguracoesRoute
   AuthenticatedParcelamentosRoute: typeof AuthenticatedParcelamentosRoute
+  AuthenticatedPlanilhasRoute: typeof AuthenticatedPlanilhasRoute
   AuthenticatedRelatoriosRoute: typeof AuthenticatedRelatoriosRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
   AuthenticatedCartoesIdRoute: typeof AuthenticatedCartoesIdRoute
@@ -366,6 +386,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedComprasRoute: AuthenticatedComprasRoute,
   AuthenticatedConfiguracoesRoute: AuthenticatedConfiguracoesRoute,
   AuthenticatedParcelamentosRoute: AuthenticatedParcelamentosRoute,
+  AuthenticatedPlanilhasRoute: AuthenticatedPlanilhasRoute,
   AuthenticatedRelatoriosRoute: AuthenticatedRelatoriosRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
   AuthenticatedCartoesIdRoute: AuthenticatedCartoesIdRoute,
