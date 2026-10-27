@@ -288,6 +288,52 @@ describe("pagamentos e competências", () => {
     ).toHaveLength(0);
   });
 
+  it("soma o valor total devido por competência e não reaplica pagamentos em meses futuros", () => {
+    const { state: initial, currentInvoiceId } = stateWithTwelveInstallments();
+    const november = reducer(initial, { type: "prepareNextInvoice", invoiceId: currentInvoiceId });
+    const novemberInvoice = november.invoices.find((invoice) => invoice.month === "2026-11");
+    if (!novemberInvoice) throw new Error("A previsão de novembro não foi criada");
+    const december = reducer(november, {
+      type: "prepareNextInvoice",
+      invoiceId: novemberInvoice.id,
+    });
+
+    expect(personDebtTotal(december, personId)).toBe(35);
+    const afterOctober = reducer(december, {
+      type: "recordPersonPayment",
+      payment: {
+        id: "payment_october",
+        personId,
+        amount: 15,
+        paidAt: "2026-10-25",
+        month: "2026-10",
+      },
+    });
+    expect(personDebtTotal(afterOctober, personId)).toBe(20);
+    const afterNovember = reducer(afterOctober, {
+      type: "recordPersonPayment",
+      payment: {
+        id: "payment_november",
+        personId,
+        amount: 10,
+        paidAt: "2026-11-25",
+        month: "2026-11",
+      },
+    });
+    expect(personDebtTotal(afterNovember, personId)).toBe(10);
+    const fullyPaid = reducer(afterNovember, {
+      type: "recordPersonPayment",
+      payment: {
+        id: "payment_december",
+        personId,
+        amount: 10,
+        paidAt: "2026-12-25",
+        month: "2026-12",
+      },
+    });
+    expect(personDebtTotal(fullyPaid, personId)).toBe(0);
+  });
+
   it("não duplica a fatura preparada quando a importação real chega para a mesma competência", () => {
     const { state: initial, currentInvoiceId } = stateWithTwelveInstallments();
     const prepared = reducer(initial, { type: "prepareNextInvoice", invoiceId: currentInvoiceId });

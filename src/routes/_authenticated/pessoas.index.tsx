@@ -44,7 +44,7 @@ function Pessoas() {
             <table className="w-full min-w-[900px] text-sm">
               <thead className="border-b bg-muted/60 text-left text-xs uppercase tracking-wide text-muted-foreground">
                 <tr className="[&_th]:px-4 [&_th]:py-2.5">
-                  <th>Nome</th><th>Cartões</th><th className="text-right">Devedor total</th><th className="text-right">Competência</th><th className="text-right">Pago</th><th className="text-right">Restante</th><th>Status</th><th className="w-12" />
+                  <th>Nome</th><th>Cartões</th><th className="text-right">Valor Total Devido</th><th className="text-right">Fatura do mês</th><th className="text-right">Pago no mês</th><th className="text-right">Restante no mês</th><th>Status</th><th className="w-12" />
                 </tr>
               </thead>
               <tbody className="divide-y">

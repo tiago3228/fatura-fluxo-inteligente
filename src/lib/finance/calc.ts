@@ -126,24 +126,21 @@ export const personMonthPaid = (s: FinanceState, personId: string, month: string
 export const personMonthRemaining = (s: FinanceState, personId: string, month: string) =>
   Math.max(0, round2(personMonthTotal(s, personId, month) - personMonthPaid(s, personId, month)));
 
-export const personDebtTotal = (s: FinanceState, personId: string) => {
-  const due = round2(
-    s.transactions.reduce(
-      (sum, transaction) =>
-        sum +
-        transaction.allocations
-          .filter((allocation) => allocation.personId === personId && transaction.amount > 0)
-          .reduce((part, allocation) => part + allocation.amount, 0),
+/**
+ * Saldo total ainda devido, somando o restante de cada competência separadamente.
+ * Assim, um pagamento de novembro não é reaplicado sobre dezembro nem sobre meses
+ * anteriores, e cada obrigação é abatida no máximo uma vez.
+ */
+export const personTotalDue = (s: FinanceState, personId: string) =>
+  round2(
+    [...new Set(s.invoices.map((invoice) => invoice.month))].reduce(
+      (sum, month) => sum + personMonthRemaining(s, personId, month),
       0,
     ),
   );
-  const paid = round2(
-    (s.payments ?? [])
-      .filter((payment) => payment.personId === personId)
-      .reduce((sum, payment) => sum + payment.amount, 0),
-  );
-  return Math.max(0, round2(due - paid));
-};
+
+/** Compatibilidade com relatórios e integrações que ainda usam o nome anterior. */
+export const personDebtTotal = personTotalDue;
 
 export type PersonPaymentStatus = "pendente" | "parcial" | "pago";
 export const personPaymentStatus = (

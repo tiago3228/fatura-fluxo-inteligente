@@ -84,9 +84,9 @@ function PessoaDetalhe() {
       {msg && <p className="mb-4 rounded-lg bg-warning-soft px-3 py-2 text-sm font-medium text-warning">{msg}</p>}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <KpiCard label="Devedor total" value={fmtBRL(personDebtTotal(state, p.id))} hint="Obrigações menos pagamentos" />
-        <KpiCard label="Obrigação no mês" value={fmtBRL(personMonthTotal(state, p.id, m))} hint={`Pago ${fmtBRL(personMonthPaid(state, p.id, m))}`} />
-        <KpiCard label="Restante no mês" value={fmtBRL(personMonthRemaining(state, p.id, m))} hint={<LimitBar total={r.total} limit={p.limit} />} />
+        <KpiCard label="Valor Total Devido" value={fmtBRL(personDebtTotal(state, p.id))} hint="Todas as competências pendentes" />
+        <KpiCard label="Fatura do mês" value={fmtBRL(personMonthTotal(state, p.id, m))} hint={`Pago ${fmtBRL(personMonthPaid(state, p.id, m))}`} />
+        <KpiCard label="Restante da fatura" value={fmtBRL(personMonthRemaining(state, p.id, m))} hint={<LimitBar total={r.total} limit={p.limit} />} />
         <KpiCard label="Limite cadastrado" value={fmtBRL(p.limit)} hint="Referência administrativa" tone={r.total > p.limit ? "danger" : "default"} />
         <KpiCard label="Compras divididas" value={fmtBRL(r.splitTotal)} hint={`${r.rows.filter((x) => x.split).length} lançamento(s)`} />
         <KpiCard label="Parcelas futuras" value={fmtBRL(totalFutureCommitted(state, m, p.id))} hint="Comprometido após este mês" />
