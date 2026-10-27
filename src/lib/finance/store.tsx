@@ -129,15 +129,15 @@ const prepareNextInvoice = (state: FinanceState, invoiceId: string): FinanceStat
   const current = state.invoices.find((invoice) => invoice.id === invoiceId);
   if (!current) return state;
   const nextMonth = addMonths(current.month, 1);
-  if (
-    state.invoices.some(
-      (invoice) => invoice.cardId === current.cardId && invoice.month === nextMonth,
-    )
-  )
-    return state;
+  const existing = state.invoices.find(
+    (invoice) => invoice.cardId === current.cardId && invoice.month === nextMonth,
+  );
+  // Faturas reais não devem ser alteradas automaticamente. Previsões antigas,
+  // porém, precisam ser enriquecidas quando novas regras identificam parcelas.
+  if (existing && !(existing.source === "planilha" && existing.id.includes("_next_"))) return state;
   const card = state.cards.find((item) => item.id === current.cardId);
   if (!card) return state;
-  const nextId = `${current.id}_next_${nextMonth}`;
+  const nextId = existing?.id ?? `${current.id}_next_${nextMonth}`;
   const installmentTransactions = state.plans.flatMap((plan) => {
     if (plan.cardId !== current.cardId) return [];
     const amount = planAmountAt(plan, nextMonth);
@@ -211,23 +211,37 @@ const prepareNextInvoice = (state: FinanceState, invoiceId: string): FinanceStat
     ...descriptionInstallments,
     ...recurringTransactions,
   ];
+  const newTransactions = transactions.filter(
+    (transaction) => !state.transactions.some((item) => item.id === transaction.id),
+  );
+  const nextInvoiceTransactions = [
+    ...state.transactions.filter((transaction) => transaction.invoiceId === nextId),
+    ...newTransactions,
+  ];
+  const officialTotal = round2(
+    nextInvoiceTransactions
+      .filter((transaction) => transaction.type !== "pagamento")
+      .reduce((sum, transaction) => sum + transaction.amount, 0),
+  );
   return {
     ...state,
-    invoices: [
-      ...state.invoices,
-      {
-        id: nextId,
-        cardId: current.cardId,
-        month: nextMonth,
-        dueDate: dateInMonth(nextMonth, card.dueDay),
-        officialTotal: round2(
-          transactions.reduce((sum, transaction) => sum + transaction.amount, 0),
-        ),
-        status: "em_revisao",
-        source: "planilha",
-      },
-    ],
-    transactions: [...state.transactions, ...transactions],
+    invoices: existing
+      ? state.invoices.map((invoice) =>
+          invoice.id === existing.id ? { ...invoice, officialTotal } : invoice,
+        )
+      : [
+          ...state.invoices,
+          {
+            id: nextId,
+            cardId: current.cardId,
+            month: nextMonth,
+            dueDate: dateInMonth(nextMonth, card.dueDay),
+            officialTotal,
+            status: "em_revisao" as const,
+            source: "planilha" as const,
+          },
+        ],
+    transactions: [...state.transactions, ...newTransactions],
   };
 };
 
@@ -269,46 +283,7 @@ const ensureRecurringProjections = (state: FinanceState): FinanceState => {
       continue;
     }
     if (!isForecastInvoice(existing)) continue;
-    const card = result.cards.find((item) => item.id === cardId);
-    if (!card) continue;
-    const missing = result.recurringCharges
-      .filter((charge) => charge.cardId === cardId && recurringChargeAppliesAt(charge, nextMonth))
-      .filter(
-        (charge) =>
-          !result.transactions.some(
-            (transaction) => transaction.id === `${existing.id}_${charge.id}`,
-          ),
-      )
-      .map((charge) => ({
-        id: `${existing.id}_${charge.id}`,
-        invoiceId: existing.id,
-        date: dateInMonth(nextMonth, card.closingDay),
-        description: charge.description,
-        amount: charge.amount,
-        type: "compra" as const,
-        recurringChargeId: charge.id,
-        allocations: charge.shares.map((share) => ({
-          personId: share.personId,
-          amount: round2((charge.amount * share.pct) / 100),
-        })),
-      }));
-    if (!missing.length) continue;
-    const transactions = [...result.transactions, ...missing];
-    const officialTotal = round2(
-      transactions
-        .filter(
-          (transaction) =>
-            transaction.invoiceId === existing.id && transaction.type !== "pagamento",
-        )
-        .reduce((sum, transaction) => sum + transaction.amount, 0),
-    );
-    result = {
-      ...result,
-      transactions,
-      invoices: result.invoices.map((invoice) =>
-        invoice.id === existing.id ? { ...invoice, officialTotal } : invoice,
-      ),
-    };
+    result = prepareNextInvoice(result, latestActual.id);
   }
   return result;
 };

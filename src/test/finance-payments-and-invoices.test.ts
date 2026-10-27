@@ -512,4 +512,37 @@ describe("pagamentos e competências", () => {
       ),
     ).toHaveLength(1);
   });
+
+  it("completa uma previsão antiga que tinha apenas recorrências", () => {
+    const initial = createDemoState();
+    const hydrated = reducer(initial, { type: "hydrate", state: initial });
+    const november = hydrated.invoices.find(
+      (invoice) => invoice.cardId === "c_7432" && invoice.month === "2026-11",
+    );
+    if (!november) throw new Error("A previsão de novembro não foi criada");
+    const stale: FinanceState = {
+      ...hydrated,
+      invoices: hydrated.invoices.map((invoice) =>
+        invoice.id === november.id
+          ? {
+              ...invoice,
+              officialTotal: 229.8,
+            }
+          : invoice,
+      ),
+      transactions: hydrated.transactions.filter(
+        (transaction) =>
+          transaction.invoiceId !== november.id || transaction.recurringChargeId !== undefined,
+      ),
+    };
+
+    const repaired = reducer(stale, { type: "hydrate", state: stale });
+    const repairedInstallments = repaired.transactions.filter(
+      (transaction) => transaction.invoiceId === november.id && transaction.type === "parcela",
+    );
+    expect(repairedInstallments.length).toBeGreaterThan(0);
+    expect(repaired.invoices.find((invoice) => invoice.id === november.id)?.officialTotal).toBe(
+      3176.77,
+    );
+  });
 });

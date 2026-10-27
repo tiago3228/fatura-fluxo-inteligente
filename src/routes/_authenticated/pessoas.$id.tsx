@@ -41,6 +41,13 @@ function PessoaDetalhe() {
   const allPersonTotal = Number(allPersonTable.footer?.at(-1) ?? 0);
   const pdfFilename = `quanto-${p.name.toLowerCase().replace(/\s+/g, "-")}-todas-as-compras.pdf`;
   const maxHist = Math.max(p.limit, ...r.history.map((h) => h.total), 1);
+  const installmentRows = r.rows.filter(
+    (row) =>
+      row.tx.type === "parcela" ||
+      row.tx.installmentNumber !== undefined ||
+      /\b\d{1,2}\s*\/\s*\d{1,2}\b/.test(row.tx.description),
+  );
+  const installmentTotal = round2(installmentRows.reduce((sum, row) => sum + row.share, 0));
 
   return (
     <>
@@ -88,7 +95,7 @@ function PessoaDetalhe() {
         <KpiCard label="Fatura do mês" value={fmtBRL(personMonthTotal(state, p.id, m))} hint={`Pago ${fmtBRL(personMonthPaid(state, p.id, m))}`} />
         <KpiCard label="Restante da fatura" value={fmtBRL(personMonthRemaining(state, p.id, m))} hint={<LimitBar total={r.total} limit={p.limit} />} />
         <KpiCard label="Limite cadastrado" value={fmtBRL(p.limit)} hint="Referência administrativa" tone={r.total > p.limit ? "danger" : "default"} />
-        <KpiCard label="Compras divididas" value={fmtBRL(r.splitTotal)} hint={`${r.rows.filter((x) => x.split).length} lançamento(s)`} />
+        <KpiCard label="Compras parceladas" value={fmtBRL(installmentTotal)} hint={`${installmentRows.length} lançamento(s)`} />
         <KpiCard label="Parcelas futuras" value={fmtBRL(totalFutureCommitted(state, m, p.id))} hint="Comprometido após este mês" />
       </div>
 
