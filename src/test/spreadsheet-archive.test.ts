@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { isPrivateLegacySpreadsheet, spreadsheetDownloadHref } from "@/lib/finance/archive";
 import type { SpreadsheetArchive } from "@/lib/finance/types";
+import { createDemoState } from "@/lib/finance/mock";
+import { reducer } from "@/lib/finance/store";
 
 const legacyArchive: SpreadsheetArchive = {
   id: "sheet_outubro_2020",
@@ -34,5 +36,27 @@ describe("download de planilhas arquivadas", () => {
     };
 
     expect(spreadsheetDownloadHref(otherArchive)).toBe("/archives/other.xlsx");
+  });
+});
+
+describe("manutenção do arquivo de planilhas", () => {
+  it("mantém a planilha de outubro removida após nova hidratação", () => {
+    const initial = createDemoState();
+    const deleted = reducer(initial, {
+      type: "removeSpreadsheet",
+      spreadsheetId: "sheet_outubro_2020",
+    });
+    const hydrated = reducer(deleted, { type: "hydrate", state: deleted });
+
+    expect(hydrated.spreadsheets).toEqual([]);
+  });
+
+  it("migra estados antigos sem campo de planilhas uma única vez", () => {
+    const legacy = createDemoState();
+    delete legacy.spreadsheets;
+
+    const hydrated = reducer(createDemoState(), { type: "hydrate", state: legacy });
+
+    expect(hydrated.spreadsheets?.map((item) => item.id)).toContain("sheet_outubro_2020");
   });
 });

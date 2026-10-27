@@ -599,13 +599,12 @@ const assignOctoberPurchases = (state: FinanceState): FinanceState => {
 };
 
 const ensureSpreadsheetArchive = (state: FinanceState): FinanceState => {
-  const spreadsheets = state.spreadsheets ?? [];
-  if (spreadsheets.some((item) => item.id === "sheet_outubro_2020"))
-    return { ...state, spreadsheets };
+  // A ausência do campo identifica estados antigos que ainda precisam receber
+  // o marcador legado; uma lista vazia é uma exclusão intencional do usuário.
+  if (state.spreadsheets !== undefined) return state;
   return {
     ...state,
     spreadsheets: [
-      ...spreadsheets,
       {
         id: "sheet_outubro_2020",
         fileName: "OUTUBRODE2020.xlsx",
