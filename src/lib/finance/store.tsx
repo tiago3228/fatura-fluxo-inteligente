@@ -73,6 +73,58 @@ const upsert = <T extends { id: string }>(list: T[], item: T) =>
     ? list.map((x) => (x.id === item.id ? item : x))
     : [...list, item];
 
+type InstallmentReference = { number: number; total: number };
+
+/** Lê n/total tanto dos campos estruturados quanto da descrição original da fatura. */
+const installmentReferenceOf = (
+  transaction: Pick<Transaction, "description" | "installmentNumber" | "installmentTotal">,
+): InstallmentReference | null => {
+  if (
+    Number.isInteger(transaction.installmentNumber) &&
+    Number.isInteger(transaction.installmentTotal) &&
+    transaction.installmentNumber! >= 1 &&
+    transaction.installmentTotal! >= transaction.installmentNumber!
+  ) {
+    return { number: transaction.installmentNumber!, total: transaction.installmentTotal! };
+  }
+  const match = transaction.description.match(/(?:^|[^0-9])(\d{1,2})\s*\/\s*(\d{1,2})(?!\d)/);
+  if (!match) return null;
+  const number = Number(match[1]);
+  const total = Number(match[2]);
+  return number >= 1 && total >= number ? { number, total } : null;
+};
+
+const nextInstallmentDescription = (description: string, reference: InstallmentReference) => {
+  const next = `${reference.number + 1}/${reference.total}`;
+  return /(?:^|[^0-9])\d{1,2}\s*\/\s*\d{1,2}(?!\d)/.test(description)
+    ? description.replace(/\d{1,2}\s*\/\s*\d{1,2}(?!\d)/, next)
+    : `${description} ${next}`;
+};
+
+const projectionKey = (description: string, amount: number) =>
+  `${description
+    .toLowerCase()
+    .replace(/\d{1,2}\s*\/\s*\d{1,2}/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()}|${amount.toFixed(2)}`;
+
+const scaledAllocations = (transaction: Transaction, amount: number): Allocation[] => {
+  if (transaction.amount <= 0 || transaction.allocations.length === 0) return [];
+  const total = round2(transaction.allocations.reduce((sum, item) => sum + item.amount, 0));
+  if (total !== round2(transaction.amount)) return [];
+  const allocations = transaction.allocations.map((item) => ({
+    personId: item.personId,
+    amount: round2((item.amount / transaction.amount) * amount),
+  }));
+  const last = allocations.at(-1);
+  if (last) {
+    last.amount = round2(
+      amount - allocations.slice(0, -1).reduce((sum, item) => sum + item.amount, 0),
+    );
+  }
+  return allocations;
+};
+
 const prepareNextInvoice = (state: FinanceState, invoiceId: string): FinanceState => {
   const current = state.invoices.find((invoice) => invoice.id === invoiceId);
   if (!current) return state;
@@ -109,6 +161,34 @@ const prepareNextInvoice = (state: FinanceState, invoiceId: string): FinanceStat
       },
     ];
   });
+  const projectedPlanKeys = new Set(
+    installmentTransactions.map((transaction) =>
+      projectionKey(transaction.description, transaction.amount),
+    ),
+  );
+  const descriptionInstallments = state.transactions.flatMap((transaction) => {
+    if (transaction.invoiceId !== current.id || transaction.amount <= 0) return [];
+    const reference = installmentReferenceOf(transaction);
+    if (!reference || reference.number >= reference.total || transaction.type === "pagamento")
+      return [];
+    // Um plano cadastrado é a fonte estruturada; não duplique sua parcela pela descrição.
+    if (transaction.planId && state.plans.some((plan) => plan.id === transaction.planId)) return [];
+    const description = nextInstallmentDescription(transaction.description, reference);
+    if (projectedPlanKeys.has(projectionKey(description, transaction.amount))) return [];
+    return [
+      {
+        id: `${nextId}_installment_${transaction.id}`,
+        invoiceId: nextId,
+        date: dateInMonth(nextMonth, card.closingDay),
+        description,
+        amount: transaction.amount,
+        type: "parcela" as const,
+        installmentNumber: reference.number + 1,
+        installmentTotal: reference.total,
+        allocations: scaledAllocations(transaction, transaction.amount),
+      },
+    ];
+  });
   const recurringTransactions = state.recurringCharges
     .filter(
       (charge) => charge.cardId === current.cardId && recurringChargeAppliesAt(charge, nextMonth),
@@ -126,7 +206,11 @@ const prepareNextInvoice = (state: FinanceState, invoiceId: string): FinanceStat
         amount: round2((charge.amount * share.pct) / 100),
       })),
     }));
-  const transactions = [...installmentTransactions, ...recurringTransactions];
+  const transactions = [
+    ...installmentTransactions,
+    ...descriptionInstallments,
+    ...recurringTransactions,
+  ];
   return {
     ...state,
     invoices: [
@@ -149,6 +233,18 @@ const prepareNextInvoice = (state: FinanceState, invoiceId: string): FinanceStat
 
 const isForecastInvoice = (invoice: Invoice) =>
   invoice.source === "planilha" && invoice.id.includes("_next_");
+
+/** Ao reabrir uma conta, retoma a projeção da próxima fatura que já foi paga. */
+const ensurePaidInvoiceProjections = (state: FinanceState): FinanceState => {
+  let result = state;
+  result.invoices
+    .filter((invoice) => invoice.status === "paga" && !isForecastInvoice(invoice))
+    .sort((a, b) => b.month.localeCompare(a.month))
+    .forEach((invoice) => {
+      result = prepareNextInvoice(result, invoice.id);
+    });
+  return result;
+};
 
 const ensureRecurringProjections = (state: FinanceState): FinanceState => {
   let result = state;
@@ -421,9 +517,11 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
       });
       const normalized = { ...raw, recurringCharges, transactions, payments: raw.payments ?? [] };
       return ensureRecurringProjections(
-        ensureSpreadsheetArchive({
-          ...assignInitialCardholders(assignOctoberPurchases(ensure0548(normalized))),
-        }),
+        ensurePaidInvoiceProjections(
+          ensureSpreadsheetArchive({
+            ...assignInitialCardholders(assignOctoberPurchases(ensure0548(normalized))),
+          }),
+        ),
       );
     }
     case "reset":
@@ -624,13 +722,15 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
       return { ...s, payments: upsert(s.payments ?? [], a.payment) };
     case "removePersonPayment":
       return { ...s, payments: (s.payments ?? []).filter((payment) => payment.id !== a.paymentId) };
-    case "markInvoicePaid":
-      return {
+    case "markInvoicePaid": {
+      const paid: FinanceState = {
         ...s,
         invoices: s.invoices.map((invoice) =>
           invoice.id === a.invoiceId ? { ...invoice, status: "paga", paidAt: a.paidAt } : invoice,
         ),
       };
+      return prepareNextInvoice(paid, a.invoiceId);
+    }
     case "prepareNextInvoice":
       return prepareNextInvoice(s, a.invoiceId);
   }

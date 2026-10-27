@@ -209,6 +209,85 @@ describe("pagamentos e competências", () => {
     ).toHaveLength(0);
   });
 
+  it("projeta referências n/total da descrição, mesmo sem campos estruturados", () => {
+    const base = createDemoState();
+    const currentInvoice = base.invoices.find(
+      (invoice) => invoice.cardId === "c_7432" && invoice.month === "2026-10",
+    );
+    if (!currentInvoice) throw new Error("A fixture precisa da fatura de outubro");
+    const transaction = (id: string, description: string, amount: number): Transaction => ({
+      id,
+      invoiceId: currentInvoice.id,
+      date: "2026-10-20",
+      description,
+      amount,
+      type: "compra",
+      allocations: [{ personId, amount }],
+    });
+    const initial: FinanceState = {
+      ...base,
+      invoices: [{ ...currentInvoice, status: "paga" }],
+      transactions: [
+        transaction("tx_barbearia", "BARBEARIA JO-CT 10/12", 986.14),
+        transaction("tx_final", "CENTRO ODONTOLOGIC12/12", 208.37),
+        transaction("tx_spotify", "DM*Spotify P4726", 12.9),
+      ],
+      plans: [],
+      recurringCharges: [],
+      payments: [],
+    };
+
+    const november = reducer(initial, {
+      type: "markInvoicePaid",
+      invoiceId: currentInvoice.id,
+      paidAt: "2026-10-23",
+    });
+    const novemberInvoice = november.invoices.find((invoice) => invoice.month === "2026-11");
+    expect(novemberInvoice).toBeDefined();
+    const novemberTransactions = november.transactions.filter(
+      (transaction) => transaction.invoiceId === novemberInvoice?.id,
+    );
+    expect(novemberTransactions.map((transaction) => transaction.description)).toEqual([
+      "BARBEARIA JO-CT 11/12",
+    ]);
+    expect(novemberTransactions[0]).toMatchObject({
+      installmentNumber: 11,
+      installmentTotal: 12,
+      amount: 986.14,
+      allocations: [{ personId, amount: 986.14 }],
+    });
+
+    const december = reducer(november, {
+      type: "prepareNextInvoice",
+      invoiceId: novemberInvoice!.id,
+    });
+    const decemberInvoice = december.invoices.find((invoice) => invoice.month === "2026-12");
+    expect(
+      december.transactions.filter((transaction) => transaction.invoiceId === decemberInvoice?.id),
+    ).toHaveLength(1);
+    expect(
+      december.transactions.find((transaction) => transaction.invoiceId === decemberInvoice?.id),
+    ).toMatchObject({
+      description: "BARBEARIA JO-CT 12/12",
+      installmentNumber: 12,
+    });
+    expect(
+      december.transactions
+        .filter((transaction) => transaction.invoiceId === decemberInvoice?.id)
+        .some((transaction) => transaction.description.includes("Spotify")),
+    ).toBe(false);
+
+    const january = reducer(december, {
+      type: "prepareNextInvoice",
+      invoiceId: decemberInvoice!.id,
+    });
+    const januaryInvoice = january.invoices.find((invoice) => invoice.month === "2027-01");
+    expect(januaryInvoice).toBeDefined();
+    expect(
+      january.transactions.filter((transaction) => transaction.invoiceId === januaryInvoice?.id),
+    ).toHaveLength(0);
+  });
+
   it("não duplica a fatura preparada quando a importação real chega para a mesma competência", () => {
     const { state: initial, currentInvoiceId } = stateWithTwelveInstallments();
     const prepared = reducer(initial, { type: "prepareNextInvoice", invoiceId: currentInvoiceId });
@@ -260,7 +339,7 @@ describe("pagamentos e competências", () => {
     );
     expect(november).toBeDefined();
     const projected = hydrated.transactions.filter(
-      (transaction) => transaction.invoiceId === november?.id,
+      (transaction) => transaction.invoiceId === november?.id && transaction.recurringChargeId,
     );
     expect(projected.map((transaction) => transaction.amount).sort((a, b) => a - b)).toEqual([
       109.9, 119.9,
@@ -292,12 +371,17 @@ describe("pagamentos e competências", () => {
       );
     }
     const novemberRemaining = canceled.transactions.filter(
-      (transaction) => transaction.invoiceId === november?.id,
+      (transaction) => transaction.invoiceId === november?.id && transaction.recurringChargeId,
     );
     expect(novemberRemaining).toHaveLength(1);
     expect(novemberRemaining[0]?.amount).toBe(109.9);
-    expect(canceled.invoices.find((invoice) => invoice.id === november?.id)?.officialTotal).toBe(
-      109.9,
+    expect(
+      canceled.invoices.find((invoice) => invoice.id === november?.id)?.officialTotal,
+    ).toBeCloseTo(
+      canceled.transactions
+        .filter((transaction) => transaction.invoiceId === november?.id)
+        .reduce((sum, transaction) => sum + transaction.amount, 0),
+      2,
     );
   });
 
