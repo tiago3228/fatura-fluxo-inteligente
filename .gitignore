@@ -17,7 +17,6 @@ dist-ssr
 *.local
 
 # Local environment configuration; keep only the sanitized template tracked.
-.env
 .env.*
 !.env.example
 
