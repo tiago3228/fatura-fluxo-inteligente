@@ -79,6 +79,7 @@ export interface Transaction {
   isProjected?: boolean | undefined;
   allocations: Allocation[];
   adjustmentNote?: string | undefined;
+  note?: string | undefined;
 }
 
 export interface PlanShare {

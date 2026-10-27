@@ -60,6 +60,7 @@ export type Action =
         installmentTotal: number | null;
       };
     }
+  | { type: "setTransactionNote"; txId: string; note: string }
   | { type: "deleteTransaction"; txId: string }
   | { type: "addTransaction"; transaction: Transaction }
   | { type: "setTxType"; txId: string; txType: TxType }
@@ -642,6 +643,7 @@ const reconcileImportedTransactions = (
       ...transaction,
       allocations: match.allocations,
       ...(match.adjustmentNote !== undefined ? { adjustmentNote: match.adjustmentNote } : {}),
+      ...(match.note !== undefined ? { note: match.note } : {}),
     };
     delete restored.isProjected;
     if (match.planId !== undefined) restored.planId = match.planId;
@@ -791,6 +793,19 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
         }),
       );
       return ensureInstallmentProjections(next);
+    }
+    case "setTransactionNote": {
+      const note = a.note.trim();
+      return {
+        ...s,
+        transactions: s.transactions.map((transaction) => {
+          if (transaction.id !== a.txId) return transaction;
+          const updated = { ...transaction };
+          if (note) updated.note = note;
+          else delete updated.note;
+          return updated;
+        }),
+      };
     }
     case "deleteTransaction": {
       const original = s.transactions.find((transaction) => transaction.id === a.txId);

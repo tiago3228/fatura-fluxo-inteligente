@@ -137,6 +137,11 @@ export const txMonth = (s: FinanceState, tx: Transaction) => invoiceOf(s, tx)?.m
 export const invoiceTxs = (s: FinanceState, invoiceId: string) =>
   s.transactions.filter((t) => t.invoiceId === invoiceId);
 
+export const invoiceHasFinancialData = (s: FinanceState, invoice: Invoice) =>
+  invoice.officialTotal !== 0 ||
+  invoiceTxs(s, invoice.id).length > 0 ||
+  (invoice.payments ?? []).some((payment) => payment.amount !== 0);
+
 /** Soma dos lançamentos da fatura (pagamentos de faturas anteriores não entram) */
 export const invoiceLaunchesTotal = (s: FinanceState, inv: Invoice) =>
   round2(

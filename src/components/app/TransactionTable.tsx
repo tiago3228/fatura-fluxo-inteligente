@@ -5,6 +5,7 @@ import {
   ArrowUpDown,
   Copy,
   ExternalLink,
+  MessageSquareText,
   MoreHorizontal,
   Pencil,
   Repeat,
@@ -28,6 +29,15 @@ import type { RecurringCharge, Transaction, TxType } from "@/lib/finance/types";
 import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   ContextMenu,
@@ -249,6 +259,8 @@ function Row({
 }) {
   const { state, dispatch } = useFinance();
   const { openAssign, openSplit, openEdit, deleteTx, unassign } = useTxActions();
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [noteDraft, setNoteDraft] = useState(tx.note ?? "");
   const status = txStatus(tx);
   const isPay = tx.type === "pagamento";
   const recurrence = state.recurringCharges.find(
@@ -311,6 +323,12 @@ function Row({
     });
   };
 
+  const saveNote = () => {
+    dispatch({ type: "setTransactionNote", txId: tx.id, note: noteDraft });
+    toast.success(noteDraft.trim() ? "Observação salva" : "Observação removida");
+    setNoteOpen(false);
+  };
+
   const items = (
     Item: typeof ContextMenuItem | typeof DropdownMenuItem,
     Sep: typeof ContextMenuSeparator,
@@ -341,6 +359,15 @@ function Row({
           {recurrence.cancelledFromMonth ? "Recorrência já encerrada" : "Remover recorrência"}
         </Item>
       )}
+      <Item
+        disabled={isPay}
+        onSelect={() => {
+          setNoteDraft(tx.note ?? "");
+          setNoteOpen(true);
+        }}
+      >
+        <MessageSquareText className="size-4" /> {tx.note ? "Editar observação" : "Adicionar observação"}
+      </Item>
       {tx.allocations.length > 0 && (
         <Item onSelect={() => unassign([tx.id])}>
           <UserX className="size-4" /> Remover atribuição
@@ -388,6 +415,7 @@ function Row({
   );
 
   return (
+    <>
     <ContextMenu>
       <ContextMenuTrigger asChild>
         <tr
@@ -417,6 +445,12 @@ function Row({
             )}
             {tx.adjustmentNote && (
               <div className="text-xs text-warning">Ajuste: {tx.adjustmentNote}</div>
+            )}
+            {tx.note && (
+              <div className="mt-1 flex items-start gap-1 text-xs text-info">
+                <MessageSquareText className="mt-0.5 size-3 shrink-0" />
+                <span>Observação: {tx.note}</span>
+              </div>
             )}
             {recurrence && (
               <div className="text-xs text-info">
@@ -518,5 +552,28 @@ function Row({
         )}
       </ContextMenuContent>
     </ContextMenu>
+    <Dialog open={noteOpen} onOpenChange={setNoteOpen}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{tx.note ? "Observação da compra" : "Adicionar observação"}</DialogTitle>
+          <DialogDescription>
+            Identifique do que se trata este lançamento. A observação será sincronizada com o workspace compartilhado.
+          </DialogDescription>
+        </DialogHeader>
+        <Textarea
+          autoFocus
+          maxLength={500}
+          value={noteDraft}
+          onChange={(event) => setNoteDraft(event.target.value)}
+          placeholder="Ex.: compra para manutenção do carro"
+          aria-label="Observação da compra"
+        />
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setNoteOpen(false)}>Cancelar</Button>
+          <Button onClick={saveNote}>Salvar observação</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

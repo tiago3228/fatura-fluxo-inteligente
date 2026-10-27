@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { Eye, FileSpreadsheet, FileUp, X } from "lucide-react";
 import { useFinance } from "@/lib/finance/store";
-import { availableMonths, invoiceDiff, invoicePendingCount, invoiceTxs } from "@/lib/finance/calc";
+import { invoiceDiff, invoiceHasFinancialData, invoicePendingCount, invoiceTxs } from "@/lib/finance/calc";
 import { fmtBRL, fmtDate, fmtMonth, fmtMonthLong } from "@/lib/finance/format";
 import { EmptyState, PageHeader, Panel } from "@/components/app/common";
 import { InvoiceStatusBadge, Pill } from "@/components/app/badges";
@@ -30,7 +30,9 @@ function Faturas() {
   const [xls, setXls] = useState(false);
   const [f, setF] = useState<{ card?: string; month?: string; status?: string; due?: string }>({});
 
-  const list = state.invoices
+  const visibleInvoices = state.invoices.filter((invoice) => invoiceHasFinancialData(state, invoice));
+  const months = [...new Set(visibleInvoices.map((invoice) => invoice.month))].sort().reverse();
+  const list = visibleInvoices
     .filter((i) => (!f.card || i.cardId === f.card) && (!f.month || i.month === f.month) && (!f.status || i.status === f.status))
     .filter((i) => {
       if (!f.due) return true;
@@ -56,7 +58,7 @@ function Faturas() {
       <Panel>
         <div className="flex flex-wrap gap-2 border-b p-3">
           <FilterSelect label="Cartão" value={f.card} onChange={(v) => setF({ ...f, card: v })} options={state.cards.map((c) => [c.id, `${c.name} •••• ${c.last4}`])} />
-          <FilterSelect label="Mês" value={f.month} onChange={(v) => setF({ ...f, month: v })} options={availableMonths(state).map((m) => [m, fmtMonthLong(m)])} />
+          <FilterSelect label="Mês" value={f.month} onChange={(v) => setF({ ...f, month: v })} options={months.map((m) => [m, fmtMonthLong(m)])} />
           <FilterSelect label="Vencimento" value={f.due} onChange={(v) => setF({ ...f, due: v })} options={[["vencidas", "Já vencidas"], ["a_vencer", "A vencer"]]} />
           <FilterSelect label="Status" value={f.status} onChange={(v) => setF({ ...f, status: v })} options={[["conferida", "Conferida"], ["em_revisao", "Em revisão"], ["inconsistente", "Inconsistente"]]} />
           {hasF && <Button variant="ghost" size="sm" onClick={() => setF({})}><X className="size-4" /> Limpar</Button>}

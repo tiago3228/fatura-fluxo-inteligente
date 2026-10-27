@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { FloatingCalculator } from "@/components/app/FloatingCalculator";
 
 export const Route = createFileRoute("/_authenticated/calculadora")({
   head: () => ({
@@ -27,6 +28,7 @@ function Calculadora() {
   const [firstMonth, setFirstMonth] = useState(state.settings.month);
   const [cardId, setCardId] = useState("none");
   const [selectedPeople, setSelectedPeople] = useState<string[]>([]);
+  const [quickCalculatorOpen, setQuickCalculatorOpen] = useState(false);
 
   const total = parseBRL(totalText) ?? 0;
   const count = Math.min(48, Math.max(1, Number(installments) || 1));
@@ -52,7 +54,14 @@ function Calculadora() {
       <PageHeader
         title="Calculadora"
         description="Simule uma compra antes de lançá-la. Nada nesta tela altera suas faturas ou atribuições."
-        actions={<Button variant="outline" onClick={reset}><RotateCcw className="size-4" /> Limpar</Button>}
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => setQuickCalculatorOpen(true)}>
+              <Calculator className="size-4" /> Calculadora rápida
+            </Button>
+            <Button variant="outline" onClick={reset}><RotateCcw className="size-4" /> Limpar</Button>
+          </div>
+        }
       />
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.85fr)]">
@@ -121,6 +130,7 @@ function Calculadora() {
           {selectedPeople.length > 0 && <div className="mt-5 rounded-lg bg-accent p-3 text-sm"><p className="font-semibold">Divisão igualitária</p><p className="mt-1 text-muted-foreground">{selectedPeople.length} {selectedPeople.length === 1 ? "pessoa" : "pessoas"} · {fmtBRL(splitAmount)} por pessoa no total · {fmtBRL(round2(splitAmount / count))} por parcela</p></div>}
         </Panel>
       </div>
+      {quickCalculatorOpen && <FloatingCalculator onClose={() => setQuickCalculatorOpen(false)} />}
     </>
   );
 }
