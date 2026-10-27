@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useMemo, useState, type ReactNode, type Context } from "react";
 import { AlertTriangle, Check, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useFinance } from "@/lib/finance/store";
@@ -27,7 +27,7 @@ interface TxActionsCtx {
   unassign: (txIds: string[]) => void;
 }
 // Contexto estável entre recargas automáticas (HMR) para não "perder" o provider.
-const gTx = globalThis as unknown as { __txActionsCtx?: React.Context<TxActionsCtx | null> };
+const gTx = globalThis as unknown as { __txActionsCtx?: Context<TxActionsCtx | null> };
 const Ctx = gTx.__txActionsCtx ?? (gTx.__txActionsCtx = createContext<TxActionsCtx | null>(null));
 export const useTxActions = () => {
   const v = useContext(Ctx);
