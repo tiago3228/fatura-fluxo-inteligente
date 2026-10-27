@@ -14,6 +14,7 @@ import {
   monthInvoices,
   monthTxs,
   personMonthTotal,
+  sortPeopleBySpending,
   totalCardLimit,
   totalCardLimitAvailable,
   totalCardLimitUsed,
@@ -74,6 +75,7 @@ function Overview() {
   const [showExtra, setShowExtra] = useState(false);
   const [showCardLimit, setShowCardLimit] = useState(false);
   const people = state.people.filter((p) => p.active).map((p) => ({ ...p, total: personMonthTotal(state, p.id, m) }));
+  const peopleBySpending = sortPeopleBySpending(people);
   const nextPeopleSummary = people.map((person) => {
     const actual = personMonthTotal(state, person.id, nextMonth);
     const expected = forecast(state, m, 1, person.id)[0]?.value ?? 0;
@@ -238,7 +240,7 @@ function Overview() {
               </tr>
             </thead>
             <tbody className="divide-y">
-              {people.map((p) => (
+              {peopleBySpending.map((p) => (
                 <tr key={p.id} className="[&_td]:px-4 [&_td]:py-3 hover:bg-muted/40">
                   <td><Link to="/pessoas/$id" params={{ id: p.id }} className="font-semibold hover:underline">{p.name}</Link></td>
                   <td className="num text-right font-semibold">{fmtBRL(p.total)}</td>

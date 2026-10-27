@@ -224,6 +224,9 @@ export const personMonthTotal = (s: FinanceState, personId: string, month: strin
     ),
   );
 
+export const sortPeopleBySpending = <T extends { total: number }>(people: T[]) =>
+  [...people].sort((a, b) => b.total - a.total);
+
 export const personMonthPaid = (s: FinanceState, personId: string, month: string) =>
   round2(
     (s.payments ?? [])

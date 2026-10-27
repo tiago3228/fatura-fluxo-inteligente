@@ -1,10 +1,25 @@
 import { describe, expect, it } from "vitest";
 
 import { createDemoState } from "@/lib/finance/mock";
-import { monthTxs, personMonthTotal, txCard } from "@/lib/finance/calc";
+import { monthTxs, personMonthTotal, sortPeopleBySpending, txCard } from "@/lib/finance/calc";
 import { reducer } from "@/lib/finance/store";
 
 describe("separação inicial da fatura por titular", () => {
+  it("ordena gastos do maior para o menor sem alterar a lista original", () => {
+    const people = [
+      { id: "low", total: 25 },
+      { id: "high", total: 140 },
+      { id: "tie", total: 25 },
+    ];
+
+    expect(sortPeopleBySpending(people).map((person) => person.id)).toEqual([
+      "high",
+      "low",
+      "tie",
+    ]);
+    expect(people.map((person) => person.id)).toEqual(["low", "high", "tie"]);
+  });
+
   it("atribui cada compra ao titular do cartão e calcula os totais", () => {
     const state = createDemoState();
     const monthTransactions = monthTxs(state, "2026-10");
