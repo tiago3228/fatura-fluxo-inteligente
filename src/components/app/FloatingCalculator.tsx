@@ -9,18 +9,74 @@ import {
 
 type Position = { left: number; top: number };
 type DragOrigin = Position & { pointerId: number; startX: number; startY: number };
+type Calculation = { expression: string; result: string };
+const HISTORY_KEY = "fatura-fluxo-calculadora-historico-v1";
+const HISTORY_LIMIT = 100;
+
+const readHistory = (): Calculation[] => {
+  try {
+    const raw = sessionStorage.getItem(HISTORY_KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (item): item is Calculation =>
+        !!item && typeof item.expression === "string" && typeof item.result === "string",
+    ).slice(-HISTORY_LIMIT);
+  } catch {
+    return [];
+  }
+};
+
+const formatNumber = (value: number) =>
+  new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 10 }).format(value);
 
 const keyClass =
   "min-h-11 rounded-md border bg-background px-2 text-lg font-medium shadow-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:translate-y-px";
 const operatorClass = "bg-muted font-semibold";
 
-export function FloatingCalculator({ onClose }: { onClose: () => void }) {
+export function FloatingCalculator({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [state, dispatch] = useReducer(basicCalculatorReducer, initialBasicCalculatorState);
+  const [history, setHistory] = useState<Calculation[]>(readHistory);
   const [position, setPosition] = useState<Position | null>(null);
   const dragOrigin = useRef<DragOrigin | null>(null);
+  const historyEndRef = useRef<HTMLDivElement | null>(null);
+  const actionHandlerRef = useRef<(action: BasicCalculatorAction) => void>(() => {});
+
+  const handleAction = (action: BasicCalculatorAction) => {
+    if (action.type === "equals") {
+      const expression = state.operator && state.accumulator !== null
+        ? `${formatNumber(state.accumulator)} ${state.operator} ${state.display}`
+        : state.lastOperator !== null && state.lastOperand !== null
+          ? `${state.display} ${state.lastOperator} ${formatNumber(state.lastOperand)}`
+          : null;
+      const next = basicCalculatorReducer(state, action);
+      if (expression && next !== state && !next.error) {
+        setHistory((current) => [
+          ...current,
+          { expression, result: next.display },
+        ].slice(-HISTORY_LIMIT));
+      }
+    }
+    dispatch(action);
+  };
+  actionHandlerRef.current = handleAction;
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+    } catch {
+      // A calculadora continua funcional quando o armazenamento da sessão não está disponível.
+    }
+  }, [history]);
+
+  useEffect(() => {
+    if (open) historyEndRef.current?.scrollIntoView({ block: "end" });
+  }, [history, open]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (!open) return;
       const target = event.target;
       if (
         target instanceof HTMLElement &&
@@ -45,12 +101,12 @@ export function FloatingCalculator({ onClose }: { onClose: () => void }) {
         : actions[event.key];
       if (!action) return;
       event.preventDefault();
-      dispatch(action);
+      actionHandlerRef.current(action);
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [open]);
 
   const startDrag = (event: React.PointerEvent<HTMLDivElement>) => {
     if ((event.target as HTMLElement).closest("button")) return;
@@ -87,8 +143,10 @@ export function FloatingCalculator({ onClose }: { onClose: () => void }) {
     if (dragOrigin.current?.pointerId === event.pointerId) dragOrigin.current = null;
   };
 
-  const press = (action: BasicCalculatorAction) => () => dispatch(action);
+  const press = (action: BasicCalculatorAction) => () => handleAction(action);
   const operator = (value: BasicCalculatorOperator) => press({ type: "operator", operator: value });
+
+  if (!open) return null;
 
   return (
     <section
@@ -118,13 +176,37 @@ export function FloatingCalculator({ onClose }: { onClose: () => void }) {
       </div>
 
       <div className="space-y-3 p-3">
-        <output
-          aria-live="polite"
-          aria-label="Visor da calculadora"
-          className="block min-h-16 overflow-hidden rounded-lg bg-muted px-3 py-2 text-right font-mono text-3xl font-semibold tabular-nums"
-        >
-          {state.display}
-        </output>
+        <div className="rounded-lg bg-muted p-3">
+          <div
+            role="log"
+            aria-label="Histórico de cálculos"
+            className="max-h-28 min-h-8 space-y-1 overflow-y-auto text-right font-mono text-xs text-muted-foreground"
+          >
+            {history.length === 0 && <p className="py-1">O histórico aparecerá aqui.</p>}
+            {history.map((item, index) => (
+              <p key={`${index}-${item.expression}-${item.result}`} className="break-all">
+                {item.expression} = <span className="font-semibold text-foreground">{item.result}</span>
+              </p>
+            ))}
+            <div ref={historyEndRef} />
+          </div>
+          <output
+            aria-live="polite"
+            aria-label="Visor da calculadora"
+            className="mt-2 block min-h-10 overflow-hidden border-t border-border/60 pt-2 text-right font-mono text-3xl font-semibold tabular-nums"
+          >
+            {state.display}
+          </output>
+        </div>
+        {history.length > 0 && (
+          <button
+            type="button"
+            className="w-full text-right text-xs text-muted-foreground underline-offset-4 hover:underline"
+            onClick={() => setHistory([])}
+          >
+            Limpar histórico
+          </button>
+        )}
 
         <div className="grid grid-cols-4 gap-2">
           <button

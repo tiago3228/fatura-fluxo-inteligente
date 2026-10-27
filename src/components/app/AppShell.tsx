@@ -32,6 +32,7 @@ import { useAlerts } from "@/lib/finance/alerts";
 import { useFinance } from "@/lib/finance/store";
 import { DemoTag } from "./common";
 import { TxActionsProvider } from "./tx-actions";
+import { FloatingCalculator } from "./FloatingCalculator";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -250,6 +251,8 @@ function SyncStatusBanner() {
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
+  const [quickCalculatorOpen, setQuickCalculatorOpen] = useState(false);
+
   return (
     <TooltipProvider delayDuration={200}>
       <TxActionsProvider>
@@ -268,6 +271,19 @@ export function AppShell({ children }: { children: ReactNode }) {
             <ConnectionStatus />
             <SyncStatusBanner />
             <main className="mx-auto w-full max-w-[1400px] flex-1 p-4 md:p-6">{children}</main>
+            <FloatingCalculator open={quickCalculatorOpen} onClose={() => setQuickCalculatorOpen(false)} />
+            {!quickCalculatorOpen && (
+              <Button
+                type="button"
+                size="icon"
+                aria-label="Abrir calculadora rápida"
+                title="Abrir calculadora rápida"
+                className="fixed bottom-4 right-4 z-[70] size-12 rounded-full shadow-lg"
+                onClick={() => setQuickCalculatorOpen(true)}
+              >
+                <Calculator className="size-5" />
+              </Button>
+            )}
           </SidebarInset>
         </SidebarProvider>
       </TxActionsProvider>
