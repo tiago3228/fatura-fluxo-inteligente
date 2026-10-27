@@ -7,6 +7,25 @@ import {
 } from "@/lib/finance/pdf";
 
 describe("leitura local de fatura", () => {
+  it("reconhece n/total colado ao nome do estabelecimento", () => {
+    const parsed = parseInvoiceText(
+      [
+        "Lançamentos: compras e saques",
+        "07/10 GOL LINHAS A*EWQKW01/04 329,88",
+      ].join("\n"),
+      "2026-10",
+    );
+
+    expect(parsed.rows).toHaveLength(1);
+    expect(parsed.rows[0]).toMatchObject({
+      description: "GOL LINHAS A*EWQKW01/04",
+      type: "parcela",
+      installmentNumber: 1,
+      installmentTotal: 4,
+      amount: 329.88,
+    });
+  });
+
   it("reconhece lançamentos em colunas lado a lado e seleciona o total atual", () => {
     const parsed = parseInvoiceText(
       [

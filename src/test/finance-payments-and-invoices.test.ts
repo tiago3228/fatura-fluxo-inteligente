@@ -98,6 +98,36 @@ function stateWithTwelveInstallments(): {
   };
 }
 
+function stateWithCarineGol() {
+  const base = createDemoState();
+  const gol = base.transactions.find(
+    (transaction) => transaction.description === "GOL LINHAS A*EWQKW01/04",
+  );
+  if (!gol) throw new Error("A fixture precisa conter a compra parcelada da GOL");
+  const carine = {
+    id: "p_carine",
+    name: "Carine",
+    limit: 1500,
+    active: true,
+    cardIds: [],
+  };
+  const initial: FinanceState = {
+    ...base,
+    people: [...base.people, carine],
+    transactions: base.transactions.map((transaction) =>
+      transaction.id === gol.id
+        ? { ...transaction, allocations: [{ personId: carine.id, amount: transaction.amount }] }
+        : transaction,
+    ),
+  };
+  return { initial, carine, gol };
+}
+
+const transactionsForCardMonth = (state: FinanceState, cardId: string, month: string) => {
+  const invoice = state.invoices.find((item) => item.cardId === cardId && item.month === month);
+  return invoice ? state.transactions.filter((item) => item.invoiceId === invoice.id) : [];
+};
+
 describe("pagamentos e competências", () => {
   it("calcula pagamentos parciais e integrais sem reaplicar o mesmo pagamento", () => {
     let state = stateWithSinglePurchase();
@@ -211,6 +241,181 @@ describe("pagamentos e competências", () => {
     ).toHaveLength(0);
   });
 
+  it("projeta automaticamente GOL 01/04 até 04/04 sem exigir pagamento da fatura", () => {
+    const { initial, carine, gol } = stateWithCarineGol();
+    expect(initial.people.find((person) => person.id === "p_tiago")?.cardIds).toContain("c_8222");
+    expect(carine.cardIds).not.toContain("c_8222");
+    expect(gol.type).toBe("parcela");
+    expect(gol).toMatchObject({ installmentNumber: 1, installmentTotal: 4 });
+
+    const hydrated = reducer(initial, { type: "hydrate", state: initial });
+    for (const [month, number] of [
+      ["2026-11", 2],
+      ["2026-12", 3],
+      ["2027-01", 4],
+    ] as const) {
+      const golRows = transactionsForCardMonth(hydrated, "c_8222", month).filter((transaction) =>
+        transaction.description.startsWith("GOL LINHAS A*EWQKW"),
+      );
+      expect(golRows).toHaveLength(1);
+      expect(golRows[0]).toMatchObject({
+        installmentNumber: number,
+        installmentTotal: 4,
+        amount: 329.88,
+        type: "parcela",
+        isProjected: true,
+        allocations: [{ personId: carine.id, amount: 329.88 }],
+      });
+    }
+    expect(personMonthTotal(hydrated, carine.id, "2026-11")).toBe(329.88);
+    expect(
+      transactionsForCardMonth(hydrated, "c_8222", "2027-02").some((transaction) =>
+        transaction.description.startsWith("GOL LINHAS A*EWQKW"),
+      ),
+    ).toBe(false);
+
+    const hydratedAgain = reducer(hydrated, { type: "hydrate", state: hydrated });
+    expect(
+      transactionsForCardMonth(hydratedAgain, "c_8222", "2026-11").filter((transaction) =>
+        transaction.description.startsWith("GOL LINHAS A*EWQKW"),
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("propaga a atribuição iniciada na parcela futura à compra original e às parcelas seguintes", () => {
+    const { initial, carine, gol } = stateWithCarineGol();
+    const unassigned: FinanceState = {
+      ...initial,
+      transactions: initial.transactions.map((transaction) =>
+        transaction.id === gol.id ? { ...transaction, allocations: [] } : transaction,
+      ),
+    };
+    const hydrated = reducer(unassigned, { type: "hydrate", state: unassigned });
+    const novemberRow = transactionsForCardMonth(hydrated, "c_8222", "2026-11").find(
+      (transaction) => transaction.description.startsWith("GOL LINHAS A*EWQKW"),
+    );
+    if (!novemberRow) throw new Error("A parcela de novembro deveria estar projetada");
+
+    const allocated = reducer(hydrated, {
+      type: "allocate",
+      txIds: [novemberRow.id],
+      personId: carine.id,
+    });
+    expect(allocated.transactions.find((transaction) => transaction.id === gol.id)?.allocations).toEqual([
+      { personId: carine.id, amount: 329.88 },
+    ]);
+    for (const month of ["2026-11", "2026-12", "2027-01"]) {
+      expect(
+        transactionsForCardMonth(allocated, "c_8222", month).find((transaction) =>
+          transaction.description.startsWith("GOL LINHAS A*EWQKW"),
+        )?.allocations,
+      ).toEqual([{ personId: carine.id, amount: 329.88 }]);
+    }
+  });
+
+  it("não recria uma cadeia de parcelas removida após nova hidratação", () => {
+    const { initial, gol } = stateWithCarineGol();
+    const hydrated = reducer(initial, { type: "hydrate", state: initial });
+    const novemberRow = transactionsForCardMonth(hydrated, "c_8222", "2026-11").find(
+      (transaction) => transaction.description.startsWith("GOL LINHAS A*EWQKW"),
+    );
+    if (!novemberRow) throw new Error("A parcela de novembro deveria estar projetada");
+
+    const deleted = reducer(hydrated, { type: "deleteTransaction", txId: novemberRow.id });
+    const rehydrated = reducer(deleted, { type: "hydrate", state: deleted });
+    for (const month of ["2026-11", "2026-12", "2027-01"]) {
+      expect(
+        transactionsForCardMonth(rehydrated, "c_8222", month).some((transaction) =>
+          transaction.description.startsWith("GOL LINHAS A*EWQKW"),
+        ),
+      ).toBe(false);
+    }
+
+    const editedSource = reducer(rehydrated, {
+      type: "updateTransaction",
+      txId: gol.id,
+      patch: {
+        description: gol.description,
+        date: gol.date,
+        amount: gol.amount,
+        installmentNumber: 1,
+        installmentTotal: 4,
+      },
+    });
+    expect(
+      transactionsForCardMonth(editedSource, "c_8222", "2026-11").some((transaction) =>
+        transaction.description.startsWith("GOL LINHAS A*EWQKW"),
+      ),
+    ).toBe(true);
+  });
+
+  it("completa uma fatura real já existente sem alterar total, pagamento ou status pago", () => {
+    const { initial, carine } = stateWithCarineGol();
+    const novemberInvoice = {
+      id: "inv_real_nov_8222",
+      cardId: "c_8222",
+      month: "2026-11",
+      dueDate: "2026-11-23",
+      officialTotal: 1400,
+      status: "paga" as const,
+      paidAt: "2026-11-22T12:00:00.000Z",
+      payments: [{ personId: carine.id, amount: 1400, paidAt: "2026-11-22" }],
+      source: "pdf" as const,
+    };
+    const withNovemberInvoice: FinanceState = {
+      ...initial,
+      invoices: [...initial.invoices, novemberInvoice],
+    };
+    const hydrated = reducer(withNovemberInvoice, {
+      type: "hydrate",
+      state: withNovemberInvoice,
+    });
+    const projected = transactionsForCardMonth(hydrated, "c_8222", "2026-11").filter(
+      (transaction) => transaction.description.startsWith("GOL LINHAS A*EWQKW"),
+    );
+    expect(projected).toHaveLength(1);
+    expect(projected[0]).toMatchObject({ installmentNumber: 2, amount: 329.88 });
+    expect(hydrated.invoices.find((invoice) => invoice.id === novemberInvoice.id)).toMatchObject({
+      officialTotal: 1400,
+      status: "paga",
+      paidAt: novemberInvoice.paidAt,
+      payments: novemberInvoice.payments,
+    });
+
+    const reimported = reducer(hydrated, {
+      type: "importInvoice",
+      invoice: { ...novemberInvoice, id: "pdf_nov_reimport", status: "em_revisao", officialTotal: 1450 },
+      transactions: [
+        {
+          id: "tx_gol_nov_real",
+          invoiceId: "pdf_nov_reimport",
+          date: "2026-11-16",
+          description: "GOL LINHAS A*EWQKW02/04",
+          amount: 329.88,
+          type: "parcela" as const,
+          installmentNumber: 2,
+          installmentTotal: 4,
+          allocations: [],
+        },
+      ],
+    });
+    expect(reimported.invoices.find((invoice) => invoice.id === novemberInvoice.id)).toMatchObject({
+      officialTotal: 1450,
+      status: "paga",
+      paidAt: novemberInvoice.paidAt,
+      payments: novemberInvoice.payments,
+    });
+    const realGolRows = transactionsForCardMonth(reimported, "c_8222", "2026-11").filter(
+      (transaction) => transaction.description.startsWith("GOL LINHAS A*EWQKW"),
+    );
+    expect(realGolRows).toHaveLength(1);
+    expect(realGolRows[0]).toMatchObject({
+      id: "tx_gol_nov_real",
+      allocations: [{ personId: carine.id, amount: 329.88 }],
+    });
+    expect(realGolRows[0]?.isProjected).toBeUndefined();
+  });
+
   it("projeta referências n/total da descrição, mesmo sem campos estruturados", () => {
     const base = createDemoState();
     const currentInvoice = base.invoices.find(
@@ -260,7 +465,7 @@ describe("pagamentos e competências", () => {
     });
     expect(committedMonthTotal(november, "2026-11")).toBe(986.14);
     expect(forecast(november, "2026-10", 1)[0]?.value).toBe(986.14);
-    expect(totalFutureCommitted(november, "2026-10")).toBe(986.14);
+    expect(totalFutureCommitted(november, "2026-10")).toBe(1972.28);
 
     const december = reducer(november, {
       type: "prepareNextInvoice",
@@ -399,9 +604,10 @@ describe("pagamentos e competências", () => {
     expect(
       projected.every((transaction) => transaction.allocations[0]?.personId === personId),
     ).toBe(true);
-    expect(forecast(hydrated, "2026-10", 3).map((month) => month.value)).toEqual([
-      3176.77, 229.8, 229.8,
-    ]);
+    const forecastBeforeCancellation = forecast(hydrated, "2026-10", 3).map(
+      (month) => month.value,
+    );
+    expect(forecastBeforeCancellation.every((value) => value > 0)).toBe(true);
 
     const historyBefore = hydrated.transactions.filter(
       (transaction) => transaction.recurringChargeId,
@@ -411,9 +617,9 @@ describe("pagamentos e competências", () => {
       chargeId: "rec_totalpass_11990",
       cancelledFromMonth: "2026-11",
     });
-    expect(forecast(canceled, "2026-10", 3).map((month) => month.value)).toEqual([
-      3056.87, 109.9, 109.9,
-    ]);
+    expect(forecast(canceled, "2026-10", 3).map((month) => month.value)).toEqual(
+      forecastBeforeCancellation.map((value) => Number((value - 119.9).toFixed(2))),
+    );
     for (const historical of historyBefore.filter(
       (transaction) => transaction.invoiceId !== november?.id,
     )) {

@@ -2,7 +2,12 @@ import { useRef, useState } from "react";
 import { AlertTriangle, FileSpreadsheet, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { useFinance } from "@/lib/finance/store";
-import { availableMonths, addMonths, dateInMonth } from "@/lib/finance/calc";
+import {
+  availableMonths,
+  addMonths,
+  dateInMonth,
+  installmentReferenceFromDescription,
+} from "@/lib/finance/calc";
 import { fmtBRL, fmtDate, fmtMonthLong, parseBRL, round2, uid } from "@/lib/finance/format";
 import type { Transaction } from "@/lib/finance/types";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -122,10 +127,24 @@ export function ExcelImportDialog({ open, onOpenChange }: { open: boolean; onOpe
   const confirm = () => {
     if (!card) return;
     const invoiceId = uid("inv_pl");
-    const txs: Transaction[] = importable.map((a) => ({
-      id: uid("tx"), invoiceId, date: a.date!, description: a.description, amount: a.amount!, type: a.amount! < 0 ? "credito" : "compra",
-      allocations: a.person ? [{ personId: a.person.id, amount: a.amount! }] : [],
-    }));
+    const txs: Transaction[] = importable.map((a) => {
+      const installment = installmentReferenceFromDescription(a.description);
+      return {
+        id: uid("tx"),
+        invoiceId,
+        date: a.date!,
+        description: a.description,
+        amount: a.amount!,
+        type: a.amount! < 0 ? "credito" : installment ? "parcela" : "compra",
+        ...(installment
+          ? {
+              installmentNumber: installment.number,
+              installmentTotal: installment.total,
+            }
+          : {}),
+        allocations: a.person ? [{ personId: a.person.id, amount: a.amount! }] : [],
+      };
+    });
     dispatch({
       type: "importInvoice",
       invoice: { id: invoiceId, cardId: card.id, month, dueDate: dateInMonth(month, card.dueDay), officialTotal: total, status: "em_revisao", source: "planilha" },

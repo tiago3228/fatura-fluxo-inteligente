@@ -44,6 +44,7 @@ export interface Invoice {
   officialTotal: number;
   status: InvoiceStatus;
   payments?: InvoicePayment[];
+  paidAt?: string | undefined;
   source: "demo" | "pdf" | "pdf_demo" | "planilha";
 }
 
@@ -72,6 +73,10 @@ export interface Transaction {
   recurringChargeId?: string | undefined;
   installmentNumber?: number | undefined;
   installmentTotal?: number | undefined;
+  /** ID da compra original que gerou este lançamento previsto. */
+  projectionSourceId?: string | undefined;
+  /** Indica que a linha foi criada pelo sistema e ainda não veio de uma fatura importada. */
+  isProjected?: boolean | undefined;
   allocations: Allocation[];
   adjustmentNote?: string | undefined;
 }
@@ -140,4 +145,6 @@ export interface FinanceState {
   payments?: PersonPayment[];
   /** Controle interno das importações automáticas de atribuições. */
   spreadsheetAssignmentVersion?: number;
+  /** Cadeias de parcelas previstas removidas explicitamente pelo usuário. */
+  suppressedProjectionSources?: string[];
 }

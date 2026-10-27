@@ -1,7 +1,12 @@
 import type { TxType } from "./types";
 import { parseBRL, round2 } from "./format";
 import type { FinanceState } from "./types";
-import { planAmountAt, planNumberAt, recurringChargeAppliesAt } from "./calc";
+import {
+  installmentReferenceFromDescription,
+  planAmountAt,
+  planNumberAt,
+  recurringChargeAppliesAt,
+} from "./calc";
 
 export type ExtractedPdfRow = {
   id: string;
@@ -326,16 +331,16 @@ export function parseInvoiceText(rawText: string, fallbackMonth: string): Extrac
     )
       return;
     const negative = amount < 0 || /estorno|crédito|credito|devolução|devolucao/i.test(description);
+    const installment = installmentReferenceFromDescription(description);
     const type: TxType = negative
       ? amount < 0
         ? "estorno"
         : "credito"
       : /tarifa|encargo|iof|juros/i.test(description)
         ? "tarifa"
-        : /(?:^|[^\d])\d{1,2}\s*\/\s*\d{1,2}\b/.test(description)
+        : installment
           ? "parcela"
           : "compra";
-    const installment = description.match(/(?:^|[^\d])(\d{1,2})\s*\/\s*(\d{1,2})\b/);
     rows.push({
       id: `pdf_${index}_${date}`,
       date,
@@ -344,7 +349,10 @@ export function parseInvoiceText(rawText: string, fallbackMonth: string): Extrac
       type,
       ...(cardLast4ByColumn[column] ? { cardLast4: cardLast4ByColumn[column] } : {}),
       ...(installment
-        ? { installmentNumber: Number(installment[1]), installmentTotal: Number(installment[2]) }
+        ? {
+            installmentNumber: installment.number,
+            installmentTotal: installment.total,
+          }
         : {}),
       ...(description.length < 3 ? { review: "Descrição curta — confira" } : {}),
     });

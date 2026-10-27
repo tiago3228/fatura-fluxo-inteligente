@@ -45,6 +45,65 @@ export const dateInMonth = (ym: string, day: number) => {
   return `${ym}-${String(d).padStart(2, "0")}`;
 };
 
+export type InstallmentReference = { number: number; total: number };
+
+type InstallmentDescriptionMatch = InstallmentReference & {
+  index: number;
+  end: number;
+  separator: string;
+};
+
+const installmentPattern = /(?:^|([^\d]))(\d{1,2})\s*\/\s*(\d{1,2})(?!\d)/g;
+
+const findInstallmentDescriptionMatch = (
+  description: string,
+): InstallmentDescriptionMatch | null => {
+  let found: InstallmentDescriptionMatch | null = null;
+  const pattern = new RegExp(installmentPattern.source, "g");
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(description)) !== null) {
+    const number = Number(match[2]);
+    const total = Number(match[3]);
+    if (number >= 1 && total >= number) {
+      found = {
+        number,
+        total,
+        index: match.index,
+        end: pattern.lastIndex,
+        separator: match[1] ?? "",
+      };
+    }
+    if (match[0].length === 0) pattern.lastIndex += 1;
+  }
+  return found;
+};
+
+/** Reconhece n/total em descrições antigas, inclusive quando colado ao nome do estabelecimento. */
+export const installmentReferenceFromDescription = (
+  description: string,
+): InstallmentReference | null => {
+  const match = findInstallmentDescriptionMatch(description);
+  return match ? { number: match.number, total: match.total } : null;
+};
+
+export const stripInstallmentReference = (description: string) => {
+  const match = findInstallmentDescriptionMatch(description);
+  return match
+    ? `${description.slice(0, match.index)}${match.separator}${description.slice(match.end)}`.trim()
+    : description;
+};
+
+export const replaceInstallmentReference = (
+  description: string,
+  reference: InstallmentReference,
+) => {
+  const match = findInstallmentDescriptionMatch(description);
+  const replacement = `${reference.number}/${reference.total}`;
+  if (!match) return `${description} ${replacement}`;
+  const prefix = `${description.slice(0, match.index)}${match.separator}`;
+  return `${prefix}${replacement}${description.slice(match.end)}`;
+};
+
 export const nextOccurrence = (day: number, from: Date = new Date()) => {
   const ym = `${from.getFullYear()}-${String(from.getMonth() + 1).padStart(2, "0")}`;
   const today = `${ym}-${String(from.getDate()).padStart(2, "0")}`;
