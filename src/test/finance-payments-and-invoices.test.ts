@@ -438,6 +438,44 @@ describe("pagamentos e competências", () => {
     expect(atenaPlans.some(({ plan }) => plan.cardId === "c_7264")).toBe(true);
   });
 
+  it("atribui imediatamente as parcelas importadas por PDF à titular cadastrada do cartão", () => {
+    const initial = createDemoState();
+    const sourceInvoice = initial.invoices.find((invoice) => invoice.cardId === "c_7264");
+    if (!sourceInvoice) throw new Error("A fixture precisa da fatura do cartão da Atena");
+    const invoice = {
+      ...sourceInvoice,
+      id: "invoice_atena_pdf_import",
+      month: "2026-11",
+      dueDate: "2026-11-23",
+      officialTotal: 50,
+      source: "pdf" as const,
+    };
+    const transaction: Transaction = {
+      id: "tx_atena_pdf_installment",
+      invoiceId: invoice.id,
+      date: "2026-11-06",
+      description: "SHEIN *SHEIN.COM 01/02",
+      amount: 50,
+      type: "parcela",
+      installmentNumber: 1,
+      installmentTotal: 2,
+      allocations: [],
+    };
+    const imported = reducer(initial, {
+      type: "importInvoice",
+      invoice,
+      transactions: [transaction],
+    });
+    const saved = imported.transactions.find((item) => item.id === transaction.id);
+
+    expect(saved?.allocations).toEqual([{ personId: "p_atena", amount: 50 }]);
+    expect(
+      detectedInstallmentPlans(imported).some(({ plan }) =>
+        plan.shares.some((share) => share.personId === "p_atena"),
+      ),
+    ).toBe(true);
+  });
+
   it("agrupa parcelas importadas da mesma compra entre faturas e estima as parcelas ausentes", () => {
     const initial = createDemoState();
     const card = initial.cards.find((item) => item.id === "c_7264");

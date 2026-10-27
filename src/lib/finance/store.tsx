@@ -991,7 +991,9 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
           ...reconciled,
         ],
       };
-      return ensureInstallmentProjections(ensureRecurringProjections(imported));
+      return ensureInstallmentProjections(
+        ensureRecurringProjections(assignInitialCardholders(imported)),
+      );
     }
     case "setInvoiceStatus":
       return {

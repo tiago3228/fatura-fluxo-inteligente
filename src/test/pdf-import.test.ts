@@ -26,6 +26,23 @@ describe("leitura local de fatura", () => {
     });
   });
 
+  it("reconhece data de um dígito sem confundi-la com a referência n/total", () => {
+    const parsed = parseInvoiceText(
+      ["Lançamentos: compras e saques", "6/04 SHEIN *SHEIN.COM 06/06 71,02"].join("\n"),
+      "2026-04",
+    );
+
+    expect(parsed.rows).toHaveLength(1);
+    expect(parsed.rows[0]).toMatchObject({
+      date: "2026-04-06",
+      description: "SHEIN *SHEIN.COM 06/06",
+      type: "parcela",
+      installmentNumber: 6,
+      installmentTotal: 6,
+      amount: 71.02,
+    });
+  });
+
   it("reconhece lançamentos em colunas lado a lado e seleciona o total atual", () => {
     const parsed = parseInvoiceText(
       [

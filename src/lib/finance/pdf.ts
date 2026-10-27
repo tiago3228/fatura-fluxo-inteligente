@@ -283,7 +283,7 @@ export function parseInvoiceText(rawText: string, fallbackMonth: string): Extrac
     .map((line) => line.replace(/\s+/g, " ").trim())
     .filter(Boolean);
   const datePattern = /\b\d{2}[\x2f.-]\d{2}(?:[\x2f.-]\d{2,4})?\b/;
-  const transactionDatePattern = /\b\d{2}[\x2f.-]\d{2}(?![\x2f.-]\d{2,4})\b/;
+  const transactionDatePattern = /^\d{1,2}[\x2f.-]\d{2}(?:[\x2f.-]\d{2,4})?\b/;
   const rows: ExtractedPdfRow[] = [];
   const inTransactionSection = [false, false];
   const cardLast4ByColumn: (string | undefined)[] = [undefined, undefined];
