@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { useFinance } from "@/lib/finance/store";
 import {
   addMonths,
+  detectedInstallmentPlans,
   forecast,
   monthInvoices,
   planAmountAt,
@@ -50,8 +51,16 @@ function Parcelamentos() {
   const m = state.settings.month;
   const [edit, setEdit] = useState<InstallmentPlan | "new" | null>(null);
   const [f, setF] = useState<{ person?: string; card?: string; status?: string }>({});
-  const list = state.plans.filter(
-    (p) =>
+  const allPlans = [
+    ...state.plans.map((plan) => ({ plan, detected: false, estimated: false })),
+    ...detectedInstallmentPlans(state).map(({ plan, estimated }) => ({
+      plan,
+      detected: true,
+      estimated,
+    })),
+  ];
+  const list = allPlans.filter(
+    ({ plan: p }) =>
       (!f.card || p.cardId === f.card) &&
       (!f.person || p.shares.some((s) => s.personId === f.person)) &&
       (!f.status || planStatusAt(p, m) === f.status),
@@ -128,6 +137,10 @@ function Parcelamentos() {
             </Button>
           )}
         </div>
+        <p className="px-4 py-2 text-xs text-muted-foreground">
+          Parcelas importadas são identificadas pela marcação n/total; totais são estimados quando o
+          histórico não contém todas as parcelas.
+        </p>
         {list.length === 0 ? (
           <EmptyState title="Nenhum parcelamento encontrado" />
         ) : (
@@ -149,7 +162,7 @@ function Parcelamentos() {
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {list.map((p) => {
+                {list.map(({ plan: p, detected, estimated }) => {
                   const c = state.cards.find((x) => x.id === p.cardId);
                   const n = planNumberAt(p, m);
                   const st = planStatusAt(p, m);
@@ -157,7 +170,14 @@ function Parcelamentos() {
                   const next = planNextMonth(p, m);
                   return (
                     <tr key={p.id} className="hover:bg-muted/40 [&_td]:px-3 [&_td]:py-3">
-                      <td className="font-semibold">{p.description}</td>
+                      <td className="font-semibold">
+                        {p.description}
+                        {detected && (
+                          <div className="text-xs font-normal text-muted-foreground">
+                            Detectado na fatura
+                          </div>
+                        )}
+                      </td>
                       <td className="num text-muted-foreground">•••• {c?.last4}</td>
                       <td>
                         {p.shares
@@ -167,8 +187,16 @@ function Parcelamentos() {
                           )
                           .join(", ") || "—"}
                       </td>
-                      <td className="num text-right">{fmtBRL(p.total)}</td>
                       <td className="num text-right">
+                        {estimated && (
+                          <span title="Valor estimado pela parcela identificada">≈ </span>
+                        )}
+                        {fmtBRL(p.total)}
+                      </td>
+                      <td className="num text-right">
+                        {estimated && (
+                          <span title="Valor estimado pela parcela identificada">≈ </span>
+                        )}
                         {st === "ativo"
                           ? fmtBRL(planAmountAt(p, m) ?? 0)
                           : fmtBRL(p.amounts[0] ?? 0)}
@@ -186,39 +214,44 @@ function Parcelamentos() {
                       <td className="num text-right">{planRemainingCount(p, m)}</td>
                       <td>{next ? fmtMonth(next) : "—"}</td>
                       <td className="num text-right font-semibold">
+                        {estimated && (
+                          <span title="Valor estimado pela parcela identificada">≈ </span>
+                        )}
                         {fmtBRL(planFutureCommitted(p, m))}
                       </td>
                       <td>
                         <PlanStatusBadge status={st} />
                       </td>
                       <td>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              aria-label={`Ações para ${p.description}`}
-                            >
-                              <MoreHorizontal className="size-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onSelect={() => setEdit(p)}>
-                              <Pencil className="size-4" /> Editar
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              className="text-danger"
-                              onSelect={() => {
-                                dispatch({ type: "deletePlan", planId: p.id });
-                                toast.success("Parcelamento removido", {
-                                  description: "Os lançamentos das faturas foram mantidos.",
-                                });
-                              }}
-                            >
-                              <Trash2 className="size-4" /> Excluir
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                        {!detected && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                aria-label={`Ações para ${p.description}`}
+                              >
+                                <MoreHorizontal className="size-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onSelect={() => setEdit(p)}>
+                                <Pencil className="size-4" /> Editar
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="text-danger"
+                                onSelect={() => {
+                                  dispatch({ type: "deletePlan", planId: p.id });
+                                  toast.success("Parcelamento removido", {
+                                    description: "Os lançamentos das faturas foram mantidos.",
+                                  });
+                                }}
+                              >
+                                <Trash2 className="size-4" /> Excluir
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
                       </td>
                     </tr>
                   );

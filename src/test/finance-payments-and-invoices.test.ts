@@ -3,6 +3,7 @@ import {
   cardLimitAvailable,
   cardLimitUsed,
   committedMonthTotal,
+  detectedInstallmentPlans,
   forecast,
   personDebtTotal,
   personMonthPaid,
@@ -420,6 +421,78 @@ describe("pagamentos e competências", () => {
         settings: { ...sharedState.settings, cardLimitTotal: undefined },
       }),
     ).toBe(1500);
+  });
+
+  it("detecta parcelamentos importados e associa os responsáveis para o filtro por pessoa", () => {
+    const state = createDemoState();
+    const detected = detectedInstallmentPlans(state);
+    const atenaPlans = detected.filter(({ plan }) =>
+      plan.shares.some((share) => share.personId === "p_atena"),
+    );
+
+    expect(state.plans).toHaveLength(0);
+    expect(detected.length).toBeGreaterThan(0);
+    expect(atenaPlans.length).toBeGreaterThan(0);
+    expect(atenaPlans.some(({ plan }) => plan.cardId === "c_7264")).toBe(true);
+  });
+
+  it("agrupa parcelas importadas da mesma compra entre faturas e estima as parcelas ausentes", () => {
+    const initial = createDemoState();
+    const card = initial.cards.find((item) => item.id === "c_7264");
+    const templateInvoice = initial.invoices.find((invoice) => invoice.cardId === "c_7264");
+    if (!card || !templateInvoice) throw new Error("A fixture precisa do cartão da Atena");
+    const septemberInvoice = {
+      ...templateInvoice,
+      id: "invoice_installment_september",
+      month: "2026-09",
+      dueDate: "2026-09-23",
+    };
+    const octoberInvoice = {
+      ...templateInvoice,
+      id: "invoice_installment_october",
+      month: "2026-10",
+      dueDate: "2026-10-23",
+    };
+    const firstInstallment: Transaction = {
+      id: "tx_installment_first",
+      invoiceId: septemberInvoice.id,
+      date: "2026-09-05",
+      description: "05/09 Loja Teste 01/03",
+      amount: 100,
+      type: "parcela",
+      installmentNumber: 1,
+      installmentTotal: 3,
+      allocations: [{ personId: "p_atena", amount: 100 }],
+    };
+    const secondInstallment: Transaction = {
+      ...firstInstallment,
+      id: "tx_installment_second",
+      invoiceId: octoberInvoice.id,
+      date: "2026-10-05",
+      description: "05/10 Loja Teste 02/03",
+      installmentNumber: 2,
+    };
+    const state: FinanceState = {
+      ...initial,
+      settings: { ...initial.settings, month: "2026-10" },
+      cards: [card],
+      invoices: [septemberInvoice, octoberInvoice],
+      transactions: [firstInstallment, secondInstallment],
+      plans: [],
+    };
+    const detected = detectedInstallmentPlans(state);
+
+    expect(detected).toHaveLength(1);
+    expect(detected[0]).toMatchObject({
+      estimated: true,
+      plan: {
+        description: "Loja Teste",
+        firstMonth: "2026-09",
+        total: 300,
+        amounts: [100, 100, 100],
+        shares: [{ personId: "p_atena", pct: 100 }],
+      },
+    });
   });
 
   it("propaga a atribuição iniciada na parcela futura à compra original e às parcelas seguintes", () => {

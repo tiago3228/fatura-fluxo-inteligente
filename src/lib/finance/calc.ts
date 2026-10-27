@@ -314,6 +314,158 @@ export const planNextMonth = (p: InstallmentPlan, month: string) =>
       : addMonths(month, 1)
     : null;
 
+export interface DetectedInstallmentPlan {
+  plan: InstallmentPlan;
+  estimated: boolean;
+}
+
+type DetectedInstallmentTransaction = {
+  transaction: Transaction;
+  cardId: string;
+  number: number;
+  total: number;
+  startMonth: string;
+  description: string;
+  descriptionKey: string;
+};
+
+const normalizedInstallmentDescription = (description: string) =>
+  stripInstallmentReference(description)
+    .replace(/^\s*\d{1,2}\/\d{1,2}\s*/, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLocaleLowerCase("pt-BR");
+
+/** Detecta compras parceladas lançadas nas faturas e as apresenta como planos inferidos. */
+export const detectedInstallmentPlans = (s: FinanceState): DetectedInstallmentPlan[] => {
+  const groups = new Map<string, DetectedInstallmentTransaction[]>();
+  const registeredPlanIds = new Set(s.plans.map((plan) => plan.id));
+
+  for (const transaction of s.transactions) {
+    if (
+      transaction.amount <= 0 ||
+      (transaction.planId && registeredPlanIds.has(transaction.planId))
+    )
+      continue;
+    const structuredReference =
+      Number.isInteger(transaction.installmentNumber) &&
+      Number.isInteger(transaction.installmentTotal) &&
+      transaction.installmentNumber! >= 1 &&
+      transaction.installmentTotal! >= transaction.installmentNumber!
+        ? { number: transaction.installmentNumber!, total: transaction.installmentTotal! }
+        : null;
+    const reference =
+      structuredReference ?? installmentReferenceFromDescription(transaction.description);
+    if (!reference || reference.total < 2) continue;
+
+    const invoice = invoiceOf(s, transaction);
+    if (!invoice || !cardOf(s, invoice.cardId)) continue;
+    const description = stripInstallmentReference(transaction.description)
+      .replace(/^\s*\d{1,2}\/\d{1,2}\s*/, "")
+      .trim();
+    const descriptionKey = normalizedInstallmentDescription(transaction.description);
+    const startMonth = addMonths(invoice.month, 1 - reference.number);
+    const item: DetectedInstallmentTransaction = {
+      transaction,
+      cardId: invoice.cardId,
+      number: reference.number,
+      total: reference.total,
+      startMonth,
+      description: description || transaction.description,
+      descriptionKey,
+    };
+    const key = JSON.stringify([item.cardId, item.startMonth, item.total, item.descriptionKey]);
+    groups.set(key, [...(groups.get(key) ?? []), item]);
+  }
+
+  const detected: DetectedInstallmentPlan[] = [];
+  for (const items of groups.values()) {
+    const first = items[0];
+    if (!first) continue;
+    const registeredCount = s.plans.filter(
+      (plan) =>
+        plan.cardId === first.cardId &&
+        plan.firstMonth === first.startMonth &&
+        plan.amounts.length === first.total &&
+        normalizedInstallmentDescription(plan.description) === first.descriptionKey,
+    ).length;
+
+    const byNumber = new Map<number, DetectedInstallmentTransaction[]>();
+    for (const item of items) {
+      const matching = byNumber.get(item.number) ?? [];
+      matching.push(item);
+      matching.sort(
+        (a, b) =>
+          a.transaction.date.localeCompare(b.transaction.date) ||
+          a.transaction.id.localeCompare(b.transaction.id),
+      );
+      byNumber.set(item.number, matching);
+    }
+    const parallelPurchases = Math.max(...[...byNumber.values()].map((rows) => rows.length));
+
+    for (let purchaseIndex = 0; purchaseIndex < parallelPurchases; purchaseIndex += 1) {
+      if (purchaseIndex < registeredCount) continue;
+      const rows = [...byNumber.values()]
+        .map((numberRows) => numberRows[purchaseIndex])
+        .filter((item): item is DetectedInstallmentTransaction => item !== undefined)
+        .sort((a, b) => a.number - b.number);
+      const firstRow = rows[0];
+      if (!firstRow) continue;
+
+      const knownAmounts = new Map(
+        rows.map((item) => [item.number, round2(item.transaction.amount)]),
+      );
+      const knownAmountValues = [...knownAmounts.values()];
+      const fallbackAmount = round2(
+        knownAmountValues.reduce((sum, amount) => sum + amount, 0) / knownAmountValues.length,
+      );
+      const amounts = Array.from(
+        { length: firstRow.total },
+        (_, index) => knownAmounts.get(index + 1) ?? fallbackAmount,
+      );
+      const shareTransaction =
+        rows.find((item) =>
+          item.transaction.allocations.some((allocation) => allocation.amount > 0),
+        )?.transaction ?? firstRow.transaction;
+      const allocated = shareTransaction.allocations.filter((allocation) => allocation.amount > 0);
+      const allocatedTotal = allocated.reduce((sum, allocation) => sum + allocation.amount, 0);
+      const shares = allocatedTotal
+        ? allocated.map((allocation) => ({
+            personId: allocation.personId,
+            pct: (allocation.amount / allocatedTotal) * 100,
+          }))
+        : [];
+      const lastShare = shares.at(-1);
+      if (lastShare) {
+        lastShare.pct = round2(
+          100 - shares.slice(0, -1).reduce((sum, share) => sum + share.pct, 0),
+        );
+      }
+      const firstInstallment = rows.find((item) => item.number === 1);
+
+      detected.push({
+        estimated: knownAmounts.size < firstRow.total,
+        plan: {
+          id: `detected_${rows.map((item) => item.transaction.id).sort()[0]}`,
+          description: firstRow.description,
+          cardId: firstRow.cardId,
+          purchaseDate: firstInstallment?.transaction.date ?? `${firstRow.startMonth}-01`,
+          total: round2(amounts.reduce((sum, amount) => sum + amount, 0)),
+          amounts,
+          firstMonth: firstRow.startMonth,
+          shares,
+        },
+      });
+    }
+  }
+
+  return detected.sort(
+    (a, b) =>
+      a.plan.description.localeCompare(b.plan.description, "pt-BR") ||
+      a.plan.firstMonth.localeCompare(b.plan.firstMonth),
+  );
+};
+
 export const recurringChargeAppliesAt = (charge: RecurringCharge, month: string) =>
   month >= charge.startMonth && (!charge.cancelledFromMonth || month < charge.cancelledFromMonth);
 
