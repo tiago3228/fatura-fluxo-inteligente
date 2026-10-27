@@ -212,34 +212,84 @@ export const planNextMonth = (p: InstallmentPlan, month: string) =>
 export const recurringChargeAppliesAt = (charge: RecurringCharge, month: string) =>
   month >= charge.startMonth && (!charge.cancelledFromMonth || month < charge.cancelledFromMonth);
 
+/**
+ * Soma os compromissos conhecidos de uma competência.
+ * Parcelas já materializadas nas faturas têm prioridade; planos e recorrências
+ * só entram como previsão quando ainda não existe seu lançamento correspondente.
+ */
+export const committedMonthTotal = (s: FinanceState, month: string, personId?: string) => {
+  const committedTransactions = monthTxs(s, month).filter(
+    (transaction) =>
+      transaction.amount > 0 &&
+      (transaction.type === "parcela" || transaction.recurringChargeId !== undefined),
+  );
+  const representedPlanIds = new Set(
+    committedTransactions
+      .map((transaction) => transaction.planId)
+      .filter((planId): planId is string => Boolean(planId)),
+  );
+  const representedRecurringIds = new Set(
+    committedTransactions
+      .map((transaction) => transaction.recurringChargeId)
+      .filter((chargeId): chargeId is string => Boolean(chargeId)),
+  );
+  const transactionValue = committedTransactions.reduce((sum, transaction) => {
+    if (!personId) return sum + transaction.amount;
+    return (
+      sum +
+      transaction.allocations
+        .filter((allocation) => allocation.personId === personId)
+        .reduce((part, allocation) => part + allocation.amount, 0)
+    );
+  }, 0);
+  const planValue = s.plans.reduce((sum, plan) => {
+    if (representedPlanIds.has(plan.id)) return sum;
+    const amount = planAmountAt(plan, month);
+    if (!amount) return sum;
+    if (!personId) return sum + amount;
+    return (
+      sum + (amount * (plan.shares.find((share) => share.personId === personId)?.pct ?? 0)) / 100
+    );
+  }, 0);
+  const recurringValue = (s.recurringCharges ?? []).reduce((sum, charge) => {
+    if (representedRecurringIds.has(charge.id) || !recurringChargeAppliesAt(charge, month))
+      return sum;
+    if (!personId) return sum + charge.amount;
+    return (
+      sum +
+      (charge.amount * (charge.shares.find((share) => share.personId === personId)?.pct ?? 0)) / 100
+    );
+  }, 0);
+  return round2(transactionValue + planValue + recurringValue);
+};
+
 export const forecast = (s: FinanceState, fromMonth: string, months = 6, personId?: string) =>
   Array.from({ length: months }, (_, i) => {
     const m = addMonths(fromMonth, i + 1);
-    const planValue = s.plans.reduce((sum, p) => {
-      const amt = planAmountAt(p, m);
-      if (!amt) return sum;
-      if (!personId) return sum + amt;
-      const share = p.shares.find((x) => x.personId === personId)?.pct ?? 0;
-      return sum + (amt * share) / 100;
-    }, 0);
-    const recurringValue = (s.recurringCharges ?? []).reduce((sum, charge) => {
-      if (!recurringChargeAppliesAt(charge, m)) return sum;
-      if (!personId) return sum + charge.amount;
-      const share = charge.shares.find((item) => item.personId === personId)?.pct ?? 0;
-      return sum + (charge.amount * share) / 100;
-    }, 0);
-    return { month: m, value: round2(planValue + recurringValue) };
+    return { month: m, value: committedMonthTotal(s, m, personId) };
   });
 
-export const totalFutureCommitted = (s: FinanceState, month: string, personId?: string) =>
-  round2(
-    s.plans.reduce((sum, p) => {
-      const f = planFutureCommitted(p, month);
-      if (!personId) return sum + f;
-      const share = p.shares.find((x) => x.personId === personId)?.pct ?? 0;
-      return sum + (f * share) / 100;
-    }, 0),
-  );
+export const totalFutureCommitted = (s: FinanceState, month: string, personId?: string) => {
+  const plans = s.plans.reduce((sum, p) => {
+    const f = planFutureCommitted(p, month);
+    if (!personId) return sum + f;
+    const share = p.shares.find((x) => x.personId === personId)?.pct ?? 0;
+    return sum + (f * share) / 100;
+  }, 0);
+  const projectedDescriptionInstallments = s.transactions.reduce((sum, transaction) => {
+    if (transaction.type !== "parcela" || transaction.planId || transaction.amount <= 0) return sum;
+    const invoice = invoiceOf(s, transaction);
+    if (!invoice || invoice.month <= month) return sum;
+    if (!personId) return sum + transaction.amount;
+    return (
+      sum +
+      transaction.allocations
+        .filter((allocation) => allocation.personId === personId)
+        .reduce((part, allocation) => part + allocation.amount, 0)
+    );
+  }, 0);
+  return round2(plans + projectedDescriptionInstallments);
+};
 
 /** Divide um valor em partes iguais preservando centavos (resto vai para a primeira parte) */
 export const splitEqually = (amount: number, n: number) => {

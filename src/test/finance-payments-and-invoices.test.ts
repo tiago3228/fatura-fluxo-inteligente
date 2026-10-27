@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  committedMonthTotal,
   forecast,
   personDebtTotal,
   personMonthPaid,
   personMonthRemaining,
   personPaymentStatus,
   personMonthTotal,
+  totalFutureCommitted,
 } from "@/lib/finance/calc";
 import { createDemoState } from "@/lib/finance/mock";
 import { reducer } from "@/lib/finance/store";
@@ -256,6 +258,9 @@ describe("pagamentos e competências", () => {
       amount: 986.14,
       allocations: [{ personId, amount: 986.14 }],
     });
+    expect(committedMonthTotal(november, "2026-11")).toBe(986.14);
+    expect(forecast(november, "2026-10", 1)[0]?.value).toBe(986.14);
+    expect(totalFutureCommitted(november, "2026-10")).toBe(986.14);
 
     const december = reducer(november, {
       type: "prepareNextInvoice",
@@ -395,7 +400,7 @@ describe("pagamentos e competências", () => {
       projected.every((transaction) => transaction.allocations[0]?.personId === personId),
     ).toBe(true);
     expect(forecast(hydrated, "2026-10", 3).map((month) => month.value)).toEqual([
-      229.8, 229.8, 229.8,
+      3176.77, 229.8, 229.8,
     ]);
 
     const historyBefore = hydrated.transactions.filter(
@@ -407,7 +412,7 @@ describe("pagamentos e competências", () => {
       cancelledFromMonth: "2026-11",
     });
     expect(forecast(canceled, "2026-10", 3).map((month) => month.value)).toEqual([
-      109.9, 109.9, 109.9,
+      3056.87, 109.9, 109.9,
     ]);
     for (const historical of historyBefore.filter(
       (transaction) => transaction.invoiceId !== november?.id,
