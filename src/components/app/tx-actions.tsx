@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useMemo, useState, type ReactNode, type Context } from "react";
 import { AlertTriangle, Check, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useFinance } from "@/lib/finance/store";
@@ -26,7 +26,9 @@ interface TxActionsCtx {
   deleteTx: (txId: string) => void;
   unassign: (txIds: string[]) => void;
 }
-const Ctx = createContext<TxActionsCtx | null>(null);
+// Contexto estável entre recargas automáticas (HMR) para não "perder" o provider.
+const gTx = globalThis as unknown as { __txActionsCtx?: Context<TxActionsCtx | null> };
+const Ctx = gTx.__txActionsCtx ?? (gTx.__txActionsCtx = createContext<TxActionsCtx | null>(null));
 export const useTxActions = () => {
   const v = useContext(Ctx);
   if (!v) throw new Error("TxActionsProvider ausente");
