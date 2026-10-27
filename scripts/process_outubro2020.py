@@ -3,11 +3,22 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 import csv
+import os
 import sys
 from openpyxl import load_workbook, Workbook
 
-SOURCE = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("OUTUBRODE2020.xlsx")
-OUT_DIR = Path("docs/imports")
+PRIVATE_DIR = Path.home() / ".local/share/fatura-fluxo-inteligente-private"
+SOURCE = Path(
+    os.environ.get(
+        "FATURA_SOURCE_FILE",
+        sys.argv[1] if len(sys.argv) > 1 else str(PRIVATE_DIR / "originals/OUTUBRODE2020.xlsx"),
+    )
+)
+OUT_DIR = Path(os.environ.get("FATURA_IMPORT_OUT_DIR", str(PRIVATE_DIR / "imports")))
+if not SOURCE.is_file():
+    raise SystemExit(
+        "Arquivo de origem não encontrado. Passe o caminho como argumento ou em FATURA_SOURCE_FILE."
+    )
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 PEOPLE = {

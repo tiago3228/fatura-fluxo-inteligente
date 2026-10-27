@@ -3,7 +3,23 @@ import { Link, useRouter, useRouterState } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  Bell, BookOpen, Calculator, CalendarClock, CreditCard, FileSpreadsheet, FileText, LayoutDashboard, LogOut, Settings, ShoppingBag, Users, Wallet,
+  AlertCircle,
+  Bell,
+  BookOpen,
+  Calculator,
+  CalendarClock,
+  CheckCircle2,
+  CloudOff,
+  CreditCard,
+  FileSpreadsheet,
+  FileText,
+  LayoutDashboard,
+  Loader2,
+  LogOut,
+  Settings,
+  ShoppingBag,
+  Users,
+  Wallet,
 } from "lucide-react";
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarHeader, SidebarInset, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger,
@@ -13,6 +29,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAlerts } from "@/lib/finance/alerts";
+import { useFinance } from "@/lib/finance/store";
 import { DemoTag } from "./common";
 import { TxActionsProvider } from "./tx-actions";
 import { cn } from "@/lib/utils";
@@ -171,6 +188,67 @@ function ConnectionStatus() {
   return <div className="border-b border-warning/30 bg-warning-soft px-4 py-2 text-center text-xs font-medium text-warning">Você está sem conexão. Alterações financeiras só serão confirmadas quando o servidor responder.</div>;
 }
 
+function SyncStatusIndicator() {
+  const { syncStatus } = useFinance();
+  const status = {
+    loading: {
+      label: "Carregando dados",
+      Icon: Loader2,
+      className: "text-muted-foreground",
+    },
+    local: { label: "Modo local", Icon: CloudOff, className: "text-muted-foreground" },
+    saving: { label: "Salvando na nuvem", Icon: Loader2, className: "text-primary" },
+    synced: { label: "Sincronizado", Icon: CheckCircle2, className: "text-success" },
+    error: {
+      label: "Falha na sincronização",
+      Icon: AlertCircle,
+      className: "text-destructive",
+    },
+    conflict: {
+      label: "Conflito: envio pausado",
+      Icon: AlertCircle,
+      className: "text-destructive",
+    },
+  }[syncStatus];
+  const isAlert = syncStatus === "error" || syncStatus === "conflict";
+  const Icon = status.Icon;
+
+  return (
+    <div
+      role={isAlert ? "alert" : "status"}
+      aria-live={isAlert ? "assertive" : "polite"}
+      aria-label={status.label}
+      title={status.label}
+      className={`flex items-center gap-1.5 px-2 text-xs font-medium ${status.className}`}
+    >
+      <Icon
+        aria-hidden="true"
+        className={`size-4 ${syncStatus === "loading" || syncStatus === "saving" ? "animate-spin" : ""}`}
+      />
+      <span className="hidden sm:inline">{status.label}</span>
+    </div>
+  );
+}
+
+function SyncStatusBanner() {
+  const { syncStatus } = useFinance();
+  if (syncStatus !== "error" && syncStatus !== "conflict") return null;
+  const message =
+    syncStatus === "conflict"
+      ? "Outra sessão alterou os dados enquanto havia mudanças locais. O envio foi pausado para evitar sobrescrever dados; preserve esta cópia e reconcilie antes de continuar."
+      : "A sincronização não foi confirmada. Alterações após o último estado sincronizado podem existir apenas neste navegador; verifique a conexão antes de encerrar a sessão.";
+
+  return (
+    <div
+      role="alert"
+      aria-live="assertive"
+      className="border-b border-destructive/30 bg-destructive/5 px-4 py-2 text-center text-xs font-medium text-destructive"
+    >
+      {message}
+    </div>
+  );
+}
+
 export function AppShell({ children }: { children: ReactNode }) {
   return (
     <TooltipProvider delayDuration={200}>
@@ -182,11 +260,13 @@ export function AppShell({ children }: { children: ReactNode }) {
               <SidebarTrigger aria-label="Alternar menu" className="max-md:size-11 max-md:[&_svg]:size-6" />
               <div className="hidden sm:block"><DemoTag /></div>
               <div className="ml-auto flex items-center gap-1">
+                <SyncStatusIndicator />
                 <Notifications />
                 <Profile />
               </div>
             </header>
             <ConnectionStatus />
+            <SyncStatusBanner />
             <main className="mx-auto w-full max-w-[1400px] flex-1 p-4 md:p-6">{children}</main>
           </SidebarInset>
         </SidebarProvider>

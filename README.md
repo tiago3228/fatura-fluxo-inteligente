@@ -27,7 +27,9 @@ npm run dev
 
 ## Estado da persistência
 
-O aplicativo usa o Lovable Cloud (banco de dados + contas). O acesso exige login com e-mail e senha: cada conta tem o próprio workspace e os dados (faturas, cartões, pessoas, lançamentos, parcelamentos e preferências) ficam salvos na nuvem, sincronizados entre dispositivos. Uma cópia local no navegador serve de cache offline; desligar « Guardar dados » em Configurações desativa o cache. O schema inicial validado está em `supabase/schema.sql` (aplicado ao banco) e o estado do aplicativo é salvo por workspace em `workspace_state`.
+O aplicativo usa autenticação e Supabase. No código atual, as contas autenticadas chamam `join_family_workspace` e compartilham o estado financeiro do workspace familiar; o estado principal é um documento JSONB em `workspace_state`. A configuração real de autenticação, as migrations aplicadas e as políticas do projeto implantado precisam ser verificadas no ambiente antes de presumir que correspondem a este repositório.
+
+O estado local do navegador é uma cópia/cache separado. A sincronização remota e a persistência local devem ser tratadas como requisitos distintos; consulte a implementação atual antes de alterar a preferência “Guardar dados”. A definição de `workspace_state` e da associação familiar está nas migrations versionadas em `drizzle/migrations/`, além do schema base em `supabase/schema.sql`; aplicar somente o schema base não configura necessariamente todo o backend esperado pelo app.
 
 ## PWA
 

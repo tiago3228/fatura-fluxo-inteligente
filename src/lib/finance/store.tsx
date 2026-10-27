@@ -1,9 +1,18 @@
-import { createContext, useContext, useEffect, useReducer, useRef, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useReducer,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { ensureWorkspace, loadCloudState, saveCloudState } from "./cloud";
 import { createDemoState } from "./mock";
 import {
   addMonths,
+  allocateByPercent,
   dateInMonth,
   installmentReferenceFromDescription,
   planAmountAt,
@@ -107,7 +116,10 @@ const projectionKey = (description: string, amount: number) =>
     .trim()}|${amount.toFixed(2)}`;
 
 const projectionMatchKey = (
-  transaction: Pick<Transaction, "description" | "amount" | "installmentNumber" | "installmentTotal">,
+  transaction: Pick<
+    Transaction,
+    "description" | "amount" | "installmentNumber" | "installmentTotal"
+  >,
 ) => {
   const reference = installmentReferenceOf(transaction);
   return `${projectionKey(transaction.description, transaction.amount)}|${reference?.number ?? ""}/${reference?.total ?? ""}`;
@@ -198,10 +210,7 @@ const prepareNextInvoice = (
         installmentTotal: plan.amounts.length,
         projectionSourceId: `plan:${plan.id}`,
         isProjected: true,
-        allocations: plan.shares.map((share) => ({
-          personId: share.personId,
-          amount: round2((amount * share.pct) / 100),
-        })),
+        allocations: allocateByPercent(amount, plan.shares),
       },
     ];
   });
@@ -251,10 +260,7 @@ const prepareNextInvoice = (
           amount: charge.amount,
           type: "compra" as const,
           recurringChargeId: charge.id,
-          allocations: charge.shares.map((share) => ({
-            personId: share.personId,
-            amount: round2((charge.amount * share.pct) / 100),
-          })),
+          allocations: allocateByPercent(charge.amount, charge.shares),
         }))
     : [];
   const transactions: Transaction[] = [
@@ -394,18 +400,14 @@ const ensureInstallmentProjections = (state: FinanceState): FinanceState => {
             installmentReferenceOf(transaction) !== null,
         );
         const hasPlanInstallment = result.plans.some(
-          (plan) =>
-            plan.cardId === invoice.cardId && (planAmountAt(plan, nextMonth) ?? 0) > 0,
+          (plan) => plan.cardId === invoice.cardId && (planAmountAt(plan, nextMonth) ?? 0) > 0,
         );
         return hasInstallmentTransaction || hasPlanInstallment;
       })
       .sort((a, b) => a.month.localeCompare(b.month))
       .map((invoice) => invoice.id);
     for (const invoiceId of invoiceIds) result = prepareNextInvoice(result, invoiceId, false);
-    if (
-      result.transactions.length === transactionCount &&
-      result.invoices.length === invoiceCount
-    )
+    if (result.transactions.length === transactionCount && result.invoices.length === invoiceCount)
       break;
   }
   return result;
@@ -460,7 +462,8 @@ const sameInstallmentSeries = (
     !previousReference ||
     !incomingReference ||
     previousReference.total !== incomingReference.total ||
-    transactionDescriptionKey(previous.description) !== transactionDescriptionKey(incoming.description)
+    transactionDescriptionKey(previous.description) !==
+      transactionDescriptionKey(incoming.description)
   )
     return false;
   if (previous.invoiceId === preparedInvoiceId)
@@ -607,7 +610,6 @@ const ensureSpreadsheetArchive = (state: FinanceState): FinanceState => {
         fileName: "OUTUBRODE2020.xlsx",
         month: "2020-10",
         uploadedAt: "2026-10-23T21:00:00.000Z",
-        publicPath: "/planilhas/OUTUBRODE2020.xlsx",
       },
     ],
   };
@@ -647,8 +649,7 @@ const reconcileImportedTransactions = (
     if (match.projectionSourceId !== undefined)
       restored.projectionSourceId = match.projectionSourceId;
     else if (installmentReferenceOf(match))
-      restored.projectionSourceId =
-        match.invoiceId === prepared?.id ? transaction.id : match.id;
+      restored.projectionSourceId = match.invoiceId === prepared?.id ? transaction.id : match.id;
     if (transaction.installmentNumber === undefined && match.installmentNumber !== undefined)
       restored.installmentNumber = match.installmentNumber;
     if (transaction.installmentTotal === undefined && match.installmentTotal !== undefined)
@@ -717,9 +718,10 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
       const source = selected?.projectionSourceId
         ? s.transactions.find((transaction) => transaction.id === selected.projectionSourceId)
         : undefined;
-      const sourceAllocations = selected && source
-        ? scaleAllocationList(a.allocations, selected.amount, source.amount)
-        : [];
+      const sourceAllocations =
+        selected && source
+          ? scaleAllocationList(a.allocations, selected.amount, source.amount)
+          : [];
       return {
         ...s,
         transactions: syncProjectedAllocations(
@@ -728,7 +730,7 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
               ? { ...t, allocations: a.allocations, adjustmentNote: a.adjustmentNote }
               : source && t.id === source.id
                 ? { ...t, allocations: sourceAllocations, adjustmentNote: a.adjustmentNote }
-              : t,
+                : t,
           ),
         ),
       };
@@ -749,19 +751,19 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
       const original = s.transactions.find((transaction) => transaction.id === a.txId);
       if (!original) return s;
       const updatedTransactions = s.transactions.map((t) => {
-          if (t.id !== a.txId) return t;
-          const updated: Transaction = {
-            ...t,
-            description: a.patch.description,
-            date: a.patch.date,
-            amount: a.patch.amount,
-          };
-          if (a.patch.installmentNumber === null) delete updated.installmentNumber;
-          else updated.installmentNumber = a.patch.installmentNumber;
-          if (a.patch.installmentTotal === null) delete updated.installmentTotal;
-          else updated.installmentTotal = a.patch.installmentTotal;
-          return updated;
-        });
+        if (t.id !== a.txId) return t;
+        const updated: Transaction = {
+          ...t,
+          description: a.patch.description,
+          date: a.patch.date,
+          amount: a.patch.amount,
+        };
+        if (a.patch.installmentNumber === null) delete updated.installmentNumber;
+        else updated.installmentNumber = a.patch.installmentNumber;
+        if (a.patch.installmentTotal === null) delete updated.installmentTotal;
+        else updated.installmentTotal = a.patch.installmentTotal;
+        return updated;
+      });
       if (original.isProjected) {
         return recalculateForecastTotals({
           ...s,
@@ -769,24 +771,25 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
         });
       }
       const projectionRoot = original.projectionSourceId ?? original.id;
-      const remainingTransactions = updatedTransactions
-        .filter(
-          (transaction) =>
-            !(
-              projectionRoot &&
-              transaction.isProjected &&
-              transaction.projectionSourceId === projectionRoot &&
-              transaction.id !== a.txId
-            ),
-        );
+      const remainingTransactions = updatedTransactions.filter(
+        (transaction) =>
+          !(
+            projectionRoot &&
+            transaction.isProjected &&
+            transaction.projectionSourceId === projectionRoot &&
+            transaction.id !== a.txId
+          ),
+      );
       const suppressedProjectionSources = (s.suppressedProjectionSources ?? []).filter(
         (sourceId) => sourceId !== projectionRoot,
       );
-      const next = normalizeInstallmentTransactions(recalculateForecastTotals({
-        ...s,
-        transactions: syncProjectedAllocations(remainingTransactions),
-        suppressedProjectionSources,
-      }));
+      const next = normalizeInstallmentTransactions(
+        recalculateForecastTotals({
+          ...s,
+          transactions: syncProjectedAllocations(remainingTransactions),
+          suppressedProjectionSources,
+        }),
+      );
       return ensureInstallmentProjections(next);
     }
     case "deleteTransaction": {
@@ -809,7 +812,10 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
     }
     case "addTransaction":
       return ensureInstallmentProjections(
-        normalizeInstallmentTransactions({ ...s, transactions: [...s.transactions, a.transaction] }),
+        normalizeInstallmentTransactions({
+          ...s,
+          transactions: [...s.transactions, a.transaction],
+        }),
       );
     case "setTxType": {
       const next = normalizeInstallmentTransactions({
@@ -1032,7 +1038,13 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
   }
 }
 
-type FinanceCtx = { state: FinanceState; dispatch: React.Dispatch<Action> } | null;
+export type SyncStatus = "loading" | "local" | "saving" | "synced" | "error" | "conflict";
+type FinanceCtx = {
+  state: FinanceState;
+  dispatch: React.Dispatch<Action>;
+  syncStatus: SyncStatus;
+  isCloudConnected: boolean;
+} | null;
 // Contexto único mesmo quando o arquivo é recarregado durante a edição (evita "fora do FinanceProvider").
 const g = globalThis as unknown as { __financeCtx?: React.Context<FinanceCtx> };
 const Ctx = g.__financeCtx ?? (g.__financeCtx = createContext<FinanceCtx>(null));
@@ -1044,8 +1056,18 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
   });
   const hydrated = useRef(false);
   const workspaceId = useRef<string | null>(null);
+  const cloudReady = useRef(false);
+  const savingJson = useRef<string | null>(null);
   const stateRef = useRef(state);
   stateRef.current = state;
+  const [syncStatus, setSyncStatusState] = useState<SyncStatus>("loading");
+  const syncStatusRef = useRef<SyncStatus>("loading");
+  const [isCloudConnected, setIsCloudConnected] = useState(false);
+  const [cloudReadyVersion, setCloudReadyVersion] = useState(0);
+  const setSyncStatus = (next: SyncStatus) => {
+    syncStatusRef.current = next;
+    setSyncStatusState(next);
+  };
 
   // Cópia local (funciona offline e evita "flash" de dados demonstrativos).
   const lastSynced = useRef<string | null>(null);
@@ -1063,7 +1085,27 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
   // Nuvem: carrega os dados da conta ao entrar e passa a salvar a cada alteração.
   useEffect(() => {
     let cancelled = false;
+    let loadGeneration = 0;
     let channel: ReturnType<typeof supabase.channel> | null = null;
+    let pendingRemote: FinanceState | null = null;
+
+    const applyRemote = (remote: FinanceState) => {
+      const json = JSON.stringify(remote);
+      if (json === lastSynced.current) return;
+      if (json === savingJson.current) {
+        lastSynced.current = json;
+        return;
+      }
+      const localJson = JSON.stringify(stateRef.current);
+      if (lastSynced.current !== null && localJson !== lastSynced.current) {
+        setSyncStatus("conflict");
+        return;
+      }
+      lastSynced.current = json;
+      stateRef.current = remote;
+      dispatch({ type: "hydrate", state: remote });
+      setSyncStatus("synced");
+    };
 
     // Recebe na hora as alterações feitas pela outra conta.
     const subscribeRemote = (ws: string) => {
@@ -1080,31 +1122,82 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
           },
           (payload) => {
             const remote = (payload.new as { data?: unknown } | null)?.data;
-            if (!remote || typeof remote !== "object") return;
-            const json = JSON.stringify(remote);
-            if (json === lastSynced.current) return;
-            lastSynced.current = json;
-            dispatch({ type: "hydrate", state: remote as FinanceState });
+            if (!remote || typeof remote !== "object" || Array.isArray(remote)) return;
+            const parsed = remote as FinanceState;
+            if (!cloudReady.current) {
+              pendingRemote = parsed;
+              return;
+            }
+            applyRemote(parsed);
           },
         )
         .subscribe();
     };
 
     const loadFromCloud = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (!data.session || cancelled) return;
-      const ws = await ensureWorkspace();
-      if (!ws || cancelled) return;
-      workspaceId.current = ws;
-      subscribeRemote(ws);
-      const cloud = await loadCloudState(ws);
-      if (cancelled) return;
-      if (cloud) {
-        lastSynced.current = JSON.stringify(cloud);
-        dispatch({ type: "hydrate", state: cloud });
-      } else if (stateRef.current) {
-        // Primeira entrada: publica o estado local na nuvem.
-        await saveCloudState(ws, stateRef.current);
+      const generation = ++loadGeneration;
+      cloudReady.current = false;
+      workspaceId.current = null;
+      lastSynced.current = null;
+      savingJson.current = null;
+      setIsCloudConnected(false);
+      setSyncStatus("loading");
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        if (cancelled || generation !== loadGeneration) return;
+        if (error) {
+          setSyncStatus("error");
+          return;
+        }
+        if (!data.session) {
+          setSyncStatus("local");
+          return;
+        }
+        const ws = await ensureWorkspace();
+        if (cancelled || generation !== loadGeneration) return;
+        if (!ws) {
+          setSyncStatus("error");
+          return;
+        }
+        workspaceId.current = ws;
+        setIsCloudConnected(true);
+        subscribeRemote(ws);
+
+        const result = await loadCloudState(ws);
+        if (cancelled || generation !== loadGeneration || workspaceId.current !== ws) return;
+        if (result.kind === "error") {
+          // Uma falha de leitura nunca deve ser tratada como um documento ausente.
+          setSyncStatus("error");
+          return;
+        }
+
+        const cloudState = pendingRemote ?? (result.kind === "loaded" ? result.state : null);
+        if (cloudState) {
+          lastSynced.current = JSON.stringify(cloudState);
+          stateRef.current = cloudState;
+          cloudReady.current = true;
+          setCloudReadyVersion((version) => version + 1);
+          dispatch({ type: "hydrate", state: cloudState });
+          setSyncStatus("synced");
+          pendingRemote = null;
+          return;
+        }
+
+        // Primeira entrada confirmada: publica o estado local; falha deixa o sync bloqueado.
+        setSyncStatus("saving");
+        const initialState = stateRef.current;
+        const saved = await saveCloudState(ws, initialState);
+        if (cancelled || generation !== loadGeneration || workspaceId.current !== ws) return;
+        if (!saved) {
+          setSyncStatus("error");
+          return;
+        }
+        lastSynced.current = JSON.stringify(initialState);
+        cloudReady.current = true;
+        setCloudReadyVersion((version) => version + 1);
+        setSyncStatus("synced");
+      } catch {
+        if (!cancelled && generation === loadGeneration) setSyncStatus("error");
       }
     };
 
@@ -1114,8 +1207,13 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event) => {
       if (event === "SIGNED_OUT") {
+        loadGeneration += 1;
+        cloudReady.current = false;
         workspaceId.current = null;
         lastSynced.current = null;
+        savingJson.current = null;
+        setIsCloudConnected(false);
+        setSyncStatus("local");
         if (channel) {
           void supabase.removeChannel(channel);
           channel = null;
@@ -1133,6 +1231,8 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
 
     return () => {
       cancelled = true;
+      loadGeneration += 1;
+      cloudReady.current = false;
       subscription.unsubscribe();
       if (channel) void supabase.removeChannel(channel);
     };
@@ -1146,19 +1246,57 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     } catch {
       /* ignore */
     }
-    if (!workspaceId.current || !state.settings.persist) return;
+    if (!workspaceId.current || !cloudReady.current || syncStatusRef.current === "conflict") return;
     // Salva na nuvem com pequena espera para agrupar alterações em sequência.
-    const timer = setTimeout(() => {
-      if (!workspaceId.current) return;
-      const json = JSON.stringify(stateRef.current);
-      if (json === lastSynced.current) return; // nada novo (ou veio da outra conta)
-      lastSynced.current = json;
-      void saveCloudState(workspaceId.current, stateRef.current);
-    }, 600);
-    return () => clearTimeout(timer);
-  }, [state]);
+    let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    const saveCurrentState = async (attempt = 0) => {
+      if (
+        cancelled ||
+        !workspaceId.current ||
+        !cloudReady.current ||
+        syncStatusRef.current === "conflict"
+      )
+        return;
+      const ws = workspaceId.current;
+      const snapshot = stateRef.current;
+      const json = JSON.stringify(snapshot);
+      if (json === lastSynced.current) {
+        setSyncStatus("synced");
+        return;
+      }
+      savingJson.current = json;
+      setSyncStatus("saving");
+      const saved = await saveCloudState(ws, snapshot);
+      if (ws !== workspaceId.current) return;
+      if (saved) {
+        lastSynced.current = json;
+        if (savingJson.current === json) savingJson.current = null;
+        if ((syncStatusRef.current as SyncStatus) !== "conflict") {
+          setSyncStatus(JSON.stringify(stateRef.current) === json ? "synced" : "saving");
+        }
+        return;
+      }
+      if (savingJson.current === json) savingJson.current = null;
+      if ((syncStatusRef.current as SyncStatus) !== "conflict") setSyncStatus("error");
+      const delays = [2000, 5000, 15000, 30000];
+      if (attempt < delays.length) {
+        retryTimer = setTimeout(() => void saveCurrentState(attempt + 1), delays[attempt]);
+      }
+    };
+    const timer = setTimeout(() => void saveCurrentState(), 600);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+      if (retryTimer) clearTimeout(retryTimer);
+    };
+  }, [state, cloudReadyVersion]);
 
-  return <Ctx.Provider value={{ state, dispatch }}>{children}</Ctx.Provider>;
+  return (
+    <Ctx.Provider value={{ state, dispatch, syncStatus, isCloudConnected }}>
+      {children}
+    </Ctx.Provider>
+  );
 }
 
 export function useFinance() {

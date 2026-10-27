@@ -285,7 +285,6 @@ const spreadsheets: SpreadsheetArchive[] = [
     fileName: "OUTUBRODE2020.xlsx",
     month: "2020-10",
     uploadedAt: "2026-10-23T21:00:00.000Z",
-    publicPath: "/planilhas/OUTUBRODE2020.xlsx",
   },
 ];
 const totalpassRows = rowsByCard["7432"] ?? [];

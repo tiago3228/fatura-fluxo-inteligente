@@ -1,9 +1,11 @@
 import { round2 } from "./format";
 import type {
+  Allocation,
   CreditCard,
   FinanceState,
   InstallmentPlan,
   Invoice,
+  PlanShare,
   RecurringCharge,
   Transaction,
   TxType,
@@ -169,7 +171,8 @@ export const cardLimitUsed = (s: FinanceState, cardId: string) =>
       .filter((invoice) => invoice.cardId === cardId && invoice.status !== "paga")
       .reduce((sum, invoice) => {
         const isForecast = invoice.source === "planilha" && invoice.id.includes("_next_");
-        if (!isForecast) return sum + Math.max(invoice.officialTotal, invoiceLaunchesTotal(s, invoice));
+        if (!isForecast)
+          return sum + Math.max(invoice.officialTotal, invoiceLaunchesTotal(s, invoice));
         return (
           sum +
           s.transactions
@@ -483,6 +486,51 @@ export const recurringChargeAppliesAt = (charge: RecurringCharge, month: string)
   month >= charge.startMonth && (!charge.cancelledFromMonth || month < charge.cancelledFromMonth);
 
 /**
+ * Encontra correspondências estritas entre parcelas da fatura sem planId e planos cadastrados.
+ * Cada plano pode representar no máximo uma linha por número de parcela; linhas extras continuam
+ * contabilizadas como compras independentes.
+ */
+const matchUnlinkedInstallmentsToPlans = (s: FinanceState, transactions: Transaction[]) => {
+  const transactionIds = new Set<string>();
+  const planIds = new Set<string>();
+  const usedPlanInstallments = new Set<string>();
+
+  for (const transaction of transactions) {
+    if (transaction.type !== "parcela" || transaction.amount <= 0) continue;
+    if (transaction.planId && s.plans.some((plan) => plan.id === transaction.planId)) continue;
+    const invoice = invoiceOf(s, transaction);
+    if (!invoice) continue;
+    const reference =
+      Number.isInteger(transaction.installmentNumber) &&
+      Number.isInteger(transaction.installmentTotal) &&
+      transaction.installmentNumber! >= 1 &&
+      transaction.installmentTotal! >= transaction.installmentNumber!
+        ? { number: transaction.installmentNumber!, total: transaction.installmentTotal! }
+        : installmentReferenceFromDescription(transaction.description);
+    if (!reference) continue;
+
+    const plan = s.plans.find((candidate) => {
+      const slot = `${candidate.id}:${reference.number}`;
+      return (
+        !usedPlanInstallments.has(slot) &&
+        candidate.cardId === invoice.cardId &&
+        candidate.amounts.length === reference.total &&
+        planNumberAt(candidate, invoice.month) === reference.number &&
+        round2(planAmountAt(candidate, invoice.month) ?? 0) === round2(transaction.amount) &&
+        normalizedInstallmentDescription(candidate.description) ===
+          normalizedInstallmentDescription(transaction.description)
+      );
+    });
+    if (!plan) continue;
+    usedPlanInstallments.add(`${plan.id}:${reference.number}`);
+    transactionIds.add(transaction.id);
+    planIds.add(plan.id);
+  }
+
+  return { transactionIds, planIds };
+};
+
+/**
  * Soma os compromissos conhecidos de uma competência.
  * Parcelas já materializadas nas faturas têm prioridade; planos e recorrências
  * só entram como previsão quando ainda não existe seu lançamento correspondente.
@@ -493,11 +541,13 @@ export const committedMonthTotal = (s: FinanceState, month: string, personId?: s
       transaction.amount > 0 &&
       (transaction.type === "parcela" || transaction.recurringChargeId !== undefined),
   );
+  const inferredMatches = matchUnlinkedInstallmentsToPlans(s, committedTransactions);
   const representedPlanIds = new Set(
     committedTransactions
       .map((transaction) => transaction.planId)
       .filter((planId): planId is string => Boolean(planId)),
   );
+  for (const planId of inferredMatches.planIds) representedPlanIds.add(planId);
   const representedRecurringIds = new Set(
     committedTransactions
       .map((transaction) => transaction.recurringChargeId)
@@ -540,6 +590,13 @@ export const forecast = (s: FinanceState, fromMonth: string, months = 6, personI
   });
 
 export const totalFutureCommitted = (s: FinanceState, month: string, personId?: string) => {
+  const projectedDescriptionTransactions = s.transactions.filter((transaction) => {
+    if (transaction.type !== "parcela" || transaction.planId || transaction.amount <= 0)
+      return false;
+    const invoice = invoiceOf(s, transaction);
+    return Boolean(invoice && invoice.month > month);
+  });
+  const inferredMatches = matchUnlinkedInstallmentsToPlans(s, projectedDescriptionTransactions);
   const plans = s.plans.reduce((sum, p) => {
     const f = planFutureCommitted(p, month);
     if (!personId) return sum + f;
@@ -548,6 +605,7 @@ export const totalFutureCommitted = (s: FinanceState, month: string, personId?: 
   }, 0);
   const projectedDescriptionInstallments = s.transactions.reduce((sum, transaction) => {
     if (transaction.type !== "parcela" || transaction.planId || transaction.amount <= 0) return sum;
+    if (inferredMatches.transactionIds.has(transaction.id)) return sum;
     const invoice = invoiceOf(s, transaction);
     if (!invoice || invoice.month <= month) return sum;
     if (!personId) return sum + transaction.amount;
@@ -559,6 +617,25 @@ export const totalFutureCommitted = (s: FinanceState, month: string, personId?: 
     );
   }, 0);
   return round2(plans + projectedDescriptionInstallments);
+};
+
+/** Rateia em centavos e ajusta o último participante para preservar o total exato. */
+export const allocateByPercent = (amount: number, shares: PlanShare[]): Allocation[] => {
+  if (shares.length === 0) return [];
+  const weights = shares.map((share) => Math.max(0, share.pct));
+  const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+  if (totalWeight === 0) return [];
+
+  const totalCents = Math.round(amount * 100);
+  let assignedCents = 0;
+  return shares.map((share, index) => {
+    const cents =
+      index === shares.length - 1
+        ? totalCents - assignedCents
+        : Math.round((totalCents * (weights[index] ?? 0)) / totalWeight);
+    assignedCents += cents;
+    return { personId: share.personId, amount: cents / 100 };
+  });
 };
 
 /** Divide um valor em partes iguais preservando centavos (resto vai para a primeira parte) */

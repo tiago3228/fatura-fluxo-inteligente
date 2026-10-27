@@ -1,27 +1,23 @@
-# Atribuições de `OUTUBRODE2020.xlsx`
+# Processamento local de planilhas financeiras
 
-Processamento realizado somente com os dados presentes na planilha original.
+Os arquivos de origem e os resultados podem conter informações financeiras. Mantenha-os fora do repositório e do diretório público da aplicação.
 
-## Regras aplicadas
+O script `scripts/process_outubro2020.py` aceita o caminho do arquivo original como primeiro argumento. Por padrão, procura o original em:
 
-- `ANA` foi interpretada como **Ana Kamilly**.
-- `ARLETE` foi interpretada como **Arlete**.
-- `REU` foi interpretada como **Reu**.
-- `JOÃO` foi interpretado como **João Cardoso**.
-- `ATENA` foi interpretada como **Atena Cardoso**, conforme a pessoa já existente nas compras/base do aplicativo.
-- Somente linhas da aba `ABRIL DE 2026` com pessoa, item e valor foram tratadas como compras itemizadas.
-- A aba `Planilha2` contém movimentações, pagamentos, depósitos e totais. Mesmo quando há um nome, não há item de compra suficiente para criar uma compra nova; essas linhas ficaram em revisão.
-- `ARLETE 1800/ATENA`, a anotação `atena 528` junto de `JOÃO` e `CARÃO` não foram divididos ou reinterpretados automaticamente.
+```text
+~/.local/share/fatura-fluxo-inteligente-private/originals/OUTUBRODE2020.xlsx
+```
 
-## Resultado
+Os CSVs e a planilha de revisão resultantes são gravados, por padrão, em:
 
-- **93 compras atribuídas**:
-  - Atena Cardoso: 50
-  - Arlete: 37
-  - Ana Kamilly: 3
-  - João Cardoso: 2
-  - Reu: 1
-- **15 registros para revisão**, em `OUTUBRODE2020_nao_atribuidas.csv`.
-- **11 linhas de controle excluídas** por serem totais, pagamentos, depósitos ou resumos, em `OUTUBRODE2020_excluidas_controle.csv`.
+```text
+~/.local/share/fatura-fluxo-inteligente-private/imports/
+```
 
-O arquivo Excel consolidado contém as abas `Atribuídas`, `Não atribuídas` e `Controle excluído`.
+Exemplo de execução local:
+
+```bash
+python3 scripts/process_outubro2020.py "$HOME/.local/share/fatura-fluxo-inteligente-private/originals/OUTUBRODE2020.xlsx"
+```
+
+Os caminhos podem ser substituídos por `FATURA_SOURCE_FILE` e `FATURA_IMPORT_OUT_DIR`. Não mova esses resultados para `public/` nem os adicione ao Git sem antes remover e classificar os dados pessoais/financeiros.

@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { PageHeader, Panel } from "@/components/app/common";
 import { useFinance } from "@/lib/finance/store";
 import { fmtMonthLong, uid } from "@/lib/finance/format";
+import { isPrivateLegacySpreadsheet, spreadsheetDownloadHref } from "@/lib/finance/archive";
 import type { SpreadsheetArchive } from "@/lib/finance/types";
 
 export const Route = createFileRoute("/_authenticated/planilhas")({
@@ -23,6 +24,7 @@ const MONTHS: Record<string, number> = {
   janeiro: 1, fevereiro: 2, marco: 3, março: 3, abril: 4, maio: 5, junho: 6,
   julho: 7, agosto: 8, setembro: 9, outubro: 10, novembro: 11, dezembro: 12,
 };
+const EMPTY_SPREADSHEETS: SpreadsheetArchive[] = [];
 
 function monthFromFilename(fileName: string, fallback: string) {
   const normalized = fileName.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
@@ -46,7 +48,7 @@ function Planilhas() {
   const [month, setMonth] = useState(state.settings.month);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
-  const spreadsheets = state.spreadsheets ?? [];
+  const spreadsheets = state.spreadsheets ?? EMPTY_SPREADSHEETS;
   const groups = useMemo(() => {
     const grouped = new Map<string, SpreadsheetArchive[]>();
     [...spreadsheets].sort((a, b) => b.month.localeCompare(a.month) || b.uploadedAt.localeCompare(a.uploadedAt)).forEach((item) => {
@@ -70,10 +72,16 @@ function Planilhas() {
     setBusy(true);
     try {
       const dataUrl = await readAsDataUrl(selectedFile);
+      const privateLegacyArchive = spreadsheets.find(
+        (item) =>
+          item.id === "sheet_outubro_2020" &&
+          !item.dataUrl &&
+          item.fileName === selectedFile.name,
+      );
       dispatch({
         type: "addSpreadsheet",
         spreadsheet: {
-          id: uid("sheet"),
+          id: privateLegacyArchive?.id ?? uid("sheet"),
           fileName: selectedFile.name,
           month,
           uploadedAt: new Date().toISOString(),
@@ -114,15 +122,17 @@ function Planilhas() {
                   </div>
                   <div className="space-y-2">
                     {items.map((item) => {
-                      const href = item.dataUrl ?? item.publicPath;
+                      const privateLegacyArchive = isPrivateLegacySpreadsheet(item);
+                      const href = spreadsheetDownloadHref(item);
                       return (
                         <div key={item.id} className="flex flex-wrap items-center gap-3 rounded-lg border p-3">
                           <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary"><FileSpreadsheet className="size-5" /></span>
                           <div className="min-w-0 flex-1">
                             <p className="truncate font-medium" title={item.fileName}>{item.fileName}</p>
-                            <p className="text-xs text-muted-foreground">Adicionada em {new Date(item.uploadedAt).toLocaleDateString("pt-BR")}{item.publicPath ? " · arquivo do aplicativo" : " · arquivo enviado"}</p>
+                            <p className="text-xs text-muted-foreground">Adicionada em {new Date(item.uploadedAt).toLocaleDateString("pt-BR")}{privateLegacyArchive ? " · original preservado fora do build público" : item.publicPath && !item.dataUrl ? " · arquivo do aplicativo" : " · arquivo enviado"}</p>
                           </div>
                           {href ? <a href={href} download={item.fileName} className="inline-flex min-h-9 items-center gap-2 rounded-md border px-3 text-sm font-medium hover:bg-muted"><Download className="size-4" /> Baixar</a> : null}
+                          {privateLegacyArchive ? <p role="status" className="w-full text-xs text-muted-foreground">Para baixar pelo workspace, reenvie o arquivo original nesta página; ele será armazenado na cópia compartilhada.</p> : null}
                           {!item.publicPath && <Button variant="ghost" size="icon" aria-label={`Excluir ${item.fileName}`} onClick={() => { dispatch({ type: "removeSpreadsheet", spreadsheetId: item.id }); toast.success("Planilha removida do arquivo"); }}><Trash2 className="size-4" /></Button>}
                         </div>
                       );

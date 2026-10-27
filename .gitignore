@@ -16,6 +16,11 @@ dist-ssr
 .nitro
 *.local
 
+# Local environment configuration; keep only the sanitized template tracked.
+.env
+.env.*
+!.env.example
+
 # Wrangler / Cloudflare
 .wrangler/
 .dev.vars
@@ -30,3 +35,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Local financial source and generated import outputs; keep outside the repository.
+/public/planilhas/OUTUBRODE2020.xlsx
+/docs/imports/OUTUBRODE2020_*

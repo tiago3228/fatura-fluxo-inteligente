@@ -28,7 +28,7 @@ function Row({ title, desc, children }: { title: string; desc?: string; children
 }
 
 function Configuracoes() {
-  const { state, dispatch } = useFinance();
+  const { state, dispatch, syncStatus } = useFinance();
   const s = state.settings;
   const set = (patch: Partial<typeof s>) => dispatch({ type: "updateSettings", patch });
   const [warn, setWarn] = useState(String(s.warnPct));
@@ -73,16 +73,57 @@ function Configuracoes() {
         <Panel title="Sobre esta versão" className="lg:col-span-2">
           <div className="divide-y">
             <div className="space-y-2 px-4 py-3 text-sm text-muted-foreground">
-              <p>Entre com seu e-mail e senha e seus dados ficam salvos na nuvem da sua conta, <b>sincronizados entre computadores</b> automaticamente. Quem entrar com a mesma conta vê as mesmas faturas, cartões e pessoas.</p>
+              <p>
+                As contas autorizadas no workspace familiar compartilham faturas, cartões, pessoas e
+                lançamentos pela nuvem. A sincronização mostra seu estado no cabeçalho; confira-o
+                antes de encerrar uma sessão.
+              </p>
               <p>A importação de PDF lê localmente PDFs com texto selecionável e sempre exige conferência. PDFs escaneados ou com layout não reconhecido são sinalizados para revisão manual. A planilha Excel também é lida localmente no navegador.</p>
             </div>
-            <Row title="Guardar dados neste navegador" desc="Desligado, as alterações se perdem ao recarregar a página"><Switch checked={s.persist} onCheckedChange={(v) => set({ persist: v })} aria-label="Guardar dados neste navegador" /></Row>
-            <Row title="Restaurar dados importados" desc="Apaga suas alterações locais">
+            <Row
+              title="Guardar uma cópia neste navegador"
+              desc="Desligado, remove o cache local; a sincronização da conta continua ativa"
+            >
+              <Switch
+                checked={s.persist}
+                onCheckedChange={(v) => set({ persist: v })}
+                aria-label="Guardar uma cópia neste navegador"
+              />
+            </Row>
+            <Row
+              title="Redefinir dados de demonstração"
+              desc={
+                syncStatus === "local"
+                  ? "Substitui os exemplos deste navegador por dados de demonstração"
+                  : "Disponível apenas no modo local, fora do workspace sincronizado"
+              }
+            >
               <AlertDialog>
-                <AlertDialogTrigger asChild><Button variant="outline"><RotateCcw className="size-4" /> Restaurar</Button></AlertDialogTrigger>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" disabled={syncStatus !== "local"}>
+                    <RotateCcw className="size-4" /> Redefinir exemplos
+                  </Button>
+                </AlertDialogTrigger>
                 <AlertDialogContent>
-                  <AlertDialogHeader><AlertDialogTitle>Restaurar dados importados?</AlertDialogTitle><AlertDialogDescription>As alterações locais serão substituídas pela base atual da fatura importada.</AlertDialogDescription></AlertDialogHeader>
-                  <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={() => { dispatch({ type: "reset" }); setWarn("80"); toast.success("Dados restaurados"); }}>Restaurar</AlertDialogAction></AlertDialogFooter>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Redefinir para dados de demonstração?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Esta ação substitui o estado atual deste navegador por exemplos e não recupera
+                      faturas importadas. Ela só fica disponível fora de um workspace sincronizado.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => {
+                        dispatch({ type: "reset" });
+                        setWarn("80");
+                        toast.success("Dados de demonstração redefinidos");
+                      }}
+                    >
+                      Redefinir exemplos
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
             </Row>

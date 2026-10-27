@@ -17,13 +17,23 @@ const download = (blob: Blob, filename: string) => {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 };
 
-export function exportCSV(t: ExportTable, filename: string, sep: ";" | "," = ";") {
+export function serializeCSV(t: ExportTable, sep: ";" | "," = ";"): string {
   const esc = (v: string | number) => {
-    const s = typeof v === "number" ? v.toFixed(2).replace(".", sep === ";" ? "," : ".") : v;
-    return /["\n;,]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    const raw =
+      typeof v === "number" ? v.toFixed(2).replace(".", sep === ";" ? "," : ".") : v;
+    const safe =
+      typeof v === "string"
+        ? raw.replace(/^(\s*)([=+\-@])/, "$1'$2")
+        : raw;
+    const escaped = safe.replace(/"/g, '""');
+    return /["\n]/.test(safe) || safe.includes(sep) ? `"${escaped}"` : escaped;
   };
   const lines = [t.headers, ...t.rows, ...(t.footer ? [t.footer] : [])].map((r) => r.map(esc).join(sep));
-  download(new Blob(["\ufeff" + lines.join("\n")], { type: "text/csv;charset=utf-8" }), filename);
+  return lines.join("\n");
+}
+
+export function exportCSV(t: ExportTable, filename: string, sep: ";" | "," = ";") {
+  download(new Blob(["\ufeff" + serializeCSV(t, sep)], { type: "text/csv;charset=utf-8" }), filename);
 }
 
 export async function exportXLSX(t: ExportTable, filename: string) {
