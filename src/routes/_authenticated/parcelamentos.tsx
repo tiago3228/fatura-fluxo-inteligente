@@ -6,6 +6,7 @@ import { useFinance } from "@/lib/finance/store";
 import {
   addMonths,
   detectedInstallmentPlans,
+  filterInstallmentPlanEntries,
   forecast,
   monthInvoices,
   planAmountAt,
@@ -59,12 +60,11 @@ function Parcelamentos() {
       estimated,
     })),
   ];
-  const list = allPlans.filter(
-    ({ plan: p }) =>
-      (!f.card || p.cardId === f.card) &&
-      (!f.person || p.shares.some((s) => s.personId === f.person)) &&
-      (!f.status || planStatusAt(p, m) === f.status),
-  );
+  const list = filterInstallmentPlanEntries(allPlans, m, {
+    personId: f.person,
+    cardId: f.card,
+    status: f.status,
+  });
   const monthIds = new Set(monthInvoices(state, m).map((i) => i.id));
   const inInvoice = round2(
     state.transactions

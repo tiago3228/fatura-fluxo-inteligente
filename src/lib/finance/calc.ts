@@ -296,6 +296,19 @@ export const planStatusAt = (p: InstallmentPlan, month: string): PlanStatus => {
   if (n > planCount(p)) return "finalizado";
   return "ativo";
 };
+
+export const filterInstallmentPlanEntries = <T extends { plan: InstallmentPlan }>(
+  entries: T[],
+  month: string,
+  filters: { personId?: string; cardId?: string; status?: string } = {},
+) =>
+  entries.filter(
+    ({ plan }) =>
+      (!filters.cardId || plan.cardId === filters.cardId) &&
+      (!filters.personId || plan.shares.some((share) => share.personId === filters.personId)) &&
+      (!filters.status || planStatusAt(plan, month) === filters.status),
+  );
+
 export const planAmountAt = (p: InstallmentPlan, month: string) => {
   const n = planNumberAt(p, month);
   return n >= 1 && n <= planCount(p) ? p.amounts[n - 1] : 0;

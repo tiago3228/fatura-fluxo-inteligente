@@ -4,7 +4,9 @@ import {
   cardLimitUsed,
   committedMonthTotal,
   detectedInstallmentPlans,
+  filterInstallmentPlanEntries,
   forecast,
+  planStatusAt,
   personDebtTotal,
   personMonthPaid,
   personMonthRemaining,
@@ -493,6 +495,74 @@ describe("pagamentos e competências", () => {
         shares: [{ personId: "p_atena", pct: 100 }],
       },
     });
+  });
+
+  it("filtra por cartão e status entre parcelamentos de titulares e cartões diferentes", () => {
+    const initial = createDemoState();
+    const extraPlans: InstallmentPlan[] = [
+      {
+        id: "fixture_active_atena",
+        description: "Plano ativo Atena",
+        cardId: "c_4494",
+        purchaseDate: "2026-10-01",
+        total: 300,
+        amounts: [100, 100, 100],
+        firstMonth: "2026-10",
+        shares: [{ personId: "p_atena", pct: 100 }],
+      },
+      {
+        id: "fixture_future_tiago",
+        description: "Plano futuro Tiago",
+        cardId: "c_7432",
+        purchaseDate: "2026-12-01",
+        total: 300,
+        amounts: [100, 100, 100],
+        firstMonth: "2026-12",
+        shares: [{ personId: "p_tiago", pct: 100 }],
+      },
+      {
+        id: "fixture_finished_atena",
+        description: "Plano finalizado Atena",
+        cardId: "c_7264",
+        purchaseDate: "2026-01-01",
+        total: 200,
+        amounts: [100, 100],
+        firstMonth: "2026-01",
+        shares: [{ personId: "p_atena", pct: 100 }],
+      },
+    ];
+    const entries = [
+      ...initial.plans.map((plan) => ({ plan })),
+      ...detectedInstallmentPlans(initial).map(({ plan }) => ({ plan })),
+      ...extraPlans.map((plan) => ({ plan })),
+    ];
+    const month = "2026-11";
+    const cardIds = [...new Set(entries.map(({ plan }) => plan.cardId))];
+
+    for (const cardId of cardIds) {
+      const filtered = filterInstallmentPlanEntries(entries, month, { cardId });
+      expect(filtered.length).toBeGreaterThan(0);
+      expect(filtered.every(({ plan }) => plan.cardId === cardId)).toBe(true);
+    }
+
+    const expectedByStatus = {
+      ativo: "fixture_active_atena",
+      futuro: "fixture_future_tiago",
+      finalizado: "fixture_finished_atena",
+    };
+    for (const [status, expectedId] of Object.entries(expectedByStatus)) {
+      const filtered = filterInstallmentPlanEntries(entries, month, { status });
+      expect(filtered.some(({ plan }) => plan.id === expectedId)).toBe(true);
+      expect(filtered.every(({ plan }) => planStatusAt(plan, month) === status)).toBe(true);
+    }
+
+    for (const personId of ["p_atena", "p_tiago"]) {
+      const filtered = filterInstallmentPlanEntries(entries, month, { personId });
+      expect(filtered.length).toBeGreaterThan(0);
+      expect(
+        filtered.every(({ plan }) => plan.shares.some((share) => share.personId === personId)),
+      ).toBe(true);
+    }
   });
 
   it("propaga a atribuição iniciada na parcela futura à compra original e às parcelas seguintes", () => {
