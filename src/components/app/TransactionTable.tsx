@@ -297,6 +297,20 @@ function Row({
     });
   };
 
+  const removeRecurrence = () => {
+    const invoice = state.invoices.find((item) => item.id === tx.invoiceId);
+    if (!invoice || !recurrence || recurrence.cancelledFromMonth) return;
+    const cancelledFromMonth = addMonths(invoice.month, 1);
+    dispatch({
+      type: "cancelRecurringCharge",
+      chargeId: recurrence.id,
+      cancelledFromMonth,
+    });
+    toast.success("Recorrência removida", {
+      description: `Nenhuma nova projeção a partir de ${cancelledFromMonth}; o histórico foi preservado.`,
+    });
+  };
+
   const items = (
     Item: typeof ContextMenuItem | typeof DropdownMenuItem,
     Sep: typeof ContextMenuSeparator,
@@ -321,6 +335,12 @@ function Row({
         <Repeat className="size-4" />{" "}
         {recurrence ? "Recorrência já cadastrada" : "Marcar como recorrente"}
       </Item>
+      {recurrence && (
+        <Item disabled={Boolean(recurrence.cancelledFromMonth)} onSelect={removeRecurrence}>
+          <Repeat className="size-4" />{" "}
+          {recurrence.cancelledFromMonth ? "Recorrência já encerrada" : "Remover recorrência"}
+        </Item>
+      )}
       {tx.allocations.length > 0 && (
         <Item onSelect={() => unassign([tx.id])}>
           <UserX className="size-4" /> Remover atribuição
