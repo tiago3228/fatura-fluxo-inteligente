@@ -229,6 +229,17 @@ export const personMonthTotal = (s: FinanceState, personId: string, month: strin
     ),
   );
 
+/** Saldo do orçamento mensal da pessoa; null indica que não há limite configurado. */
+export const personMonthLimitAvailable = (
+  s: FinanceState,
+  personId: string,
+  month: string,
+): number | null => {
+  const person = s.people.find((item) => item.id === personId);
+  if (!person || person.limit <= 0) return null;
+  return Math.max(0, round2(person.limit - personMonthTotal(s, personId, month)));
+};
+
 export const sortPeopleBySpending = <T extends { total: number }>(people: T[]) =>
   [...people].sort((a, b) => b.total - a.total);
 

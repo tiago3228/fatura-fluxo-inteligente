@@ -95,7 +95,7 @@ function Compras() {
           <KpiCard label="Total exibido" value={fmtBRL(total)} hint={`${txs.length} lançamento(s)`} />
           <KpiCard label="Pendentes" value={pending} hint="Aguardando direcionamento" tone={pending > 0 ? "warning" : "success"} />
           <KpiCard label="Divididas" value={split} hint="Compras compartilhadas" />
-          <KpiCard label="Por pessoa" value={personTotals.length === 0 ? "—" : personTotals.map(({ person, total: value }) => `${person.name.split(" ")[0]} ${fmtBRL(value)}`).join(" · ")} hint="Totais recalculados pelos direcionamentos" />
+          <KpiCard label="Por pessoa" value={personTotals.length === 0 ? "—" : personTotals.map(({ person, total: value }) => `${person.name.split(" ")[0]} ${fmtBRL(value)}`).join(" · ")} hint="Totais recalculados pelos direcionamentos" wrapValue />
         </div>
 
         {assignPerson && (

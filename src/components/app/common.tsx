@@ -55,12 +55,14 @@ export function KpiCard({
   hint,
   icon,
   tone = "default",
+  wrapValue = false,
 }: {
   label: string;
   value: ReactNode;
   hint?: ReactNode;
   icon?: ReactNode;
   tone?: "default" | "warning" | "danger" | "success";
+  wrapValue?: boolean;
 }) {
   const toneCls = {
     default: "bg-accent text-accent-foreground",
@@ -69,12 +71,22 @@ export function KpiCard({
     success: "bg-success-soft text-success",
   }[tone];
   return (
-    <div className="fade-in-up rounded-xl border bg-card p-4 shadow-xs">
+    <div className="fade-in-up min-w-0 rounded-xl border bg-card p-4 shadow-xs">
       <div className="flex items-start justify-between gap-2">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
-        {icon && <span className={cn("grid size-8 place-items-center rounded-lg [&_svg]:size-4", toneCls)}>{icon}</span>}
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {label}
+        </p>
+        {icon && (
+          <span className={cn("grid size-8 place-items-center rounded-lg [&_svg]:size-4", toneCls)}>
+            {icon}
+          </span>
+        )}
       </div>
-      <p className="num mt-2 text-2xl font-bold">{value}</p>
+      {wrapValue ? (
+        <div className="mt-2 break-words text-2xl font-bold">{value}</div>
+      ) : (
+        <p className="num mt-2 text-2xl font-bold">{value}</p>
+      )}
       {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
     </div>
   );

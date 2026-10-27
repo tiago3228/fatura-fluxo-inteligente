@@ -33,6 +33,7 @@ import { useFinance } from "@/lib/finance/store";
 import { DemoTag } from "./common";
 import { TxActionsProvider } from "./tx-actions";
 import { FloatingCalculator } from "./FloatingCalculator";
+import { PersonLimitAlert } from "./PersonLimitAlert";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -271,6 +272,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <ConnectionStatus />
             <SyncStatusBanner />
             <main className="mx-auto w-full max-w-[1400px] flex-1 p-4 md:p-6">{children}</main>
+            <PersonLimitAlert />
             <FloatingCalculator open={quickCalculatorOpen} onClose={() => setQuickCalculatorOpen(false)} />
             {!quickCalculatorOpen && (
               <Button

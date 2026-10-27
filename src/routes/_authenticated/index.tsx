@@ -13,6 +13,7 @@ import {
   limitStatus,
   monthInvoices,
   monthTxs,
+  personMonthLimitAvailable,
   personMonthTotal,
   sortPeopleBySpending,
   totalCardLimit,
@@ -74,7 +75,17 @@ function Overview() {
   } satisfies ChartConfig;
   const [showExtra, setShowExtra] = useState(false);
   const [showCardLimit, setShowCardLimit] = useState(false);
-  const people = state.people.filter((p) => p.active).map((p) => ({ ...p, total: personMonthTotal(state, p.id, m) }));
+  const people = state.people
+    .filter((p) => p.active)
+    .map((p) => {
+      const total = personMonthTotal(state, p.id, m);
+      return {
+        ...p,
+        total,
+        budgetAvailable: personMonthLimitAvailable(state, p.id, m),
+        budgetStatus: limitStatus(total, p.limit, state.settings.warnPct),
+      };
+    });
   const peopleBySpending = sortPeopleBySpending(people);
   const nextPeopleSummary = people.map((person) => {
     const actual = personMonthTotal(state, person.id, nextMonth);
@@ -99,7 +110,7 @@ function Overview() {
       footer: ["", "Total da pessoa", "", "", summary.actual],
     };
   };
-  const atRisk = people.filter((p) => limitStatus(p.total, p.limit, state.settings.warnPct) !== "normal");
+  const atRisk = people.filter((p) => p.budgetStatus !== "normal");
   const alerts = useAlerts();
 
   return (
@@ -219,14 +230,36 @@ function Overview() {
         <Panel title="Alertas" description={`${alerts.length} item(ns)`}>
           <ul className="divide-y">
             {alerts.length === 0 && <li className="p-4 text-sm text-muted-foreground">Nenhum alerta para este mês.</li>}
-            {alerts.map((a) => (
-              <li key={a.id}>
-                <Link to={a.to} className="flex gap-3 px-4 py-3 text-sm hover:bg-muted/50">
-                  {a.tone === "info" ? <Info className="mt-0.5 size-4 shrink-0 text-info" /> : <AlertTriangle className={cn("mt-0.5 size-4 shrink-0", a.tone === "danger" ? "text-danger" : "text-warning")} />}
-                  {a.text}
-                </Link>
-              </li>
-            ))}
+            {alerts.map((a) => {
+              const alertPersonId = a.id.startsWith("lim_") ? a.id.slice(4) : undefined;
+              const alertPerson = alertPersonId
+                ? state.people.find((person) => person.id === alertPersonId)
+                : undefined;
+              const budgetAvailable = alertPerson
+                ? personMonthLimitAvailable(state, alertPerson.id, m)
+                : null;
+              return (
+                <li key={a.id}>
+                  <Link to={a.to} className="flex gap-3 px-4 py-3 text-sm hover:bg-muted/50">
+                    {a.tone === "info" ? (
+                      <Info className="mt-0.5 size-4 shrink-0 text-info" />
+                    ) : (
+                      <AlertTriangle
+                        className={cn(
+                          "mt-0.5 size-4 shrink-0",
+                          a.tone === "danger" ? "text-danger" : "text-warning",
+                          alertPerson && "animate-pulse motion-reduce:animate-none",
+                        )}
+                      />
+                    )}
+                    <span>
+                      {a.text}
+                      {budgetAvailable !== null && ` Disponível para gastar: ${fmtBRL(budgetAvailable)}.`}
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
         </Panel>
       </div>
@@ -236,7 +269,7 @@ function Overview() {
           <table className="w-full min-w-[640px] text-sm">
             <thead className="border-b bg-muted/60 text-left text-xs uppercase tracking-wide text-muted-foreground">
               <tr className="[&_th]:px-4 [&_th]:py-2.5">
-                <th>Pessoa</th><th className="text-right">Atribuído</th><th className="text-right">Limite</th><th className="w-56">Uso</th><th>Status</th>
+                <th>Pessoa</th><th className="text-right">Atribuído</th><th className="text-right">Limite</th><th className="text-right">Disponível</th><th className="w-56">Uso</th><th>Status</th>
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -245,8 +278,23 @@ function Overview() {
                   <td><Link to="/pessoas/$id" params={{ id: p.id }} className="font-semibold hover:underline">{p.name}</Link></td>
                   <td className="num text-right font-semibold">{fmtBRL(p.total)}</td>
                   <td className="num text-right text-muted-foreground">{fmtBRL(p.limit)}</td>
+                  <td className={cn("num text-right", p.budgetAvailable === 0 && p.total > p.limit ? "font-semibold text-danger" : "text-success")}>
+                    {p.limit <= 0
+                      ? "—"
+                      : p.total > p.limit
+                        ? `Excedido ${fmtBRL(round2(p.total - p.limit))}`
+                        : fmtBRL(p.budgetAvailable ?? 0)}
+                  </td>
                   <td><LimitBar total={p.total} limit={p.limit} /></td>
-                  <td><LimitBadge status={limitStatus(p.total, p.limit, state.settings.warnPct)} /></td>
+                  <td>
+                    <span
+                      role={p.budgetStatus === "normal" ? undefined : "status"}
+                      aria-live={p.budgetStatus === "normal" ? undefined : "polite"}
+                      className={p.budgetStatus === "normal" ? undefined : "inline-flex animate-pulse motion-reduce:animate-none"}
+                    >
+                      <LimitBadge status={p.budgetStatus} />
+                    </span>
+                  </td>
                 </tr>
               ))}
             </tbody>

@@ -630,12 +630,28 @@ const reconcileImportedTransactions = (
   );
   const used = new Set<string>();
   const transactions = incoming.map((transaction) => {
-    const match = candidates.find(
-      (candidate) =>
-        !used.has(candidate.id) &&
-        (transactionMatchKey(candidate) === transactionMatchKey(transaction) ||
-          sameInstallmentSeries(candidate, transaction, prepared?.id, previous?.id)),
-    );
+    const match = candidates.find((candidate) => {
+      if (used.has(candidate.id)) return false;
+      if (sameInstallmentSeries(candidate, transaction, prepared?.id, previous?.id)) return true;
+
+      // Uma compra comum não pode consumir a correspondência de uma parcela,
+      // mesmo que descrição e valor coincidam. Parcelas são conciliadas pela
+      // série e pelo avanço n -> n+1; compras comuns, só no mesmo mês preparado
+      // ou quando há uma recorrência válida para a competência importada.
+      if (installmentReferenceOf(candidate) || installmentReferenceOf(transaction)) return false;
+      if (transactionMatchKey(candidate) !== transactionMatchKey(transaction)) return false;
+      if (candidate.invoiceId === prepared?.id) return true;
+      return (
+        candidate.invoiceId === previous?.id &&
+        candidate.recurringChargeId !== undefined &&
+        state.recurringCharges.some(
+          (charge) =>
+            charge.id === candidate.recurringChargeId &&
+            charge.cardId === invoice.cardId &&
+            recurringChargeAppliesAt(charge, invoice.month),
+        )
+      );
+    });
     if (!match) return transaction;
     used.add(match.id);
     const restored: Transaction = {

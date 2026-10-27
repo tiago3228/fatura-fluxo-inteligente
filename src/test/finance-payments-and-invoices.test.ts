@@ -6,8 +6,10 @@ import {
   detectedInstallmentPlans,
   filterInstallmentPlanEntries,
   forecast,
+  limitStatus,
   planStatusAt,
   personDebtTotal,
+  personMonthLimitAvailable,
   personMonthPaid,
   personMonthRemaining,
   personPaymentStatus,
@@ -137,6 +139,32 @@ const transactionsForCardMonth = (state: FinanceState, cardId: string, month: st
 };
 
 describe("pagamentos e competências", () => {
+  it("calcula o orçamento mensal disponível e marca atenção ao atingir 80%", () => {
+    const base = stateWithSinglePurchase(1500);
+    const state: FinanceState = {
+      ...base,
+      people: base.people.map((person) =>
+        person.id === personId ? { ...person, limit: 2000 } : person,
+      ),
+    };
+
+    expect(personMonthLimitAvailable(state, personId, "2026-10")).toBe(500);
+    expect(limitStatus(personMonthTotal(state, personId, "2026-10"), 2000, 80)).toBe("normal");
+    const stateAt80Percent: FinanceState = {
+      ...state,
+      transactions: state.transactions.map((transaction) => ({
+        ...transaction,
+        amount: 1600,
+        allocations: [{ personId, amount: 1600 }],
+      })),
+    };
+    expect(personMonthLimitAvailable(stateAt80Percent, personId, "2026-10")).toBe(400);
+    expect(limitStatus(personMonthTotal(stateAt80Percent, personId, "2026-10"), 2000, 80)).toBe(
+      "atencao",
+    );
+    expect(personMonthLimitAvailable(state, "p_inexistente", "2026-10")).toBeNull();
+  });
+
   it("calcula pagamentos parciais e integrais sem reaplicar o mesmo pagamento", () => {
     let state = stateWithSinglePurchase();
     expect(personMonthTotal(state, personId, "2026-10")).toBe(120);
@@ -906,6 +934,111 @@ describe("pagamentos e competências", () => {
     expect(novemberTransactions[0]?.id).toBe("actual_november_installment");
     expect(novemberTransactions[0]?.planId).toBe("plan_twelve");
     expect(novemberTransactions[0]?.installmentNumber).toBe(11);
+  });
+
+  it("preserva a pessoa da parcela 6/12 ao importar 7/12 e não confunde uma compra nova semelhante", () => {
+    const base = createDemoState();
+    const card = base.cards.find((item) => item.id === "c_7432");
+    const october = base.invoices.find(
+      (item) => item.cardId === "c_7432" && item.month === "2026-10",
+    );
+    if (!card || !october) throw new Error("A fixture precisa do cartão e fatura de outubro");
+
+    const previousOwner = {
+      id: "p_carine_test",
+      name: "Carine",
+      limit: 1000,
+      active: true,
+      cardIds: [],
+    };
+    const previousInstallment: Transaction = {
+      id: "tx_installment_october_6_of_12",
+      invoiceId: october.id,
+      date: "2026-10-16",
+      description: "LOJA EXEMPLO 6/12",
+      amount: 10,
+      type: "parcela",
+      installmentNumber: 6,
+      installmentTotal: 12,
+      allocations: [{ personId: previousOwner.id, amount: 10 }],
+    };
+    const initial: FinanceState = {
+      ...base,
+      people: [...base.people, previousOwner],
+      invoices: [october],
+      transactions: [previousInstallment],
+      plans: [],
+      recurringCharges: [],
+      payments: [],
+    };
+    const novemberInvoice = {
+      id: "pdf_november_installment_sequence",
+      cardId: card.id,
+      month: "2026-11",
+      dueDate: "2026-11-23",
+      officialTotal: 20,
+      status: "em_revisao" as const,
+      source: "pdf" as const,
+    };
+
+    const imported = reducer(initial, {
+      type: "importInvoice",
+      invoice: novemberInvoice,
+      transactions: [
+        {
+          id: "tx_new_purchase_same_description_amount",
+          invoiceId: novemberInvoice.id,
+          date: "2026-11-05",
+          description: "LOJA EXEMPLO",
+          amount: 10,
+          type: "compra",
+          allocations: [],
+        },
+        {
+          id: "tx_installment_november_7_of_12",
+          invoiceId: novemberInvoice.id,
+          date: "2026-11-16",
+          description: "LOJA EXEMPLO 7/12",
+          amount: 10,
+          type: "parcela",
+          installmentNumber: 7,
+          installmentTotal: 12,
+          allocations: [],
+        },
+      ],
+    });
+
+    expect(imported.transactions.find((item) => item.id === previousInstallment.id)).toEqual(
+      previousInstallment,
+    );
+    expect(
+      imported.transactions.find((item) => item.id === "tx_new_purchase_same_description_amount"),
+    ).toMatchObject({
+      type: "compra",
+      allocations: [{ personId: "p_tiago", amount: 10 }],
+    });
+    expect(
+      imported.transactions.find((item) => item.id === "tx_installment_november_7_of_12"),
+    ).toMatchObject({
+      description: "LOJA EXEMPLO 7/12",
+      type: "parcela",
+      installmentNumber: 7,
+      installmentTotal: 12,
+      allocations: [{ personId: previousOwner.id, amount: 10 }],
+    });
+
+    const decemberInvoice = imported.invoices.find(
+      (item) => item.cardId === card.id && item.month === "2026-12",
+    );
+    const decemberInstallment = imported.transactions.find(
+      (item) => item.invoiceId === decemberInvoice?.id,
+    );
+    expect(decemberInstallment).toMatchObject({
+      description: "LOJA EXEMPLO 8/12",
+      installmentNumber: 8,
+      installmentTotal: 12,
+      allocations: [{ personId: previousOwner.id, amount: 10 }],
+    });
   });
 
   it("projeta as duas TOTALPASS todos os meses e permite cancelar sem apagar o histórico", () => {

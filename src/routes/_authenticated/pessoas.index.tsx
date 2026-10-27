@@ -3,10 +3,10 @@ import { useState } from "react";
 import { Copy, Eye, MoreHorizontal, Pencil, Trash2, UserCheck, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { useFinance } from "@/lib/finance/store";
-import { limitMessage, personDebtTotal, personMonthPaid, personMonthRemaining, personMonthTotal, personPaymentStatus } from "@/lib/finance/calc";
+import { limitMessage, limitStatus, personDebtTotal, personMonthLimitAvailable, personMonthPaid, personMonthRemaining, personMonthTotal, personPaymentStatus } from "@/lib/finance/calc";
 import { fmtBRL, fmtMonthLong, round2, uid } from "@/lib/finance/format";
 import type { Person } from "@/lib/finance/types";
-import { EmptyState, PageHeader, Panel } from "@/components/app/common";
+import { EmptyState, LimitBar, PageHeader, Panel } from "@/components/app/common";
 import { PaymentStatusBadge, Pill } from "@/components/app/badges";
 import { PersonDialog } from "@/components/app/PersonDialog";
 import { Button } from "@/components/ui/button";
@@ -44,7 +44,7 @@ function Pessoas() {
             <table className="w-full min-w-[900px] text-sm">
               <thead className="border-b bg-muted/60 text-left text-xs uppercase tracking-wide text-muted-foreground">
                 <tr className="[&_th]:px-4 [&_th]:py-2.5">
-                  <th>Nome</th><th>Cartões</th><th className="text-right">Valor Total Devido</th><th className="text-right">Fatura do mês</th><th className="text-right">Pago no mês</th><th className="text-right">Restante no mês</th><th>Status</th><th className="w-12" />
+                  <th>Nome</th><th>Cartões</th><th className="text-right">Valor Total Devido</th><th className="text-right">Fatura do mês</th><th className="text-right">Pago no mês</th><th className="text-right">Falta pagar</th><th>Status</th><th className="w-12" />
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -55,13 +55,42 @@ function Pessoas() {
                   const debt = personDebtTotal(state, p.id);
                   const paymentStatus = personPaymentStatus(state, p.id, m);
                   const msg = limitMessage(p.name, total, p.limit, state.settings.warnPct);
+                  const budgetStatus = limitStatus(total, p.limit, state.settings.warnPct);
+                  const budgetAvailable = personMonthLimitAvailable(state, p.id, m);
+                  const budgetExceeded = p.limit > 0 ? Math.max(0, round2(total - p.limit)) : 0;
                   return (
                     <ContextMenu key={p.id}>
                       <ContextMenuTrigger asChild>
                         <tr className={cn("hover:bg-muted/40 [&_td]:px-4 [&_td]:py-3", !p.active && "opacity-60")}>
-                      <td>
+                      <td className="min-w-[240px]">
                         <Link to="/pessoas/$id" params={{ id: p.id }} className="font-semibold hover:underline">{p.name}</Link>
-                        {msg && <p className="text-xs text-muted-foreground">{msg}</p>}
+                        <div className="mt-2 space-y-1.5">
+                          {p.limit > 0 ? (
+                            <>
+                              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                                <span>Limite mensal: <b>{fmtBRL(p.limit)}</b></span>
+                                {budgetExceeded > 0 ? (
+                                  <span className="font-semibold text-danger">Excedido: {fmtBRL(budgetExceeded)}</span>
+                                ) : (
+                                  <span className="font-semibold text-success">Disponível: {fmtBRL(budgetAvailable ?? 0)}</span>
+                                )}
+                              </div>
+                              <LimitBar total={total} limit={p.limit} />
+                              {msg && (
+                                <div role="status" aria-live="polite">
+                                  <Pill
+                                    tone={budgetStatus === "atencao" ? "warning" : "danger"}
+                                    className="animate-pulse motion-reduce:animate-none"
+                                  >
+                                    {msg}
+                                  </Pill>
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <p className="text-xs text-muted-foreground">Limite mensal não definido</p>
+                          )}
+                        </div>
                       </td>
                       <td>
                         <div className="flex flex-wrap gap-1">
