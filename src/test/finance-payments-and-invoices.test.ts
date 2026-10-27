@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  cardLimitAvailable,
+  cardLimitUsed,
   committedMonthTotal,
   forecast,
   personDebtTotal,
@@ -280,6 +282,83 @@ describe("pagamentos e competências", () => {
         transaction.description.startsWith("GOL LINHAS A*EWQKW"),
       ),
     ).toHaveLength(1);
+  });
+
+  it("calcula o limite disponível pelo saldo do cartão, sem descontar faturas pagas ou recorrências futuras", () => {
+    const { initial, carine, gol } = stateWithCarineGol();
+    const sourceInvoice = initial.invoices.find((invoice) => invoice.id === gol.invoiceId);
+    if (!sourceInvoice) throw new Error("A compra da GOL precisa estar vinculada a uma fatura");
+    const openInvoice = { ...sourceInvoice, status: "em_revisao" as const, officialTotal: 329.88 };
+    const futureInvoice = {
+      ...openInvoice,
+      id: `${sourceInvoice.id}_next_2026-11`,
+      month: "2026-11",
+      dueDate: "2026-11-23",
+      officialTotal: 379.88,
+      source: "planilha" as const,
+    };
+    const paidInvoice = {
+      ...openInvoice,
+      id: "invoice_already_paid",
+      month: "2026-09",
+      status: "paga" as const,
+      officialTotal: 500,
+    };
+    const currentPurchase: Transaction = {
+      ...gol,
+      invoiceId: openInvoice.id,
+      allocations: [{ personId: carine.id, amount: 329.88 }],
+    };
+    const futureInstallment: Transaction = {
+      ...currentPurchase,
+      id: "tx_gol_future_installment",
+      invoiceId: futureInvoice.id,
+      date: "2026-11-16",
+      description: "GOL LINHAS A*EWQKW02/04",
+      installmentNumber: 2,
+      installmentTotal: 4,
+      projectionSourceId: gol.id,
+      isProjected: true,
+    };
+    const futureRecurring: Transaction = {
+      ...futureInstallment,
+      id: "tx_future_recurring",
+      description: "Serviço mensal previsto",
+      amount: 50,
+      type: "compra",
+      installmentNumber: undefined,
+      installmentTotal: undefined,
+      projectionSourceId: undefined,
+      isProjected: undefined,
+      recurringChargeId: "recurring_test",
+    };
+    const alreadyPaidPurchase: Transaction = {
+      ...currentPurchase,
+      id: "tx_already_paid",
+      invoiceId: paidInvoice.id,
+      amount: 500,
+      allocations: [{ personId: carine.id, amount: 500 }],
+    };
+    const state: FinanceState = {
+      ...initial,
+      cards: initial.cards.map((card) =>
+        card.id === "c_8222" ? { ...card, creditLimit: 1000 } : card,
+      ),
+      invoices: [openInvoice, futureInvoice, paidInvoice],
+      transactions: [currentPurchase, futureInstallment, futureRecurring, alreadyPaidPurchase],
+    };
+
+    expect(cardLimitUsed(state, "c_8222")).toBe(659.76);
+    expect(cardLimitAvailable(state, "c_8222")).toBe(340.24);
+
+    const paidCurrentInvoice: FinanceState = {
+      ...state,
+      invoices: state.invoices.map((invoice) =>
+        invoice.id === openInvoice.id ? { ...invoice, status: "paga" as const } : invoice,
+      ),
+    };
+    expect(cardLimitUsed(paidCurrentInvoice, "c_8222")).toBe(329.88);
+    expect(cardLimitAvailable(paidCurrentInvoice, "c_8222")).toBe(670.12);
   });
 
   it("propaga a atribuição iniciada na parcela futura à compra original e às parcelas seguintes", () => {

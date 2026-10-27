@@ -159,6 +159,36 @@ export const monthTxs = (s: FinanceState, month: string) => {
   return s.transactions.filter((t) => ids.has(t.invoiceId));
 };
 
+/**
+ * Valor comprometido no cartão: faturas não pagas e parcelas futuras já conhecidas.
+ * Faturas previstas não incluem cobranças recorrentes que ainda não foram realizadas.
+ */
+export const cardLimitUsed = (s: FinanceState, cardId: string) =>
+  round2(
+    s.invoices
+      .filter((invoice) => invoice.cardId === cardId && invoice.status !== "paga")
+      .reduce((sum, invoice) => {
+        const isForecast = invoice.source === "planilha" && invoice.id.includes("_next_");
+        if (!isForecast) return sum + Math.max(invoice.officialTotal, invoiceLaunchesTotal(s, invoice));
+        return (
+          sum +
+          s.transactions
+            .filter(
+              (transaction) =>
+                transaction.invoiceId === invoice.id &&
+                transaction.type !== "pagamento" &&
+                transaction.recurringChargeId === undefined,
+            )
+            .reduce((total, transaction) => total + transaction.amount, 0)
+        );
+      }, 0),
+  );
+
+export const cardLimitAvailable = (s: FinanceState, cardId: string) => {
+  const limit = s.cards.find((card) => card.id === cardId)?.creditLimit;
+  return limit === undefined ? null : round2(limit - cardLimitUsed(s, cardId));
+};
+
 export const availableMonths = (s: FinanceState) =>
   Array.from(new Set([...s.invoices.map((i) => i.month), s.settings.month]))
     .sort()

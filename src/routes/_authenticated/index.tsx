@@ -1,18 +1,19 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { AlertTriangle, CalendarClock, CircleDollarSign, Download, Info, TrendingUp, UserCheck, UserX, Users } from "lucide-react";
+import { AlertTriangle, CalendarClock, CircleDollarSign, CreditCard as CardIcon, Download, Info, TrendingUp, UserCheck, UserX, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { useFinance } from "@/lib/finance/store";
 import { useAlerts } from "@/lib/finance/alerts";
 import {
-  addMonths, forecast, invoiceAllocatedTotal, invoiceLaunchesTotal, limitStatus, monthInvoices, monthTxs, personMonthTotal, totalFutureCommitted, txCard, txStatus,
+  addMonths, cardLimitAvailable, cardLimitUsed, forecast, invoiceAllocatedTotal, invoiceLaunchesTotal, limitStatus, monthInvoices, monthTxs, personMonthTotal, totalFutureCommitted, txCard, txStatus,
 } from "@/lib/finance/calc";
 import { fmtBRL, fmtDate, fmtMonthLong, round2 } from "@/lib/finance/format";
 import { exportPDF, type ExportTable } from "@/lib/finance/export";
 import { KpiCard, LimitBar, PageHeader, Panel } from "@/components/app/common";
 import { LimitBadge } from "@/components/app/badges";
 import { TransactionTable } from "@/components/app/TransactionTable";
+import { CardLimitDialog } from "@/components/app/CardLimitDialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
@@ -55,6 +56,7 @@ function Overview() {
     novos: { label: "Gastos novos", color: "hsl(var(--warning))" },
   } satisfies ChartConfig;
   const [showExtra, setShowExtra] = useState(false);
+  const [showCardLimit, setShowCardLimit] = useState(false);
   const people = state.people.filter((p) => p.active).map((p) => ({ ...p, total: personMonthTotal(state, p.id, m) }));
   const nextPeopleSummary = people.map((person) => {
     const actual = personMonthTotal(state, person.id, nextMonth);
@@ -93,6 +95,56 @@ function Overview() {
         <KpiCard label="Parcelas futuras" value={fmtBRL(future)} hint="Não somado à fatura atual" icon={<CalendarClock />} />
         <KpiCard label="Perto ou acima do limite" value={atRisk.length} hint={`de ${people.length} pessoas ativas`} icon={<Users />} tone={atRisk.some((p) => p.total > p.limit) ? "danger" : atRisk.length ? "warning" : "success"} />
       </div>
+
+      <Panel
+        className="mt-6"
+        title="Limite total dos cartões"
+        description="Disponível = limite total menos faturas em aberto e parcelas futuras conhecidas; compras pagas não são descontadas novamente."
+        actions={
+          <Button
+            onClick={() => setShowCardLimit(true)}
+            disabled={state.cards.length === 0}
+          >
+            <CardIcon className="size-4" /> Definir limite total
+          </Button>
+        }
+      >
+        {state.cards.length === 0 ? (
+          <p className="p-4 text-sm text-muted-foreground">Cadastre um cartão para informar o limite total.</p>
+        ) : (
+          <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
+            {state.cards.map((card) => {
+              const used = cardLimitUsed(state, card.id);
+              const available = cardLimitAvailable(state, card.id);
+              return (
+                <div key={card.id} className="flex items-center justify-between gap-3 rounded-lg border p-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
+                      <CardIcon className="size-4" />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold">{card.name}</p>
+                      <p className="num text-xs text-muted-foreground">•••• {card.last4}</p>
+                    </div>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="text-xs text-muted-foreground">Limite total</p>
+                    <p className="num text-sm font-semibold">
+                      {card.creditLimit === undefined ? "Não informado" : fmtBRL(card.creditLimit)}
+                    </p>
+                    <p className="num mt-1 text-xs text-muted-foreground">Em aberto {fmtBRL(used)}</p>
+                    {available !== null && (
+                      <p className={cn("num mt-1 text-sm font-bold", available <= 0 ? "text-danger" : "text-success")}>
+                        Disponível {fmtBRL(available)}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Panel>
 
       <Panel className="mt-6" title={`Próximo mês · ${fmtMonthLong(nextMonth)}`} description="Estimativa considerando apenas parcelas e compromissos já conhecidos">
         <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -183,6 +235,9 @@ function Overview() {
           </table>
         </div>
       </Panel>
+      {showCardLimit && state.cards.length > 0 && (
+        <CardLimitDialog onClose={() => setShowCardLimit(false)} />
+      )}
     </>
   );
 }
