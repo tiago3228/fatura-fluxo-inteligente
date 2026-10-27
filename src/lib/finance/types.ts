@@ -120,6 +120,7 @@ export interface Settings {
   csvSeparator: ";" | ",";
   duplicateCheck: boolean;
   persist: boolean;
+  cardLimitTotal?: number | undefined;
 }
 
 export interface SpreadsheetArchive {

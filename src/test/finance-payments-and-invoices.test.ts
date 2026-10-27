@@ -9,6 +9,9 @@ import {
   personMonthRemaining,
   personPaymentStatus,
   personMonthTotal,
+  totalCardLimit,
+  totalCardLimitAvailable,
+  totalCardLimitUsed,
   totalFutureCommitted,
 } from "@/lib/finance/calc";
 import { createDemoState } from "@/lib/finance/mock";
@@ -359,6 +362,64 @@ describe("pagamentos e competências", () => {
     };
     expect(cardLimitUsed(paidCurrentInvoice, "c_8222")).toBe(329.88);
     expect(cardLimitAvailable(paidCurrentInvoice, "c_8222")).toBe(670.12);
+  });
+
+  it("unifica o limite e soma os compromissos de todos os cartões", () => {
+    const initial = createDemoState();
+    const sourceInvoice = initial.invoices.find((invoice) => invoice.cardId === "c_8222");
+    const sourceCard = initial.cards.find((card) => card.id === "c_8222");
+    if (!sourceInvoice || !sourceCard)
+      throw new Error("A fixture precisa do cartão e da fatura GOL");
+    const firstCard = { ...sourceCard, creditLimit: 1000 };
+    const secondCard = {
+      ...sourceCard,
+      id: "c_shared_limit",
+      name: "Cartão compartilhado",
+      creditLimit: 500,
+    };
+    const openInvoice = {
+      ...sourceInvoice,
+      id: "invoice_shared_open",
+      officialTotal: 329.88,
+      status: "em_revisao" as const,
+    };
+    const futureInvoice = {
+      ...openInvoice,
+      id: "invoice_shared_future",
+      month: "2026-11",
+      dueDate: "2026-11-23",
+      source: "pdf" as const,
+    };
+    const paidInvoice = {
+      ...openInvoice,
+      id: "invoice_shared_paid",
+      month: "2026-09",
+      status: "paga" as const,
+      officialTotal: 500,
+    };
+    const secondInvoice = {
+      ...openInvoice,
+      id: "invoice_shared_limit",
+      cardId: secondCard.id,
+      officialTotal: 100,
+    };
+    const sharedState: FinanceState = {
+      ...initial,
+      settings: { ...initial.settings, cardLimitTotal: 2000 },
+      cards: [firstCard, secondCard],
+      invoices: [openInvoice, futureInvoice, paidInvoice, secondInvoice],
+      transactions: [],
+    };
+
+    expect(totalCardLimitUsed(sharedState)).toBe(759.76);
+    expect(totalCardLimitAvailable(sharedState)).toBe(1240.24);
+    expect(totalCardLimit(sharedState)).toBe(2000);
+    expect(
+      totalCardLimit({
+        ...sharedState,
+        settings: { ...sharedState.settings, cardLimitTotal: undefined },
+      }),
+    ).toBe(1500);
   });
 
   it("propaga a atribuição iniciada na parcela futura à compra original e às parcelas seguintes", () => {

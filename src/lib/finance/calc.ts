@@ -189,6 +189,22 @@ export const cardLimitAvailable = (s: FinanceState, cardId: string) => {
   return limit === undefined ? null : round2(limit - cardLimitUsed(s, cardId));
 };
 
+/** Soma os compromissos de todos os cartões para o limite compartilhado. */
+export const totalCardLimitUsed = (s: FinanceState) =>
+  round2(s.cards.reduce((sum, card) => sum + cardLimitUsed(s, card.id), 0));
+
+/** Usa o limite unificado salvo; em estados antigos, soma os limites por cartão existentes. */
+export const totalCardLimit = (s: FinanceState): number | null => {
+  if (s.settings.cardLimitTotal !== undefined) return s.settings.cardLimitTotal;
+  const legacyTotal = round2(s.cards.reduce((sum, card) => sum + (card.creditLimit ?? 0), 0));
+  return legacyTotal > 0 ? legacyTotal : null;
+};
+
+export const totalCardLimitAvailable = (s: FinanceState) => {
+  const limit = totalCardLimit(s);
+  return limit === null ? null : round2(limit - totalCardLimitUsed(s));
+};
+
 export const availableMonths = (s: FinanceState) =>
   Array.from(new Set([...s.invoices.map((i) => i.month), s.settings.month]))
     .sort()

@@ -6,7 +6,20 @@ import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { useFinance } from "@/lib/finance/store";
 import { useAlerts } from "@/lib/finance/alerts";
 import {
-  addMonths, cardLimitAvailable, cardLimitUsed, forecast, invoiceAllocatedTotal, invoiceLaunchesTotal, limitStatus, monthInvoices, monthTxs, personMonthTotal, totalFutureCommitted, txCard, txStatus,
+  addMonths,
+  forecast,
+  invoiceAllocatedTotal,
+  invoiceLaunchesTotal,
+  limitStatus,
+  monthInvoices,
+  monthTxs,
+  personMonthTotal,
+  totalCardLimit,
+  totalCardLimitAvailable,
+  totalCardLimitUsed,
+  totalFutureCommitted,
+  txCard,
+  txStatus,
 } from "@/lib/finance/calc";
 import { fmtBRL, fmtDate, fmtMonthLong, round2 } from "@/lib/finance/format";
 import { exportPDF, type ExportTable } from "@/lib/finance/export";
@@ -33,6 +46,9 @@ export const Route = createFileRoute("/_authenticated/")({
 function Overview() {
   const { state } = useFinance();
   const m = state.settings.month;
+  const sharedCardLimit = totalCardLimit(state);
+  const sharedCardLimitUsed = totalCardLimitUsed(state);
+  const sharedCardLimitAvailable = totalCardLimitAvailable(state);
   const invs = monthInvoices(state, m);
   const official = round2(invs.reduce((s, i) => s + i.officialTotal, 0));
   const launches = round2(invs.reduce((s, i) => s + invoiceLaunchesTotal(state, i), 0));
@@ -110,38 +126,38 @@ function Overview() {
         }
       >
         {state.cards.length === 0 ? (
-          <p className="p-4 text-sm text-muted-foreground">Cadastre um cartão para informar o limite total.</p>
+          <p className="p-4 text-sm text-muted-foreground">
+            Cadastre um cartão para informar o limite total compartilhado.
+          </p>
         ) : (
-          <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
-            {state.cards.map((card) => {
-              const used = cardLimitUsed(state, card.id);
-              const available = cardLimitAvailable(state, card.id);
-              return (
-                <div key={card.id} className="flex items-center justify-between gap-3 rounded-lg border p-3">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
-                      <CardIcon className="size-4" />
-                    </span>
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold">{card.name}</p>
-                      <p className="num text-xs text-muted-foreground">•••• {card.last4}</p>
-                    </div>
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <p className="text-xs text-muted-foreground">Limite total</p>
-                    <p className="num text-sm font-semibold">
-                      {card.creditLimit === undefined ? "Não informado" : fmtBRL(card.creditLimit)}
-                    </p>
-                    <p className="num mt-1 text-xs text-muted-foreground">Em aberto {fmtBRL(used)}</p>
-                    {available !== null && (
-                      <p className={cn("num mt-1 text-sm font-bold", available <= 0 ? "text-danger" : "text-success")}>
-                        Disponível {fmtBRL(available)}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+          <div className="grid gap-3 p-4 sm:grid-cols-3">
+            <KpiCard
+              label="Limite total"
+              value={sharedCardLimit === null ? "Não informado" : fmtBRL(sharedCardLimit)}
+              hint="Compartilhado entre todos os cartões cadastrados"
+              icon={<CardIcon />}
+            />
+            <KpiCard
+              label="Em aberto e parcelas futuras"
+              value={fmtBRL(sharedCardLimitUsed)}
+              hint="Somado entre todos os cartões"
+            />
+            <KpiCard
+              label="Disponível"
+              value={sharedCardLimitAvailable === null ? "—" : fmtBRL(sharedCardLimitAvailable)}
+              hint={
+                sharedCardLimitAvailable === null
+                  ? "Defina o limite total para calcular"
+                  : "Limite compartilhado menos compromissos conhecidos"
+              }
+              tone={
+                sharedCardLimitAvailable === null
+                  ? undefined
+                  : sharedCardLimitAvailable <= 0
+                    ? "danger"
+                    : "success"
+              }
+            />
           </div>
         )}
       </Panel>
