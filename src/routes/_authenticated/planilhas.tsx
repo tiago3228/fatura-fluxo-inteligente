@@ -26,6 +26,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 
 export const Route = createFileRoute("/_authenticated/planilhas")({
   head: () => ({
@@ -215,51 +222,76 @@ function Planilhas() {
                       const privateLegacyArchive = isPrivateLegacySpreadsheet(item);
                       const href = spreadsheetDownloadHref(item);
                       return (
-                        <div
-                          key={item.id}
-                          className="flex flex-wrap items-center gap-3 rounded-lg border p-3"
-                        >
-                          <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
-                            <FileSpreadsheet className="size-5" />
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate font-medium" title={item.fileName}>
-                              {item.fileName}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              Adicionada em {new Date(item.uploadedAt).toLocaleDateString("pt-BR")}
-                              {privateLegacyArchive
-                                ? " · original preservado fora do build público"
-                                : item.publicPath && !item.dataUrl
-                                  ? " · arquivo do aplicativo"
-                                  : " · arquivo enviado"}
-                            </p>
-                          </div>
-                          {href ? (
-                            <a
-                              href={href}
-                              download={item.fileName}
-                              className="inline-flex min-h-9 items-center gap-2 rounded-md border px-3 text-sm font-medium hover:bg-muted"
+                        <ContextMenu key={item.id}>
+                          <ContextMenuTrigger asChild>
+                            <div
+                              className="flex flex-wrap items-center gap-3 rounded-lg border p-3"
+                              title="Clique com o botão direito para ver as ações"
                             >
-                              <Download className="size-4" /> Baixar
-                            </a>
-                          ) : null}
-                          {privateLegacyArchive ? (
-                            <p role="status" className="w-full text-xs text-muted-foreground">
-                              Para baixar pelo workspace, reenvie o arquivo original nesta página;
-                              ele será armazenado na cópia compartilhada.
-                            </p>
-                          ) : null}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            aria-label={`Excluir ${item.fileName}`}
-                            title="Excluir do arquivo"
-                            onClick={() => setPendingDelete(item)}
-                          >
-                            <Trash2 className="size-4" />
-                          </Button>
-                        </div>
+                              <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+                                <FileSpreadsheet className="size-5" />
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate font-medium" title={item.fileName}>
+                                  {item.fileName}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  Adicionada em{" "}
+                                  {new Date(item.uploadedAt).toLocaleDateString("pt-BR")}
+                                  {privateLegacyArchive
+                                    ? " · original preservado fora do build público"
+                                    : item.publicPath && !item.dataUrl
+                                      ? " · arquivo do aplicativo"
+                                      : " · arquivo enviado"}
+                                </p>
+                              </div>
+                              {href ? (
+                                <a
+                                  href={href}
+                                  download={item.fileName}
+                                  className="inline-flex min-h-9 items-center gap-2 rounded-md border px-3 text-sm font-medium hover:bg-muted"
+                                >
+                                  <Download className="size-4" /> Baixar
+                                </a>
+                              ) : null}
+                              {privateLegacyArchive ? (
+                                <p role="status" className="w-full text-xs text-muted-foreground">
+                                  Para baixar pelo workspace, reenvie o arquivo original nesta
+                                  página; ele será armazenado na cópia compartilhada.
+                                </p>
+                              ) : null}
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                aria-label={`Excluir ${item.fileName}`}
+                                title="Excluir do arquivo"
+                                onClick={() => setPendingDelete(item)}
+                              >
+                                <Trash2 className="size-4" />
+                              </Button>
+                            </div>
+                          </ContextMenuTrigger>
+                          <ContextMenuContent className="w-56">
+                            {href ? (
+                              <ContextMenuItem asChild>
+                                <a href={href} download={item.fileName}>
+                                  <Download className="size-4" /> Baixar planilha
+                                </a>
+                              </ContextMenuItem>
+                            ) : (
+                              <ContextMenuItem disabled>
+                                <Download className="size-4" /> Download indisponível
+                              </ContextMenuItem>
+                            )}
+                            <ContextMenuSeparator />
+                            <ContextMenuItem
+                              className="text-danger"
+                              onSelect={() => setPendingDelete(item)}
+                            >
+                              <Trash2 className="size-4" /> Excluir planilha
+                            </ContextMenuItem>
+                          </ContextMenuContent>
+                        </ContextMenu>
                       );
                     })}
                   </div>
