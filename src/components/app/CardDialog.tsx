@@ -39,7 +39,7 @@ export function CardDialog({ card, onClose }: { card?: CreditCard; onClose: () =
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{card ? "Editar cartão" : "Cadastrar cartão"}</DialogTitle>
           <DialogDescription>Nunca informe o número completo, código de segurança ou senha.</DialogDescription>

@@ -108,7 +108,7 @@ function EditTransactionDialog({ tx, onClose }: { tx?: Transaction | undefined; 
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{tx ? "Editar compra" : "Adicionar nova compra"}</DialogTitle>
           <DialogDescription>{tx ? "Corrija a descrição, o valor ou a parcela que veio incorreta da fatura." : "Cadastre uma compra manualmente na fatura selecionada."}</DialogDescription>
@@ -168,7 +168,7 @@ function AssignDialog({ txs, onClose }: { txs: Transaction[]; onClose: () => voi
   return (
     <>
       <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Direcionar para pessoa</DialogTitle>
           <DialogDescription>
@@ -332,7 +332,7 @@ function SplitDialog({ tx, onClose }: { tx: Transaction; onClose: () => void }) 
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-xl">
+      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>Dividir compra</DialogTitle>
           <DialogDescription>
