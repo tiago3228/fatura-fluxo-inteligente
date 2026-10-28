@@ -95,7 +95,22 @@ function Compras() {
           <KpiCard label="Total exibido" value={fmtBRL(total)} hint={`${txs.length} lançamento(s)`} />
           <KpiCard label="Pendentes" value={pending} hint="Aguardando direcionamento" tone={pending > 0 ? "warning" : "success"} />
           <KpiCard label="Divididas" value={split} hint="Compras compartilhadas" />
-          <KpiCard label="Por pessoa" value={personTotals.length === 0 ? "—" : personTotals.map(({ person, total: value }) => `${person.name.split(" ")[0]} ${fmtBRL(value)}`).join(" · ")} hint="Totais recalculados pelos direcionamentos" wrapValue />
+          <div className="min-w-0 rounded-xl border bg-card p-4 shadow-xs">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Por pessoa</p>
+            {personTotals.length === 0 ? (
+              <p className="mt-2 text-2xl font-bold">—</p>
+            ) : (
+              <div className="mt-2 grid grid-cols-1 gap-x-4 gap-y-1.5 sm:grid-cols-2 xl:grid-cols-1">
+                {personTotals.map(({ person, total: value }) => (
+                  <div key={person.id} className="flex min-w-0 items-center justify-between gap-2 text-sm">
+                    <span className="truncate text-muted-foreground">{person.name.split(" ")[0]}</span>
+                    <span className="num shrink-0 font-semibold">{fmtBRL(value)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <p className="mt-2 text-xs text-muted-foreground">Totais recalculados pelos direcionamentos</p>
+          </div>
         </div>
 
         {assignPerson && (
