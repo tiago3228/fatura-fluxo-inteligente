@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Plus, Scissors, Search, UserCheck, UserX, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Plus, Scissors, Search, UserCheck, UserX, X } from "lucide-react";
 import { useFinance } from "@/lib/finance/store";
 import { TX_TYPE_LABEL, monthTxs, txCard, txStatus, availableMonths } from "@/lib/finance/calc";
 import { fmtBRL, fmtMonthLong, round2 } from "@/lib/finance/format";
@@ -45,6 +45,7 @@ function Compras() {
   const navigate = useNavigate({ from: "/compras" });
   const { openAssign, openCreate, openSplit, unassign } = useTxActions();
   const [selected, setSelected] = useState<string[]>([]);
+  const [showPersonTotals, setShowPersonTotals] = useState(false);
   const month = search.month ?? state.settings.month;
   const set = (patch: Partial<Search>) => navigate({ search: (s: Search) => ({ ...s, ...patch }), replace: true });
 
@@ -96,20 +97,33 @@ function Compras() {
           <KpiCard label="Pendentes" value={pending} hint="Aguardando direcionamento" tone={pending > 0 ? "warning" : "success"} />
           <KpiCard label="Divididas" value={split} hint="Compras compartilhadas" />
           <div className="min-w-0 rounded-xl border bg-card p-4 shadow-xs">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Por pessoa</p>
-            {personTotals.length === 0 ? (
-              <p className="mt-2 text-2xl font-bold">—</p>
+            <button
+              type="button"
+              className="flex w-full items-center justify-between gap-2 text-left"
+              onClick={() => setShowPersonTotals((visible) => !visible)}
+              aria-expanded={showPersonTotals}
+              aria-controls="person-totals-list"
+            >
+              <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Por pessoa</span>
+              {showPersonTotals ? <ChevronUp className="size-4 text-muted-foreground" /> : <ChevronDown className="size-4 text-muted-foreground" />}
+            </button>
+            {showPersonTotals ? (
+              personTotals.length === 0 ? (
+                <p id="person-totals-list" className="mt-2 text-sm text-muted-foreground">Nenhum direcionamento no período.</p>
+              ) : (
+                <div id="person-totals-list" className="mt-2 grid grid-cols-1 gap-x-4 gap-y-1.5 sm:grid-cols-2 xl:grid-cols-1">
+                  {personTotals.map(({ person, total: value }) => (
+                    <div key={person.id} className="flex min-w-0 items-center justify-between gap-2 text-sm">
+                      <span className="truncate text-muted-foreground">{person.name.split(" ")[0]}</span>
+                      <span className="num shrink-0 font-semibold">{fmtBRL(value)}</span>
+                    </div>
+                  ))}
+                </div>
+              )
             ) : (
-              <div className="mt-2 grid grid-cols-1 gap-x-4 gap-y-1.5 sm:grid-cols-2 xl:grid-cols-1">
-                {personTotals.map(({ person, total: value }) => (
-                  <div key={person.id} className="flex min-w-0 items-center justify-between gap-2 text-sm">
-                    <span className="truncate text-muted-foreground">{person.name.split(" ")[0]}</span>
-                    <span className="num shrink-0 font-semibold">{fmtBRL(value)}</span>
-                  </div>
-                ))}
-              </div>
+              <p className="mt-2 text-sm font-semibold">{personTotals.length ? `${personTotals.length} pessoa(s)` : "Nenhum direcionamento"}</p>
             )}
-            <p className="mt-2 text-xs text-muted-foreground">Totais recalculados pelos direcionamentos</p>
+            <p className="mt-2 text-xs text-muted-foreground">Clique para {showPersonTotals ? "recolher" : "ver os totais"}</p>
           </div>
         </div>
 
