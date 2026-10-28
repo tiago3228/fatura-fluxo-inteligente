@@ -64,6 +64,11 @@ function AppSidebar() {
             <p className="truncate text-sm font-bold text-sidebar-accent-foreground">Fatura em Dia</p>
             <p className="truncate text-xs opacity-70">Organizador de cartões</p>
           </div>
+          <SidebarTrigger
+            aria-label="Recolher menu lateral"
+            title="Recolher menu lateral"
+            className="ml-auto group-data-[collapsible=icon]:hidden"
+          />
         </div>
       </SidebarHeader>
       <SidebarContent>
@@ -261,7 +266,11 @@ export function AppShell({ children }: { children: ReactNode }) {
           <AppSidebar />
           <SidebarInset className="min-w-0">
             <header className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b bg-background/85 px-3 backdrop-blur md:px-6">
-              <SidebarTrigger aria-label="Alternar menu" className="max-md:size-11 max-md:[&_svg]:size-6" />
+              <SidebarTrigger
+                aria-label="Abrir ou recolher menu lateral"
+                title="Abrir ou recolher menu lateral"
+                className="max-md:size-11 max-md:[&_svg]:size-6"
+              />
               <div className="hidden sm:block"><DemoTag /></div>
               <div className="ml-auto flex items-center gap-1">
                 <SyncStatusIndicator />
