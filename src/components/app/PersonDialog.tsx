@@ -39,7 +39,7 @@ export function PersonDialog({ person, onClose, onSaved }: { person?: Person; on
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-md">
         <DialogHeader><DialogTitle>{person ? "Editar pessoa" : "Adicionar pessoa"}</DialogTitle></DialogHeader>
         <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); save(); }}>
           <Field label="Nome completo" htmlFor="p-name" required error={touched ? errors.name : undefined}>
