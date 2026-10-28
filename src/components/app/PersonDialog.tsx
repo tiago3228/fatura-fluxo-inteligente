@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { useFinance } from "@/lib/finance/store";
 import { parseBRL, uid } from "@/lib/finance/format";
 import type { Person } from "@/lib/finance/types";
@@ -18,6 +19,7 @@ export function PersonDialog({ person, onClose, onSaved }: { person?: Person; on
   const [notes, setNotes] = useState(person?.notes ?? "");
   const [active, setActive] = useState(person?.active ?? true);
   const [cardIds, setCardIds] = useState<string[]>(person?.cardIds ?? []);
+  const [showCards, setShowCards] = useState(false);
   const [touched, setTouched] = useState(false);
 
   const lim = parseBRL(limit);
@@ -49,13 +51,29 @@ export function PersonDialog({ person, onClose, onSaved }: { person?: Person; on
             <Input id="p-limit" inputMode="decimal" placeholder="1.500,00" value={limit} onChange={(e) => setLimit(e.target.value)} className="num" />
           </Field>
           <Field label="Cartões que utiliza">
-            <div className="space-y-2 rounded-lg border p-3">
-              {state.cards.map((c) => (
-                <label key={c.id} className="flex items-center gap-2 text-sm">
-                  <Checkbox checked={cardIds.includes(c.id)} onCheckedChange={(v) => setCardIds((ids) => (v ? [...ids, c.id] : ids.filter((x) => x !== c.id)))} />
-                  {c.name} <span className="num text-muted-foreground">•••• {c.last4}</span>
-                </label>
-              ))}
+            <div className="rounded-lg border">
+              <button
+                type="button"
+                className="flex w-full items-center justify-between gap-2 p-3 text-left text-sm"
+                onClick={() => setShowCards((visible) => !visible)}
+                aria-expanded={showCards}
+                aria-controls="person-card-list"
+              >
+                <span className="text-muted-foreground">
+                  {cardIds.length === 0 ? "Nenhum cartão selecionado" : `${cardIds.length} cartão(ões) selecionado(s)`}
+                </span>
+                {showCards ? <ChevronUp className="size-4 text-muted-foreground" /> : <ChevronDown className="size-4 text-muted-foreground" />}
+              </button>
+              {showCards && (
+                <div id="person-card-list" className="space-y-2 border-t p-3">
+                  {state.cards.map((c) => (
+                    <label key={c.id} className="flex items-center gap-2 text-sm">
+                      <Checkbox checked={cardIds.includes(c.id)} onCheckedChange={(v) => setCardIds((ids) => (v ? [...ids, c.id] : ids.filter((x) => x !== c.id)))} />
+                      {c.name} <span className="num text-muted-foreground">•••• {c.last4}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
             </div>
           </Field>
           <Field label="Observações" htmlFor="p-notes">
