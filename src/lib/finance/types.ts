@@ -55,6 +55,22 @@ export interface InvoicePayment {
   paidAt: string;
 }
 
+export interface AuditEntry {
+  id: string;
+  actorId: string;
+  actorName: string;
+  description: string;
+  createdAt: string;
+  entityType?: "invoice" | "transaction" | "person" | "card" | "plan" | "settings" | "system";
+  entityId?: string;
+  undo?: {
+    kind: "restoreFinance";
+    invoices: Invoice[];
+    transactions: Transaction[];
+  };
+  undoneAt?: string;
+}
+
 export interface Allocation {
   personId: string;
   amount: number;
@@ -149,4 +165,6 @@ export interface FinanceState {
   spreadsheetAssignmentVersion?: number;
   /** Cadeias de parcelas previstas removidas explicitamente pelo usuário. */
   suppressedProjectionSources?: string[];
+  /** Histórico compartilhado das alterações feitas pelas contas autorizadas. */
+  auditLog?: AuditEntry[];
 }

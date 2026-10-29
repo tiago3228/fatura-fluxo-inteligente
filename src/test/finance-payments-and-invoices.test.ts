@@ -248,7 +248,40 @@ describe("pagamentos e competências", () => {
       ]),
     );
     expect(paid.invoices.filter((invoice) => invoice.month === "2026-10")).toHaveLength(2);
-    expect(paid.invoices.find((invoice) => invoice.id === "inv_november")?.status).toBe("conferida");
+    expect(paid.invoices.find((invoice) => invoice.id === "inv_november")?.status).toBe(
+      "conferida",
+    );
+  });
+
+  it("desfaz a marcação de fatura paga pelo registro de auditoria", () => {
+    const initial = stateWithSinglePurchase();
+    const invoice = initial.invoices[0];
+    if (!invoice) throw new Error("A fixture precisa de uma fatura");
+    const paid = reducer(initial, {
+      type: "markInvoicePaid",
+      invoiceId: invoice.id,
+      paidAt: "2026-10-25",
+    });
+    const entry = {
+      id: "audit_paid",
+      actorId: "user_tiago",
+      actorName: "Tiago",
+      description: "Tiago marcou como paga a fatura de outubro.",
+      createdAt: "2026-10-25T12:00:00.000Z",
+      entityType: "invoice" as const,
+      entityId: invoice.id,
+      undo: {
+        kind: "restoreFinance" as const,
+        invoices: initial.invoices,
+        transactions: initial.transactions,
+      },
+    };
+    const audited = reducer(paid, { type: "appendAudit", entry });
+    const undone = reducer(audited, { type: "undoAudit", auditId: entry.id });
+
+    expect(undone.invoices).toEqual(initial.invoices);
+    expect(undone.transactions).toEqual(initial.transactions);
+    expect(undone.auditLog?.find((item) => item.id === entry.id)?.undoneAt).toBeTruthy();
   });
 
   it("avança 10/12 para 11/12 e 12/12, sem copiar compra à vista nem alterar o histórico", () => {
@@ -678,9 +711,9 @@ describe("pagamentos e competências", () => {
       txIds: [novemberRow.id],
       personId: carine.id,
     });
-    expect(allocated.transactions.find((transaction) => transaction.id === gol.id)?.allocations).toEqual([
-      { personId: carine.id, amount: 329.88 },
-    ]);
+    expect(
+      allocated.transactions.find((transaction) => transaction.id === gol.id)?.allocations,
+    ).toEqual([{ personId: carine.id, amount: 329.88 }]);
     for (const month of ["2026-11", "2026-12", "2027-01"]) {
       expect(
         transactionsForCardMonth(allocated, "c_8222", month).find((transaction) =>
@@ -761,7 +794,12 @@ describe("pagamentos e competências", () => {
 
     const reimported = reducer(hydrated, {
       type: "importInvoice",
-      invoice: { ...novemberInvoice, id: "pdf_nov_reimport", status: "em_revisao", officialTotal: 1450 },
+      invoice: {
+        ...novemberInvoice,
+        id: "pdf_nov_reimport",
+        status: "em_revisao",
+        officialTotal: 1450,
+      },
       transactions: [
         {
           id: "tx_gol_nov_real",
@@ -1086,9 +1124,7 @@ describe("pagamentos e competências", () => {
     expect(
       projected.every((transaction) => transaction.allocations[0]?.personId === personId),
     ).toBe(true);
-    const forecastBeforeCancellation = forecast(hydrated, "2026-10", 3).map(
-      (month) => month.value,
-    );
+    const forecastBeforeCancellation = forecast(hydrated, "2026-10", 3).map((month) => month.value);
     expect(forecastBeforeCancellation.every((value) => value > 0)).toBe(true);
 
     const historyBefore = hydrated.transactions.filter(

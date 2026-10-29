@@ -22,10 +22,11 @@ import {
   recurringChargeAppliesAt,
   stripInstallmentReference,
 } from "./calc";
-import { round2 } from "./format";
+import { fmtMonthLong, round2, uid } from "./format";
 import { OCTOBER_ASSIGNMENTS } from "./octoberAssignments";
 import type {
   Allocation,
+  AuditEntry,
   CreditCard,
   FinanceState,
   InstallmentPlan,
@@ -80,6 +81,8 @@ export type Action =
   | { type: "removePersonPayment"; paymentId: string }
   | { type: "markInvoicePaid"; invoiceId: string; paidAt: string }
   | { type: "markMonthInvoicesPaid"; month: string; paidAt: string }
+  | { type: "appendAudit"; entry: AuditEntry }
+  | { type: "undoAudit"; auditId: string }
   | { type: "prepareNextInvoice"; invoiceId: string };
 
 const upsert = <T extends { id: string }>(list: T[], item: T) =>
@@ -677,6 +680,149 @@ const reconcileImportedTransactions = (
   return transactions;
 };
 
+type AuditActor = { id: string; name: string };
+
+const actorNameFromUser = (
+  user: { id: string; email?: string | null; user_metadata?: Record<string, unknown> } | null,
+) => {
+  const metadata = user?.user_metadata;
+  const metadataName = metadata?.["full_name"] ?? metadata?.["name"];
+  if (typeof metadataName === "string" && metadataName.trim()) return metadataName.trim();
+  const localPart = user?.email
+    ?.split("@")[0]
+    ?.replace(/[._-]+/g, " ")
+    .trim();
+  if (!localPart) return "Usuário";
+  return localPart.replace(/\b\w/g, (letter) => letter.toUpperCase());
+};
+
+const invoiceLabel = (state: FinanceState, invoice: Invoice) => {
+  const card = state.cards.find((item) => item.id === invoice.cardId);
+  return `${fmtMonthLong(invoice.month)}${card ? ` do cartão ${card.name} •••• ${card.last4}` : ""}`;
+};
+
+const auditForAction = (
+  action: Action,
+  before: FinanceState,
+  actor: AuditActor,
+): AuditEntry | null => {
+  if (action.type === "hydrate" || action.type === "appendAudit" || action.type === "setMonth")
+    return null;
+  if (action.type === "undoAudit") {
+    const original = before.auditLog?.find((entry) => entry.id === action.auditId);
+    if (!original || !original.undo || original.undoneAt) return null;
+    return {
+      id: uid("audit"),
+      actorId: actor.id,
+      actorName: actor.name,
+      description: `${actor.name} desfez: ${original.description}`,
+      createdAt: new Date().toISOString(),
+      entityType: original.entityType,
+      entityId: original.entityId,
+    };
+  }
+
+  let description = `${actor.name} executou a ação “${action.type}”.`;
+  let entityType: AuditEntry["entityType"] = "system";
+  let entityId: string | undefined;
+  let undo: AuditEntry["undo"];
+
+  switch (action.type) {
+    case "markInvoicePaid": {
+      const invoice = before.invoices.find((item) => item.id === action.invoiceId);
+      if (!invoice || invoice.status === "paga") return null;
+      description = `${actor.name} marcou como paga a fatura de ${invoiceLabel(before, invoice)}.`;
+      entityType = "invoice";
+      entityId = invoice.id;
+      undo = {
+        kind: "restoreFinance",
+        invoices: before.invoices,
+        transactions: before.transactions,
+      };
+      break;
+    }
+    case "markMonthInvoicesPaid": {
+      const invoices = before.invoices.filter(
+        (invoice) => invoice.month === action.month && invoice.status !== "paga",
+      );
+      if (invoices.length === 0) return null;
+      description = `${actor.name} marcou como pagas as faturas de ${fmtMonthLong(action.month)}.`;
+      entityType = "invoice";
+      entityId = action.month;
+      undo = {
+        kind: "restoreFinance",
+        invoices: before.invoices,
+        transactions: before.transactions,
+      };
+      break;
+    }
+    case "addTransaction":
+      description = `${actor.name} inseriu a compra “${action.transaction.description}”.`;
+      entityType = "transaction";
+      entityId = action.transaction.id;
+      break;
+    case "deleteTransaction": {
+      const transaction = before.transactions.find((item) => item.id === action.txId);
+      description = `${actor.name} excluiu a compra “${transaction?.description ?? action.txId}”.`;
+      entityType = "transaction";
+      entityId = action.txId;
+      break;
+    }
+    case "importInvoice":
+      description = `${actor.name} importou a fatura de ${invoiceLabel(before, action.invoice)}.`;
+      entityType = "invoice";
+      entityId = action.invoice.id;
+      break;
+    case "upsertPerson":
+      description = `${actor.name} ${before.people.some((person) => person.id === action.person.id) ? "alterou" : "inseriu"} a pessoa “${action.person.name}”.`;
+      entityType = "person";
+      entityId = action.person.id;
+      break;
+    case "deletePerson": {
+      const person = before.people.find((item) => item.id === action.personId);
+      description = `${actor.name} excluiu a pessoa “${person?.name ?? action.personId}”.`;
+      entityType = "person";
+      entityId = action.personId;
+      break;
+    }
+    case "upsertCard":
+      description = `${actor.name} ${before.cards.some((card) => card.id === action.card.id) ? "alterou" : "inseriu"} o cartão “${action.card.name} •••• ${action.card.last4}”.`;
+      entityType = "card";
+      entityId = action.card.id;
+      break;
+    case "updateSettings":
+      description = `${actor.name} alterou as configurações da aplicação.`;
+      entityType = "settings";
+      break;
+    case "setInvoicePayments":
+      description = `${actor.name} atualizou os pagamentos por pessoa da fatura.`;
+      entityType = "invoice";
+      entityId = action.invoiceId;
+      break;
+    case "recordPersonPayment":
+      description = `${actor.name} registrou um pagamento de pessoa.`;
+      entityType = "system";
+      break;
+    case "reset":
+      description = `${actor.name} redefiniu os dados de demonstração.`;
+      entityType = "system";
+      break;
+    default:
+      break;
+  }
+
+  return {
+    id: uid("audit"),
+    actorId: actor.id,
+    actorName: actor.name,
+    description,
+    createdAt: new Date().toISOString(),
+    entityType,
+    entityId,
+    ...(undo ? { undo } : {}),
+  };
+};
+
 export function reducer(s: FinanceState, a: Action): FinanceState {
   switch (a.type) {
     case "hydrate": {
@@ -697,6 +843,7 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
         transactions,
         payments: raw.payments ?? [],
         suppressedProjectionSources: raw.suppressedProjectionSources ?? [],
+        auditLog: raw.auditLog ?? [],
       };
       const migrated = normalizeInstallmentTransactions(
         ensureSpreadsheetArchive({
@@ -1081,6 +1228,20 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
       }
       return paid;
     }
+    case "appendAudit":
+      return { ...s, auditLog: [a.entry, ...(s.auditLog ?? [])].slice(0, 500) };
+    case "undoAudit": {
+      const entry = s.auditLog?.find((item) => item.id === a.auditId);
+      if (!entry?.undo || entry.undoneAt) return s;
+      return {
+        ...s,
+        invoices: entry.undo.invoices,
+        transactions: entry.undo.transactions,
+        auditLog: s.auditLog?.map((item) =>
+          item.id === a.auditId ? { ...item, undoneAt: new Date().toISOString() } : item,
+        ),
+      };
+    }
     case "prepareNextInvoice":
       return ensureInstallmentProjections(prepareNextInvoice(s, a.invoiceId));
   }
@@ -1107,6 +1268,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
   const cloudReady = useRef(false);
   const savingJson = useRef<string | null>(null);
   const stateRef = useRef(state);
+  const actorRef = useRef<AuditActor>({ id: "anonymous", name: "Usuário" });
   stateRef.current = state;
   const [syncStatus, setSyncStatusState] = useState<SyncStatus>("loading");
   const syncStatusRef = useRef<SyncStatus>("loading");
@@ -1201,6 +1363,10 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
           setSyncStatus("local");
           return;
         }
+        actorRef.current = {
+          id: data.session.user.id,
+          name: actorNameFromUser(data.session.user),
+        };
         const ws = await ensureWorkspace();
         if (cancelled || generation !== loadGeneration) return;
         if (!ws) {
@@ -1340,8 +1506,14 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     };
   }, [state, cloudReadyVersion]);
 
+  const auditedDispatch: React.Dispatch<Action> = (action) => {
+    const entry = auditForAction(action, stateRef.current, actorRef.current);
+    dispatch(action);
+    if (entry) dispatch({ type: "appendAudit", entry });
+  };
+
   return (
-    <Ctx.Provider value={{ state, dispatch, syncStatus, isCloudConnected }}>
+    <Ctx.Provider value={{ state, dispatch: auditedDispatch, syncStatus, isCloudConnected }}>
       {children}
     </Ctx.Provider>
   );
