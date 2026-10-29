@@ -107,7 +107,8 @@ function Faturas() {
                   const c = state.cards.find((x) => x.id === i.cardId);
                   const pend = invoicePendingCount(state, i);
                   const diff = invoiceDiff(state, i);
-                  const paid = i.payments?.reduce((sum, payment) => sum + payment.amount, 0) ?? 0;
+                  const recordedPaid = i.payments?.reduce((sum, payment) => sum + payment.amount, 0) ?? 0;
+                  const paid = i.status === "paga" ? i.officialTotal : recordedPaid;
                   return (
                     <tr key={i.id} className="hover:bg-muted/40 [&_td]:px-3 [&_td]:py-3">
                       <td className="font-semibold">

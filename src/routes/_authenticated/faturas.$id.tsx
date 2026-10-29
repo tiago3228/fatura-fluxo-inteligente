@@ -54,7 +54,8 @@ function FaturaDetalhe() {
     }
   });
   const unallocated = all.filter((t) => t.type !== "pagamento").reduce((s, t) => s + (t.amount - allocatedSum(t)), 0);
-  const paidTotal = round2((inv.payments ?? []).reduce((sum, payment) => sum + payment.amount, 0));
+  const recordedPaidTotal = round2((inv.payments ?? []).reduce((sum, payment) => sum + payment.amount, 0));
+  const paidTotal = inv.status === "paga" ? inv.officialTotal : recordedPaidTotal;
 
   return (
     <>
