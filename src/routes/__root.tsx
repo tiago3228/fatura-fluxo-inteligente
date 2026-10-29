@@ -16,6 +16,8 @@ import { FinanceProvider } from "@/lib/finance/store";
 import { Toaster } from "@/components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
 
+const THEME_STORAGE_KEY = "fatura-em-dia-theme";
+
 function NotFoundComponent() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -127,6 +129,12 @@ function RootShell({ children }: { children: ReactNode }) {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const router = useRouter();
+
+  useEffect(() => {
+    const darkMode = window.localStorage.getItem(THEME_STORAGE_KEY) === "dark";
+    document.documentElement.classList.toggle("dark", darkMode);
+    document.documentElement.style.colorScheme = darkMode ? "dark" : "light";
+  }, []);
 
   useEffect(() => {
     // Reage a entrar/sair: revalida o roteador (o portão de login redireciona).

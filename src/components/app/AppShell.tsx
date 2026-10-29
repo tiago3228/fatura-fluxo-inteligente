@@ -16,8 +16,10 @@ import {
   LayoutDashboard,
   Loader2,
   LogOut,
+  Moon,
   Settings,
   ShoppingBag,
+  Sun,
   Users,
   Wallet,
 } from "lucide-react";
@@ -49,6 +51,8 @@ const NAV = [
   { title: "Como Funciona", url: "/como-funciona", icon: BookOpen },
   { title: "Configurações", url: "/configuracoes", icon: Settings },
 ] as const;
+
+const THEME_STORAGE_KEY = "fatura-em-dia-theme";
 
 function AppSidebar() {
   const path = useRouterState({ select: (r) => r.location.pathname });
@@ -256,8 +260,42 @@ function SyncStatusBanner() {
   );
 }
 
+function ThemeToggle({ darkMode, onToggle }: { darkMode: boolean; onToggle: () => void }) {
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      onClick={onToggle}
+      aria-pressed={darkMode}
+      aria-label={darkMode ? "Ativar modo clean" : "Ativar modo escuro"}
+      title={darkMode ? "Ativar modo clean" : "Ativar modo escuro"}
+    >
+      {darkMode ? <Sun className="size-4" /> : <Moon className="size-4" />}
+    </Button>
+  );
+}
+
 export function AppShell({ children }: { children: ReactNode }) {
   const [quickCalculatorOpen, setQuickCalculatorOpen] = useState(false);
+  const [darkMode, setDarkMode] = useState(false);
+
+  useEffect(() => {
+    const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
+    const initialDarkMode = storedTheme === "dark";
+    setDarkMode(initialDarkMode);
+    document.documentElement.classList.toggle("dark", initialDarkMode);
+    document.documentElement.style.colorScheme = initialDarkMode ? "dark" : "light";
+  }, []);
+
+  const toggleTheme = () => {
+    setDarkMode((current) => {
+      const next = !current;
+      window.localStorage.setItem(THEME_STORAGE_KEY, next ? "dark" : "clean");
+      document.documentElement.classList.toggle("dark", next);
+      document.documentElement.style.colorScheme = next ? "dark" : "light";
+      return next;
+    });
+  };
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -273,6 +311,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               />
               <div className="hidden sm:block"><DemoTag /></div>
               <div className="ml-auto flex items-center gap-1">
+                <ThemeToggle darkMode={darkMode} onToggle={toggleTheme} />
                 <SyncStatusIndicator />
                 <Notifications />
                 <Profile />
