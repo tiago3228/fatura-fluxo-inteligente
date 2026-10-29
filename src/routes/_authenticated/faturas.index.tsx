@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { Eye, FileSpreadsheet, FileUp, X } from "lucide-react";
+import { CircleCheckBig, Eye, FileSpreadsheet, FileUp, X } from "lucide-react";
+import { toast } from "sonner";
 import { useFinance } from "@/lib/finance/store";
 import { invoiceDiff, invoiceHasFinancialData, invoicePendingCount, invoiceTxs } from "@/lib/finance/calc";
 import { fmtBRL, fmtDate, fmtMonth, fmtMonthLong } from "@/lib/finance/format";
@@ -25,7 +26,7 @@ export const Route = createFileRoute("/_authenticated/faturas/")({
 });
 
 function Faturas() {
-  const { state } = useFinance();
+  const { state, dispatch } = useFinance();
   const [pdf, setPdf] = useState(false);
   const [xls, setXls] = useState(false);
   const [f, setF] = useState<{ card?: string; month?: string; status?: string; due?: string }>({});
@@ -41,6 +42,22 @@ function Faturas() {
     })
     .sort((a, b) => b.month.localeCompare(a.month) || a.dueDate.localeCompare(b.dueDate));
   const hasF = Object.values(f).some(Boolean);
+  const monthInvoices = f.month
+    ? visibleInvoices.filter((invoice) => invoice.month === f.month)
+    : [];
+  const openMonthInvoices = monthInvoices.filter((invoice) => invoice.status !== "paga");
+  const markMonthPaid = () => {
+    if (!f.month || openMonthInvoices.length === 0) return;
+    const monthLabel = fmtMonthLong(f.month);
+    const confirmed = window.confirm(
+      `Marcar ${openMonthInvoices.length} fatura(s) de ${monthLabel} como paga(s)?`,
+    );
+    if (!confirmed) return;
+    dispatch({ type: "markMonthInvoicesPaid", month: f.month, paidAt: new Date().toISOString() });
+    toast.success(`Faturas de ${monthLabel} marcadas como pagas`, {
+      description: `${openMonthInvoices.length} fatura(s) atualizada(s).`,
+    });
+  };
 
   return (
     <>
@@ -61,6 +78,18 @@ function Faturas() {
           <FilterSelect label="Mês" value={f.month} onChange={(v) => setF({ ...f, month: v })} options={months.map((m) => [m, fmtMonthLong(m)])} />
           <FilterSelect label="Vencimento" value={f.due} onChange={(v) => setF({ ...f, due: v })} options={[["vencidas", "Já vencidas"], ["a_vencer", "A vencer"]]} />
           <FilterSelect label="Status" value={f.status} onChange={(v) => setF({ ...f, status: v })} options={[["conferida", "Conferida"], ["em_revisao", "Em revisão"], ["inconsistente", "Inconsistente"]]} />
+          {f.month && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={markMonthPaid}
+              disabled={openMonthInvoices.length === 0}
+              title={openMonthInvoices.length === 0 ? "Todas as faturas deste mês já estão pagas" : undefined}
+            >
+              <CircleCheckBig className="size-4" />
+              {openMonthInvoices.length === 0 ? "Mês já pago" : "Marcar mês como pago"}
+            </Button>
+          )}
           {hasF && <Button variant="ghost" size="sm" onClick={() => setF({})}><X className="size-4" /> Limpar</Button>}
         </div>
         {list.length === 0 ? (

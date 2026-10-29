@@ -223,6 +223,34 @@ describe("pagamentos e competências", () => {
     expect(personPaid.invoices[0]?.status).toBe("paga");
   });
 
+  it("marca todas as faturas da competência escolhida sem alterar outros meses", () => {
+    const initial = stateWithSinglePurchase();
+    const currentInvoice = initial.invoices[0];
+    if (!currentInvoice) throw new Error("A fixture precisa de uma fatura");
+    const state: FinanceState = {
+      ...initial,
+      invoices: [
+        ...initial.invoices,
+        { ...currentInvoice, id: "inv_october_other_card", status: "conferida" },
+        { ...currentInvoice, id: "inv_november", month: "2026-11", status: "conferida" },
+      ],
+    };
+
+    const paid = reducer(state, {
+      type: "markMonthInvoicesPaid",
+      month: "2026-10",
+      paidAt: "2026-10-25T12:00:00.000Z",
+    });
+
+    expect(paid.invoices.filter((invoice) => invoice.month === "2026-10")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ status: "paga", paidAt: "2026-10-25T12:00:00.000Z" }),
+      ]),
+    );
+    expect(paid.invoices.filter((invoice) => invoice.month === "2026-10")).toHaveLength(2);
+    expect(paid.invoices.find((invoice) => invoice.id === "inv_november")?.status).toBe("conferida");
+  });
+
   it("avança 10/12 para 11/12 e 12/12, sem copiar compra à vista nem alterar o histórico", () => {
     const { state: initial, currentInvoiceId, historical } = stateWithTwelveInstallments();
     const november = reducer(initial, { type: "prepareNextInvoice", invoiceId: currentInvoiceId });

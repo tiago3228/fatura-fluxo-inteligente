@@ -79,6 +79,7 @@ export type Action =
   | { type: "recordPersonPayment"; payment: PersonPayment }
   | { type: "removePersonPayment"; paymentId: string }
   | { type: "markInvoicePaid"; invoiceId: string; paidAt: string }
+  | { type: "markMonthInvoicesPaid"; month: string; paidAt: string }
   | { type: "prepareNextInvoice"; invoiceId: string };
 
 const upsert = <T extends { id: string }>(list: T[], item: T) =>
@@ -1062,6 +1063,23 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
         ),
       };
       return ensureInstallmentProjections(prepareNextInvoice(paid, a.invoiceId));
+    }
+    case "markMonthInvoicesPaid": {
+      const invoiceIds = s.invoices
+        .filter((invoice) => invoice.month === a.month)
+        .map((invoice) => invoice.id);
+      let paid: FinanceState = {
+        ...s,
+        invoices: s.invoices.map((invoice) =>
+          invoice.month === a.month
+            ? { ...invoice, status: "paga" as const, paidAt: a.paidAt }
+            : invoice,
+        ),
+      };
+      for (const invoiceId of invoiceIds) {
+        paid = ensureInstallmentProjections(prepareNextInvoice(paid, invoiceId));
+      }
+      return paid;
     }
     case "prepareNextInvoice":
       return ensureInstallmentProjections(prepareNextInvoice(s, a.invoiceId));
