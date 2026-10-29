@@ -281,6 +281,14 @@ export function AppShell({ children }: { children: ReactNode }) {
             <ConnectionStatus />
             <SyncStatusBanner />
             <main className="mx-auto w-full max-w-[1400px] flex-1 p-4 md:p-6">{children}</main>
+            <footer
+              className="pointer-events-none select-none px-4 pb-3 text-right md:px-6"
+              aria-label="Marca d’água"
+            >
+              <span className="text-[10px] font-medium uppercase tracking-[0.24em] text-muted-foreground/40">
+                Tiago Cardoso
+              </span>
+            </footer>
             <PersonLimitAlert />
             <FloatingCalculator open={quickCalculatorOpen} onClose={() => setQuickCalculatorOpen(false)} />
             {!quickCalculatorOpen && (
