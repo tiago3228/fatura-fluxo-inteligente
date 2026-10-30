@@ -23,7 +23,7 @@ import {
   personMonthTotal,
   personPaymentStatus,
 } from "@/lib/finance/calc";
-import { fmtBRL, fmtMonthLong, round2, uid } from "@/lib/finance/format";
+import { fmtBRL, fmtMonthLong, parseBRL, round2, uid } from "@/lib/finance/format";
 import type { Person } from "@/lib/finance/types";
 import { EmptyState, LimitBar, PageHeader, Panel } from "@/components/app/common";
 import { PaymentStatusBadge, Pill } from "@/components/app/badges";
@@ -47,6 +47,15 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -76,6 +85,9 @@ function Pessoas() {
   const m = state.settings.month;
   const [edit, setEdit] = useState<Person | "new" | null>(null);
   const [del, setDel] = useState<Person | null>(null);
+  const [paymentPerson, setPaymentPerson] = useState<{ person: Person; remaining: number } | null>(
+    null,
+  );
   const [expanded, setExpanded] = useState<string[]>([]);
 
   return (
@@ -179,6 +191,14 @@ function Pessoas() {
                             }}
                           >
                             Marcar parcela do mês como paga
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            disabled={remaining <= 0}
+                            onSelect={() =>
+                              remaining > 0 && setPaymentPerson({ person: p, remaining })
+                            }
+                          >
+                            Registrar pagamento parcial
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem className="text-danger" onSelect={() => setDel(p)}>
@@ -428,39 +448,9 @@ function Pessoas() {
                                   </DropdownMenuItem>
                                   <DropdownMenuItem
                                     disabled={remaining <= 0}
-                                    onSelect={() => {
-                                      const raw = window.prompt(
-                                        `Quanto ${p.name} pagou neste mês?`,
-                                        String(remaining.toFixed(2)).replace(".", ","),
-                                      );
-                                      if (!raw) return;
-                                      const amount = Number(
-                                        raw.replace(/\./g, "").replace(",", "."),
-                                      );
-                                      if (
-                                        !Number.isFinite(amount) ||
-                                        amount <= 0 ||
-                                        amount > remaining
-                                      ) {
-                                        toast.error("Valor inválido", {
-                                          description: `Digite um valor entre R$ 0,01 e ${fmtBRL(remaining)}.`,
-                                        });
-                                        return;
-                                      }
-                                      dispatch({
-                                        type: "recordPersonPayment",
-                                        payment: {
-                                          id: uid("payment"),
-                                          personId: p.id,
-                                          amount: round2(amount),
-                                          paidAt: new Date().toISOString(),
-                                          month: m,
-                                        },
-                                      });
-                                      toast.success("Pagamento parcial registrado", {
-                                        description: `${fmtBRL(amount)} para ${p.name}.`,
-                                      });
-                                    }}
+                                    onSelect={() =>
+                                      remaining > 0 && setPaymentPerson({ person: p, remaining })
+                                    }
                                   >
                                     Registrar pagamento parcial
                                   </DropdownMenuItem>
@@ -529,6 +519,15 @@ function Pessoas() {
         <PersonDialog person={edit === "new" ? undefined : edit} onClose={() => setEdit(null)} />
       )}
 
+      {paymentPerson && (
+        <PersonPaymentDialog
+          person={paymentPerson.person}
+          remaining={paymentPerson.remaining}
+          month={m}
+          onClose={() => setPaymentPerson(null)}
+        />
+      )}
+
       <AlertDialog open={!!del} onOpenChange={(o) => !o && setDel(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -560,5 +559,79 @@ function Pessoas() {
         </AlertDialogContent>
       </AlertDialog>
     </>
+  );
+}
+
+function PersonPaymentDialog({
+  person,
+  remaining,
+  month,
+  onClose,
+}: {
+  person: Person;
+  remaining: number;
+  month: string;
+  onClose: () => void;
+}) {
+  const { dispatch } = useFinance();
+  const [amount, setAmount] = useState(remaining.toFixed(2).replace(".", ","));
+  const value = parseBRL(amount);
+  const valid = value !== null && value > 0 && value <= remaining;
+
+  const save = () => {
+    if (!valid || value === null) return;
+    dispatch({
+      type: "recordPersonPayment",
+      payment: {
+        id: uid("payment"),
+        personId: person.id,
+        amount: round2(value),
+        paidAt: new Date().toISOString(),
+        month,
+      },
+    });
+    toast.success("Pagamento registrado", {
+      description: `${fmtBRL(value)} para ${person.name}. Saldo restante: ${fmtBRL(Math.max(0, round2(remaining - value)))}`,
+    });
+    onClose();
+  };
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Registrar pagamento</DialogTitle>
+          <DialogDescription>
+            Informe quanto {person.name} pagou em {fmtMonthLong(month)}. O saldo restante é{" "}
+            {fmtBRL(remaining)}.
+          </DialogDescription>
+        </DialogHeader>
+        <label className="text-sm font-medium">
+          Valor pago
+          <Input
+            className="mt-1"
+            inputMode="decimal"
+            value={amount}
+            onChange={(event) => setAmount(event.target.value)}
+            placeholder="0,00"
+            autoFocus
+          />
+        </label>
+        {value !== null && value > remaining && (
+          <p className="text-sm text-danger">O valor não pode ser maior que o saldo restante.</p>
+        )}
+        {value !== null && value <= 0 && (
+          <p className="text-sm text-danger">Informe um valor maior que zero.</p>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button onClick={save} disabled={!valid}>
+            Registrar pagamento
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
