@@ -22,6 +22,7 @@ import { useTxActions } from "@/components/app/tx-actions";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { FilterSelect, ALL } from "@/components/app/FilterSelect";
+import { PURCHASE_CATEGORIES } from "@/lib/finance/categories";
 
 type Search = {
   status?: string;
@@ -29,6 +30,7 @@ type Search = {
   card?: string;
   last4?: string;
   type?: string;
+  category?: string;
   q?: string;
   month?: string;
   assignTo?: string;
@@ -41,6 +43,7 @@ export const Route = createFileRoute("/_authenticated/compras")({
     card: typeof s["card"] === "string" ? s["card"] : undefined,
     last4: typeof s["last4"] === "string" ? s["last4"] : undefined,
     type: typeof s["type"] === "string" ? s["type"] : undefined,
+    category: typeof s["category"] === "string" ? s["category"] : undefined,
     q: typeof s["q"] === "string" ? s["q"] : undefined,
     month: typeof s["month"] === "string" ? s["month"] : undefined,
     assignTo: typeof s["assignTo"] === "string" ? s["assignTo"] : undefined,
@@ -84,6 +87,9 @@ function Compras() {
     if (search.card && txCard(state, t)?.id !== search.card) return false;
     if (search.last4 && txCard(state, t)?.last4 !== search.last4) return false;
     if (search.type && t.type !== search.type) return false;
+    if (search.category === "__none" && t.category) return false;
+    if (search.category && search.category !== "__none" && t.category !== search.category)
+      return false;
     return true;
   });
   const hasFilters = !!(
@@ -93,6 +99,7 @@ function Compras() {
     search.card ||
     search.last4 ||
     search.type ||
+    search.category ||
     search.month
   );
   const activeFilterCount = [
@@ -102,6 +109,7 @@ function Compras() {
     search.last4,
     search.status,
     search.type,
+    search.category,
   ].filter(Boolean).length;
   const selValid = selected.filter((id) => txs.some((t) => t.id === id));
   const total = round2(
@@ -211,6 +219,15 @@ function Compras() {
               onChange={(v) => set({ type: v })}
               options={(Object.keys(TX_TYPE_LABEL) as TxType[]).map((k) => [k, TX_TYPE_LABEL[k]])}
             />
+            <FilterSelect
+              label="Categoria"
+              value={search.category}
+              onChange={(v) => set({ category: v })}
+              options={[
+                ["__none", "Sem categoria"],
+                ...PURCHASE_CATEGORIES.map((category) => [category, category] as [string, string]),
+              ]}
+            />
             {hasFilters && (
               <Button
                 variant="ghost"
@@ -267,6 +284,15 @@ function Compras() {
               value={search.type}
               onChange={(v) => set({ type: v })}
               options={(Object.keys(TX_TYPE_LABEL) as TxType[]).map((k) => [k, TX_TYPE_LABEL[k]])}
+            />
+            <FilterSelect
+              label="Categoria"
+              value={search.category}
+              onChange={(v) => set({ category: v })}
+              options={[
+                ["__none", "Sem categoria"],
+                ...PURCHASE_CATEGORIES.map((category) => [category, category] as [string, string]),
+              ]}
             />
             {hasFilters && (
               <Button
