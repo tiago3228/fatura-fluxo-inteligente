@@ -24,7 +24,13 @@ import {
 } from "./calc";
 import { fmtMonthLong, round2, uid } from "./format";
 import { OCTOBER_ASSIGNMENTS } from "./octoberAssignments";
-import { categoryForMerchant, DEFAULT_CATEGORY_RULES, learnCategoryRule } from "./categories";
+import {
+  categoryForMerchant,
+  DEFAULT_CATEGORY_RULES,
+  learnCategoryRule,
+  mergeCategoryRules,
+  normalizeMerchant,
+} from "./categories";
 import type {
   Allocation,
   AuditEntry,
@@ -107,14 +113,18 @@ const applyCategoryRules = (transactions: Transaction[], rules: FinanceState["ca
 const learnFromTransactions = (
   initialRules: NonNullable<FinanceState["categoryRules"]>,
   transactions: Transaction[],
-) =>
-  transactions.reduce(
-    (rules, transaction) =>
-      transaction.category
-        ? learnCategoryRule(rules, transaction.description, transaction.category)
-        : rules,
-    initialRules,
+) => {
+  const rules = new Map(
+    initialRules.map((rule) => [normalizeMerchant(rule.merchant), rule] as const),
   );
+  for (const transaction of transactions) {
+    const merchant = normalizeMerchant(transaction.description);
+    if (merchant && transaction.category) {
+      rules.set(merchant, { merchant, category: transaction.category });
+    }
+  }
+  return Array.from(rules.values());
+};
 
 type InstallmentReference = { number: number; total: number };
 
@@ -1026,10 +1036,9 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
   switch (a.type) {
     case "hydrate": {
       const raw = a.state as FinanceState & { recurringCharges?: RecurringCharge[] };
-      let categoryRules = learnFromTransactions(DEFAULT_CATEGORY_RULES, raw.transactions);
-      for (const rule of raw.categoryRules ?? []) {
-        categoryRules = learnCategoryRule(categoryRules, rule.merchant, rule.category);
-      }
+      const categoryRules = Array.isArray(raw.categoryRules)
+        ? mergeCategoryRules(DEFAULT_CATEGORY_RULES, raw.categoryRules)
+        : learnFromTransactions(DEFAULT_CATEGORY_RULES, raw.transactions);
       const categorizedTransactions = applyCategoryRules(raw.transactions, categoryRules);
       const seededCharges = createDemoState().recurringCharges.filter((charge) =>
         raw.transactions.some((transaction) => transaction.id === charge.sourceTransactionId),
@@ -1598,6 +1607,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
   const workspaceId = useRef<string | null>(null);
   const cloudReady = useRef(false);
   const savingJson = useRef<string | null>(null);
+  const saveQueue = useRef<Promise<void>>(Promise.resolve());
   const stateRef = useRef(state);
   const actorRef = useRef<AuditActor>({ id: "anonymous", name: "Usuário" });
   stateRef.current = state;
@@ -1804,30 +1814,38 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       )
         return;
       const ws = workspaceId.current;
-      const snapshot = stateRef.current;
-      const json = JSON.stringify(snapshot);
-      if (json === lastSynced.current) {
-        setSyncStatus("synced");
-        return;
-      }
-      savingJson.current = json;
-      setSyncStatus("saving");
-      const saved = await saveCloudState(ws, snapshot);
-      if (ws !== workspaceId.current) return;
-      if (saved) {
-        lastSynced.current = json;
-        if (savingJson.current === json) savingJson.current = null;
-        if ((syncStatusRef.current as SyncStatus) !== "conflict") {
-          setSyncStatus(JSON.stringify(stateRef.current) === json ? "synced" : "saving");
+      const task = saveQueue.current.then(async () => {
+        if (cancelled || ws !== workspaceId.current || !cloudReady.current) return;
+        const snapshot = stateRef.current;
+        const json = JSON.stringify(snapshot);
+        if (json === lastSynced.current) {
+          setSyncStatus("synced");
+          return;
         }
-        return;
-      }
-      if (savingJson.current === json) savingJson.current = null;
-      if ((syncStatusRef.current as SyncStatus) !== "conflict") setSyncStatus("error");
-      const delays = [2000, 5000, 15000, 30000];
-      if (attempt < delays.length) {
-        retryTimer = setTimeout(() => void saveCurrentState(attempt + 1), delays[attempt]);
-      }
+        savingJson.current = json;
+        setSyncStatus("saving");
+        const saved = await saveCloudState(ws, snapshot);
+        if (ws !== workspaceId.current) return;
+        if (saved) {
+          lastSynced.current = json;
+          if (savingJson.current === json) savingJson.current = null;
+          if (!cancelled && syncStatusRef.current !== "conflict") {
+            setSyncStatus(JSON.stringify(stateRef.current) === json ? "synced" : "saving");
+          }
+          return;
+        }
+        if (savingJson.current === json) savingJson.current = null;
+        if (!cancelled && syncStatusRef.current !== "conflict") setSyncStatus("error");
+        const delays = [2000, 5000, 15000, 30000];
+        if (!cancelled && attempt < delays.length) {
+          retryTimer = setTimeout(() => void saveCurrentState(attempt + 1), delays[attempt]);
+        }
+      });
+      saveQueue.current = task.then(
+        () => undefined,
+        () => undefined,
+      );
+      await task;
     };
     const timer = setTimeout(() => void saveCurrentState(), 600);
     return () => {

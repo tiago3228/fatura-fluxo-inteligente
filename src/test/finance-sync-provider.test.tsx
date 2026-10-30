@@ -143,4 +143,40 @@ describe("FinanceProvider cloud bootstrap", () => {
     expect(screen.getByTestId("warn-pct")).toHaveTextContent(String(initialWarnPct + 1));
     expect(mocks.upsert).toHaveBeenCalledTimes(1);
   });
+
+  it("serializa gravações lentas para impedir que um estado antigo sobrescreva o mais recente", async () => {
+    const remoteState = createDemoState();
+    mocks.maybeSingle.mockResolvedValue({ data: { data: remoteState }, error: null });
+    const pending: ((value: { error: null }) => void)[] = [];
+    let activeWrites = 0;
+    let maxActiveWrites = 0;
+    mocks.upsert.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          activeWrites += 1;
+          maxActiveWrites = Math.max(maxActiveWrites, activeWrites);
+          pending.push((value) => {
+            activeWrites -= 1;
+            resolve(value);
+          });
+        }),
+    );
+
+    renderProvider();
+    await waitFor(() => expect(screen.getByTestId("sync-status")).toHaveTextContent("synced"));
+    fireEvent.click(screen.getByRole("button", { name: "Editar estado local" }));
+    await waitFor(() => expect(mocks.upsert).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole("button", { name: "Editar estado local" }));
+    await waitFor(() => expect(screen.getByTestId("warn-pct")).toHaveTextContent("82"));
+    await new Promise((resolve) => setTimeout(resolve, 700));
+
+    expect(mocks.upsert).toHaveBeenCalledTimes(1);
+    expect(maxActiveWrites).toBe(1);
+
+    await act(async () => pending.shift()?.({ error: null }));
+    await waitFor(() => expect(mocks.upsert).toHaveBeenCalledTimes(2));
+    await act(async () => pending.shift()?.({ error: null }));
+    await waitFor(() => expect(screen.getByTestId("sync-status")).toHaveTextContent("synced"));
+    expect(maxActiveWrites).toBe(1);
+  });
 });

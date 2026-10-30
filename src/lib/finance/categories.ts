@@ -68,13 +68,47 @@ export const learnCategoryRule = (
   return rules.map((rule, index) => (index === existingIndex ? { merchant, category } : rule));
 };
 
-const similarity = (left: string, right: string) => {
-  const leftTokens = new Set(left.split(" ").filter(Boolean));
-  const rightTokens = new Set(right.split(" ").filter(Boolean));
-  let shared = 0;
-  for (const token of leftTokens) if (rightTokens.has(token)) shared += 1;
-  const union = new Set([...leftTokens, ...rightTokens]).size;
-  return { score: union ? shared / union : 0, shared };
+export const mergeCategoryRules = (...ruleSets: CategoryRule[][]): CategoryRule[] => {
+  const merged = new Map<string, CategoryRule>();
+  for (const rules of ruleSets) {
+    for (const rule of rules) {
+      const merchant = normalizeMerchant(rule.merchant);
+      if (merchant) merged.set(merchant, { merchant, category: rule.category });
+    }
+  }
+  return Array.from(merged.values());
+};
+
+type CompiledRule = { merchant: string; category: string; tokens: Set<string> };
+type CompiledRules = {
+  exact: Map<string, string>;
+  byToken: Map<string, CompiledRule[]>;
+};
+
+const compiledRulesCache = new WeakMap<CategoryRule[], CompiledRules>();
+
+const compileRules = (rules: CategoryRule[]): CompiledRules => {
+  const cached = compiledRulesCache.get(rules);
+  if (cached) return cached;
+  const exact = new Map<string, string>();
+  const byToken = new Map<string, CompiledRule[]>();
+  for (const rule of rules) {
+    const merchant = normalizeMerchant(rule.merchant);
+    const compiled: CompiledRule = {
+      merchant,
+      category: rule.category,
+      tokens: new Set(merchant.split(" ").filter(Boolean)),
+    };
+    exact.set(merchant, rule.category);
+    for (const token of compiled.tokens) {
+      const matches = byToken.get(token) ?? [];
+      matches.push(compiled);
+      byToken.set(token, matches);
+    }
+  }
+  const result = { exact, byToken };
+  compiledRulesCache.set(rules, result);
+  return result;
 };
 
 export const categoryForMerchant = (
@@ -83,16 +117,25 @@ export const categoryForMerchant = (
 ): string | undefined => {
   const merchant = normalizeMerchant(description);
   if (!merchant) return undefined;
-  const exact = rules.find((rule) => normalizeMerchant(rule.merchant) === merchant);
-  if (exact) return exact.category;
+  const compiled = compileRules(rules);
+  const exact = compiled.exact.get(merchant);
+  if (exact) return exact;
 
   let bestScore = 0;
   let bestCategory: string | undefined;
   let tied = false;
-  for (const rule of rules) {
-    const candidate = normalizeMerchant(rule.merchant);
-    const { score, shared } = similarity(merchant, candidate);
-    if (shared < 2 || score < 0.6) continue;
+  const queryTokens = new Set(merchant.split(" ").filter(Boolean));
+  const sharedCounts = new Map<CompiledRule, number>();
+  for (const token of queryTokens) {
+    for (const rule of compiled.byToken.get(token) ?? []) {
+      sharedCounts.set(rule, (sharedCounts.get(rule) ?? 0) + 1);
+    }
+  }
+  for (const [rule, shared] of sharedCounts) {
+    if (shared < 2) continue;
+    const union = queryTokens.size + rule.tokens.size - shared;
+    const score = union ? shared / union : 0;
+    if (score < 0.6) continue;
     if (score > bestScore) {
       bestScore = score;
       bestCategory = rule.category;
