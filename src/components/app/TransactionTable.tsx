@@ -63,6 +63,7 @@ import { TxStatusBadge, TxTypeBadge } from "./badges";
 import { EmptyState } from "./common";
 import { useTxActions } from "./tx-actions";
 import { toast } from "sonner";
+import { categoryLabel } from "@/lib/finance/categories";
 
 export type SortKey = "date" | "amount" | "description" | "card" | "person" | "status";
 
@@ -297,6 +298,7 @@ function Row({
     const charge: RecurringCharge = {
       id: uid("rec"),
       description: tx.description,
+      category: tx.category,
       cardId: invoice.cardId,
       amount: tx.amount,
       startMonth: addMonths(invoice.month, 1),
@@ -366,7 +368,8 @@ function Row({
           setNoteOpen(true);
         }}
       >
-        <MessageSquareText className="size-4" /> {tx.note ? "Editar observação" : "Adicionar observação"}
+        <MessageSquareText className="size-4" />{" "}
+        {tx.note ? "Editar observação" : "Adicionar observação"}
       </Item>
       {tx.allocations.length > 0 && (
         <Item onSelect={() => unassign([tx.id])}>
@@ -416,164 +419,172 @@ function Row({
 
   return (
     <>
-    <ContextMenu>
-      <ContextMenuTrigger asChild>
-        <tr
-          className={cn(
-            "transition-colors hover:bg-muted/50 [&_td]:px-3 [&_td]:py-2.5",
-            checked && "bg-accent/60",
-            status === "pendente" && "bg-warning-soft/30",
-          )}
-        >
-          {selectable && (
-            <td>
-              <Checkbox
-                aria-label={`Selecionar ${tx.description}`}
-                disabled={isPay}
-                checked={checked}
-                onCheckedChange={(v) => onCheck?.(!!v)}
-              />
-            </td>
-          )}
-          <td className="num text-muted-foreground">{fmtDate(tx.date)}</td>
-          <td>
-            <div className="font-medium">{tx.description}</div>
-            {tx.installmentNumber && (
-              <div className="text-xs text-muted-foreground">
-                Parcela {tx.installmentNumber}/{tx.installmentTotal}
-              </div>
-            )}
-            {tx.adjustmentNote && (
-              <div className="text-xs text-warning">Ajuste: {tx.adjustmentNote}</div>
-            )}
-            {tx.note && (
-              <div className="mt-1 flex items-start gap-1 text-xs text-info">
-                <MessageSquareText className="mt-0.5 size-3 shrink-0" />
-                <span>Observação: {tx.note}</span>
-              </div>
-            )}
-            {recurrence && (
-              <div className="text-xs text-info">
-                {recurrence.cancelledFromMonth
-                  ? `Recorrência encerrada em ${recurrence.cancelledFromMonth}`
-                  : "Projeção mensal recorrente"}
-              </div>
-            )}
-          </td>
-          {showCard && (
-            <td className="whitespace-nowrap text-muted-foreground">
-              {cardLabel ? (
-                <>
-                  {cardLabel.name} <span className="num">•••• {cardLabel.last4}</span>
-                </>
-              ) : (
-                "—"
-              )}
-            </td>
-          )}
-          {showType && (
-            <td>
-              <TxTypeBadge type={tx.type} />
-            </td>
-          )}
-          <td
+      <ContextMenu>
+        <ContextMenuTrigger asChild>
+          <tr
             className={cn(
-              "num text-right font-semibold",
-              isCreditType(tx.type) && "text-success",
-              isPay && "text-muted-foreground",
+              "transition-colors hover:bg-muted/50 [&_td]:px-3 [&_td]:py-2.5",
+              checked && "bg-accent/60",
+              status === "pendente" && "bg-warning-soft/30",
             )}
           >
-            {fmtBRL(tx.amount)}
-          </td>
-          <td>
-            {shown.length === 0 ? (
-              <span className="text-muted-foreground">{isPay ? "—" : "Sem responsável"}</span>
-            ) : shown.length === 1 && !personFilter && people.length === 1 ? (
-              <span className="font-medium">{shown[0]?.name}</span>
-            ) : (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="block cursor-help">
-                    {shown.map((p) => (
-                      <span key={p.personId} className="num mr-2 inline-block text-xs">
-                        {p.name.split(" ")[0]} {fmtBRL(p.amount)}
-                      </span>
-                    ))}
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent>
-                  {people.map((p) => (
-                    <div key={p.personId} className="num">
-                      {p.name}: {fmtBRL(p.amount)}
-                    </div>
-                  ))}
-                </TooltipContent>
-              </Tooltip>
+            {selectable && (
+              <td>
+                <Checkbox
+                  aria-label={`Selecionar ${tx.description}`}
+                  disabled={isPay}
+                  checked={checked}
+                  onCheckedChange={(v) => onCheck?.(!!v)}
+                />
+              </td>
             )}
-            {allocMismatch && (
-              <div className="text-xs text-warning">Distribuído {fmtBRL(allocatedSum(tx))}</div>
-            )}
-          </td>
-          <td>
-            <TxStatusBadge status={status} />
-          </td>
-          <td>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-8"
-                  aria-label={`Ações para ${tx.description}`}
-                >
-                  <MoreHorizontal className="size-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                {items(
-                  DropdownMenuItem as never,
-                  DropdownMenuSeparator as never,
-                  DropdownMenuSub as never,
-                  DropdownMenuSubTrigger as never,
-                  DropdownMenuSubContent as never,
+            <td className="num text-muted-foreground">{fmtDate(tx.date)}</td>
+            <td>
+              <div className="font-medium">{tx.description}</div>
+              <div
+                className={cn("text-xs", tx.category ? "text-primary" : "text-muted-foreground")}
+              >
+                {categoryLabel(tx.category)}
+              </div>
+              {tx.installmentNumber && (
+                <div className="text-xs text-muted-foreground">
+                  Parcela {tx.installmentNumber}/{tx.installmentTotal}
+                </div>
+              )}
+              {tx.adjustmentNote && (
+                <div className="text-xs text-warning">Ajuste: {tx.adjustmentNote}</div>
+              )}
+              {tx.note && (
+                <div className="mt-1 flex items-start gap-1 text-xs text-info">
+                  <MessageSquareText className="mt-0.5 size-3 shrink-0" />
+                  <span>Observação: {tx.note}</span>
+                </div>
+              )}
+              {recurrence && (
+                <div className="text-xs text-info">
+                  {recurrence.cancelledFromMonth
+                    ? `Recorrência encerrada em ${recurrence.cancelledFromMonth}`
+                    : "Projeção mensal recorrente"}
+                </div>
+              )}
+            </td>
+            {showCard && (
+              <td className="whitespace-nowrap text-muted-foreground">
+                {cardLabel ? (
+                  <>
+                    {cardLabel.name} <span className="num">•••• {cardLabel.last4}</span>
+                  </>
+                ) : (
+                  "—"
                 )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </td>
-        </tr>
-      </ContextMenuTrigger>
-      <ContextMenuContent className="w-56">
-        {items(
-          ContextMenuItem,
-          ContextMenuSeparator,
-          ContextMenuSub,
-          ContextMenuSubTrigger,
-          ContextMenuSubContent,
-        )}
-      </ContextMenuContent>
-    </ContextMenu>
-    <Dialog open={noteOpen} onOpenChange={setNoteOpen}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>{tx.note ? "Observação da compra" : "Adicionar observação"}</DialogTitle>
-          <DialogDescription>
-            Identifique do que se trata este lançamento. A observação será sincronizada com o workspace compartilhado.
-          </DialogDescription>
-        </DialogHeader>
-        <Textarea
-          autoFocus
-          maxLength={500}
-          value={noteDraft}
-          onChange={(event) => setNoteDraft(event.target.value)}
-          placeholder="Ex.: compra para manutenção do carro"
-          aria-label="Observação da compra"
-        />
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setNoteOpen(false)}>Cancelar</Button>
-          <Button onClick={saveNote}>Salvar observação</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+              </td>
+            )}
+            {showType && (
+              <td>
+                <TxTypeBadge type={tx.type} />
+              </td>
+            )}
+            <td
+              className={cn(
+                "num text-right font-semibold",
+                isCreditType(tx.type) && "text-success",
+                isPay && "text-muted-foreground",
+              )}
+            >
+              {fmtBRL(tx.amount)}
+            </td>
+            <td>
+              {shown.length === 0 ? (
+                <span className="text-muted-foreground">{isPay ? "—" : "Sem responsável"}</span>
+              ) : shown.length === 1 && !personFilter && people.length === 1 ? (
+                <span className="font-medium">{shown[0]?.name}</span>
+              ) : (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="block cursor-help">
+                      {shown.map((p) => (
+                        <span key={p.personId} className="num mr-2 inline-block text-xs">
+                          {p.name.split(" ")[0]} {fmtBRL(p.amount)}
+                        </span>
+                      ))}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {people.map((p) => (
+                      <div key={p.personId} className="num">
+                        {p.name}: {fmtBRL(p.amount)}
+                      </div>
+                    ))}
+                  </TooltipContent>
+                </Tooltip>
+              )}
+              {allocMismatch && (
+                <div className="text-xs text-warning">Distribuído {fmtBRL(allocatedSum(tx))}</div>
+              )}
+            </td>
+            <td>
+              <TxStatusBadge status={status} />
+            </td>
+            <td>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-8"
+                    aria-label={`Ações para ${tx.description}`}
+                  >
+                    <MoreHorizontal className="size-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  {items(
+                    DropdownMenuItem as never,
+                    DropdownMenuSeparator as never,
+                    DropdownMenuSub as never,
+                    DropdownMenuSubTrigger as never,
+                    DropdownMenuSubContent as never,
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </td>
+          </tr>
+        </ContextMenuTrigger>
+        <ContextMenuContent className="w-56">
+          {items(
+            ContextMenuItem,
+            ContextMenuSeparator,
+            ContextMenuSub,
+            ContextMenuSubTrigger,
+            ContextMenuSubContent,
+          )}
+        </ContextMenuContent>
+      </ContextMenu>
+      <Dialog open={noteOpen} onOpenChange={setNoteOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{tx.note ? "Observação da compra" : "Adicionar observação"}</DialogTitle>
+            <DialogDescription>
+              Identifique do que se trata este lançamento. A observação será sincronizada com o
+              workspace compartilhado.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            autoFocus
+            maxLength={500}
+            value={noteDraft}
+            onChange={(event) => setNoteDraft(event.target.value)}
+            placeholder="Ex.: compra para manutenção do carro"
+            aria-label="Observação da compra"
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setNoteOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={saveNote}>Salvar observação</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

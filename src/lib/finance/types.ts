@@ -94,6 +94,8 @@ export interface Transaction {
   /** YYYY-MM-DD */
   date: string;
   description: string;
+  /** Categoria opcional para relatórios e organização dos gastos. */
+  category?: string | undefined;
   /** Valor original. Créditos/estornos/pagamentos são negativos. */
   amount: number;
   type: TxType;
@@ -132,6 +134,7 @@ export interface InstallmentPlan {
 export interface RecurringCharge {
   id: string;
   description: string;
+  category?: string | undefined;
   cardId: string;
   amount: number;
   /** YYYY-MM da primeira projeção */

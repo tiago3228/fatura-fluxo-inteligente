@@ -55,6 +55,7 @@ export type Action =
       txId: string;
       patch: {
         description: string;
+        category?: string;
         date: string;
         amount: number;
         installmentNumber: number | null;
@@ -242,6 +243,7 @@ const prepareNextInvoice = (
         invoiceId: nextId,
         date: dateInMonth(nextMonth, card.closingDay),
         description,
+        category: transaction.category,
         amount: transaction.amount,
         type: "parcela" as const,
         installmentNumber: reference.number + 1,
@@ -263,6 +265,7 @@ const prepareNextInvoice = (
           invoiceId: nextId,
           date: dateInMonth(nextMonth, card.closingDay),
           description: charge.description,
+          category: charge.category,
           amount: charge.amount,
           type: "compra" as const,
           recurringChargeId: charge.id,

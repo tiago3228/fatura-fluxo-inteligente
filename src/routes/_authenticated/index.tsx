@@ -51,6 +51,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
+import { categoryLabel } from "@/lib/finance/categories";
 
 export const Route = createFileRoute("/_authenticated/")({
   head: () => ({
@@ -196,6 +197,17 @@ function Overview() {
     })
     .filter((card) => card.invoiceCount > 0)
     .sort((a, b) => b.total - a.total);
+  const categorySummary = Array.from(
+    monthTxs(state, m).reduce((totals, transaction) => {
+      const category = categoryLabel(transaction.category);
+      totals.set(category, round2((totals.get(category) ?? 0) + transaction.amount));
+      return totals;
+    }, new Map<string, number>()),
+  )
+    .map(([category, total]) => ({ category, total }))
+    .filter((item) => item.total > 0)
+    .sort((a, b) => b.total - a.total);
+  const highestCategoryTotal = categorySummary[0]?.total ?? 0;
 
   return (
     <>
@@ -581,6 +593,42 @@ function Overview() {
                   </div>
                 </div>
               </Link>
+            ))}
+          </div>
+        )}
+      </Panel>
+
+      <Panel
+        className="mt-6"
+        title="Gastos por categoria"
+        description="Distribuição dos lançamentos positivos da competência selecionada."
+      >
+        {categorySummary.length === 0 ? (
+          <p className="p-4 text-sm text-muted-foreground">
+            Nenhuma compra categorizada para este mês.
+          </p>
+        ) : (
+          <div className="grid gap-3 p-4 sm:grid-cols-2">
+            {categorySummary.map((item) => (
+              <div key={item.category} className="rounded-lg border bg-background p-3">
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="font-medium">{item.category}</span>
+                  <span className="num font-semibold">{fmtBRL(item.total)}</span>
+                </div>
+                <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-primary transition-all"
+                    style={{
+                      width: `${highestCategoryTotal ? Math.min(100, (item.total / highestCategoryTotal) * 100) : 0}%`,
+                    }}
+                  />
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {official
+                    ? `${Math.round((item.total / official) * 100)}% do total oficial`
+                    : "—"}
+                </p>
+              </div>
             ))}
           </div>
         )}
