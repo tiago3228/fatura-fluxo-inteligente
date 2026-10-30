@@ -246,7 +246,14 @@ function PersonAccountCard({
                   <td className="num px-3 py-2 text-muted-foreground">
                     {fmtDate(transaction.date)}
                   </td>
-                  <td className="px-3 py-2 font-medium">{transaction.description}</td>
+                  <td className="px-3 py-2 font-medium">
+                    {transaction.description}
+                    {transaction.note?.trim() && (
+                      <p className="mt-0.5 text-xs font-normal text-muted-foreground">
+                        {transaction.note.trim()}
+                      </p>
+                    )}
+                  </td>
                   <td className="px-3 py-2 text-muted-foreground">
                     {transaction.category ?? "Sem categoria"}
                   </td>

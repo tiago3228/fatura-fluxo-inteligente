@@ -6,6 +6,13 @@ export type ShareAccountRow = {
   amount: number;
 };
 
+export const shareAccountRowDetails = (transaction: Transaction) => ({
+  date: fmtDate(transaction.date),
+  description: transaction.description,
+  note: transaction.note?.trim() ?? "",
+  category: transaction.category?.trim() || "Sem categoria",
+});
+
 const loadFont = (ctx: CanvasRenderingContext2D, size: number, weight = 400) => {
   ctx.font = `${weight} ${size}px Arial, sans-serif`;
 };
@@ -24,10 +31,10 @@ export async function createPersonAccountJpeg({
   paid: number;
 }): Promise<Blob> {
   const width = 1200;
-  const rowHeight = 48;
+  const rowHeight = 62;
   // Reserve espaço para o cabeçalho, a tabela e o resumo final. Sem essa margem,
   // o limite de segurança abaixo impedia as linhas de aparecerem em imagens curtas.
-  const height = Math.min(18000, 390 + rows.length * rowHeight);
+  const height = Math.min(18000, 420 + rows.length * rowHeight);
   const scale = 2;
   const canvas = document.createElement("canvas");
   canvas.width = width * scale;
@@ -61,8 +68,9 @@ export async function createPersonAccountJpeg({
   ctx.fillRect(42, y - 27, width - 84, 34);
   ctx.fillStyle = "#49605b";
   loadFont(ctx, 15, 700);
-  ctx.fillText("DATA", 58, y - 5);
-  ctx.fillText("COMPRA", 218, y - 5);
+  ctx.fillText("DATA DA COMPRA", 58, y - 5);
+  ctx.fillText("DESCRIÇÃO DA COMPRA", 218, y - 5);
+  ctx.fillText("CATEGORIA", 742, y - 5);
   ctx.textAlign = "right";
   ctx.fillText("VALOR", width - 58, y - 5);
   ctx.textAlign = "left";
@@ -74,14 +82,23 @@ export async function createPersonAccountJpeg({
     ctx.fillRect(42, y - 25, width - 84, rowHeight);
     ctx.fillStyle = "#52635f";
     loadFont(ctx, 16);
-    ctx.fillText(fmtDate(transaction.date), 58, y + 5);
+    const details = shareAccountRowDetails(transaction);
+    ctx.fillText(details.date, 58, y + 5, 145);
     ctx.fillStyle = "#1c2d29";
     loadFont(ctx, 17, 600);
     const label =
-      transaction.description.length > 52
-        ? `${transaction.description.slice(0, 49)}…`
-        : transaction.description;
-    ctx.fillText(label, 218, y + 5);
+      details.description.length > 58
+        ? `${details.description.slice(0, 55)}…`
+        : details.description;
+    ctx.fillText(label, 218, y + (details.note ? -3 : 5), 500);
+    if (details.note) {
+      ctx.fillStyle = "#61706d";
+      loadFont(ctx, 13);
+      ctx.fillText(details.note, 218, y + 20, 500);
+    }
+    ctx.fillStyle = "#52635f";
+    loadFont(ctx, 15);
+    ctx.fillText(details.category, 742, y + 5, 245);
     ctx.fillStyle = "#1f4c46";
     loadFont(ctx, 17, 700);
     ctx.textAlign = "right";
