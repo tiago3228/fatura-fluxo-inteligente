@@ -13,6 +13,7 @@ import {
   personMonthLimitAvailable,
   personMonthPaid,
   personMonthRemaining,
+  peopleMonthRemainingTotal,
   personPaymentStatus,
   personMonthTotal,
   totalCardLimit,
@@ -169,6 +170,7 @@ describe("pagamentos e competências", () => {
   it("calcula pagamentos parciais e integrais sem reaplicar o mesmo pagamento", () => {
     let state = stateWithSinglePurchase();
     expect(personMonthTotal(state, personId, "2026-10")).toBe(120);
+    expect(peopleMonthRemainingTotal(state, "2026-10")).toBe(120);
 
     state = reducer(state, {
       type: "recordPersonPayment",
@@ -186,6 +188,7 @@ describe("pagamentos e competências", () => {
 
     expect(personMonthPaid(state, personId, "2026-10")).toBe(60);
     expect(personMonthRemaining(state, personId, "2026-10")).toBe(60);
+    expect(peopleMonthRemainingTotal(state, "2026-10")).toBe(60);
     expect(personDebtTotal(state, personId)).toBe(60);
     expect(personPaymentStatus(state, personId, "2026-10")).toBe("parcial");
 
@@ -195,6 +198,7 @@ describe("pagamentos e competências", () => {
     });
     expect(personMonthPaid(state, personId, "2026-10")).toBe(120);
     expect(personMonthRemaining(state, personId, "2026-10")).toBe(0);
+    expect(peopleMonthRemainingTotal(state, "2026-10")).toBe(0);
     expect(personDebtTotal(state, personId)).toBe(0);
     expect(personPaymentStatus(state, personId, "2026-10")).toBe("pago");
   });

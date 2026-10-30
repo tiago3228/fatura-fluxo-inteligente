@@ -277,6 +277,10 @@ export const personMonthPaid = (s: FinanceState, personId: string, month: string
 export const personMonthRemaining = (s: FinanceState, personId: string, month: string) =>
   Math.max(0, round2(personMonthTotal(s, personId, month) - personMonthPaid(s, personId, month)));
 
+/** Soma o saldo mensal ainda a pagar de todas as pessoas para conferência. */
+export const peopleMonthRemainingTotal = (s: FinanceState, month: string) =>
+  round2(s.people.reduce((sum, person) => sum + personMonthRemaining(s, person.id, month), 0));
+
 /**
  * Saldo total ainda devido, somando o restante de cada competência separadamente.
  * Assim, um pagamento de novembro não é reaplicado sobre dezembro nem sobre meses

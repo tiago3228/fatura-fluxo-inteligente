@@ -3,12 +3,14 @@ import { useState } from "react";
 import { Check, ChevronDown, ChevronUp, Download, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useFinance } from "@/lib/finance/store";
+import { PurchaseContextMenu } from "@/components/app/PurchaseContextMenu";
 import {
   addMonths,
   availableMonths,
   detectedInstallmentPlans,
   installmentReferenceFromDescription,
   monthTxs,
+  peopleMonthRemainingTotal,
   personMonthPaid,
   personMonthTotal,
   stripInstallmentReference,
@@ -114,6 +116,22 @@ function EnviarConta() {
           </div>
         )}
       </Panel>
+      {sortedPeople.length > 0 && (
+        <Panel className="mt-4 border-primary/20 bg-primary/5">
+          <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-5">
+            <div>
+              <p className="font-semibold">Conferência · total a pagar</p>
+              <p className="text-xs text-muted-foreground">
+                Soma dos saldos em aberto das pessoas em {fmtMonthLong(month)}, após pagamentos
+                registrados.
+              </p>
+            </div>
+            <p className="num text-xl font-bold text-primary">
+              {fmtBRL(peopleMonthRemainingTotal(state, month))}
+            </p>
+          </div>
+        </Panel>
+      )}
       <WhatsAppRecipientDialog
         open={sharePersonId !== null}
         onOpenChange={(open) => !open && setSharePersonId(null)}
@@ -324,27 +342,29 @@ function PersonAccountCard({
             </thead>
             <tbody className="divide-y">
               {rows.map(({ transaction, amount, displayDate, dateKind }) => (
-                <tr key={transaction.id}>
-                  <td className="num px-3 py-2 text-muted-foreground">
-                    {dateKind === "unknown"
-                      ? "Data original não identificada"
-                      : dateKind === "forecast"
-                        ? `Previsão ${fmtDate(displayDate!)}`
-                        : fmtDate(displayDate!)}
-                  </td>
-                  <td className="px-3 py-2 font-medium">
-                    {transaction.description}
-                    {transaction.note?.trim() && (
-                      <p className="mt-0.5 text-xs font-normal text-muted-foreground">
-                        {transaction.note.trim()}
-                      </p>
-                    )}
-                  </td>
-                  <td className="px-3 py-2 text-muted-foreground">
-                    {transaction.category ?? "Sem categoria"}
-                  </td>
-                  <td className="num px-3 py-2 text-right font-semibold">{fmtBRL(amount)}</td>
-                </tr>
+                <PurchaseContextMenu key={transaction.id} transaction={transaction}>
+                  <tr className="cursor-context-menu">
+                    <td className="num px-3 py-2 text-muted-foreground">
+                      {dateKind === "unknown"
+                        ? "Data original não identificada"
+                        : dateKind === "forecast"
+                          ? `Previsão ${fmtDate(displayDate!)}`
+                          : fmtDate(displayDate!)}
+                    </td>
+                    <td className="px-3 py-2 font-medium">
+                      {transaction.description}
+                      {transaction.note?.trim() && (
+                        <p className="mt-0.5 text-xs font-normal text-muted-foreground">
+                          {transaction.note.trim()}
+                        </p>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-muted-foreground">
+                      {transaction.category ?? "Sem categoria"}
+                    </td>
+                    <td className="num px-3 py-2 text-right font-semibold">{fmtBRL(amount)}</td>
+                  </tr>
+                </PurchaseContextMenu>
               ))}
             </tbody>
             <tfoot className="border-t bg-muted/40 font-bold">
