@@ -246,7 +246,11 @@ function Notifications() {
           )}
           {alerts.map((a) => (
             <div key={a.id} className="flex items-start gap-2 px-4 py-3 text-sm hover:bg-muted">
-              <Link to={a.to} className="flex min-w-0 flex-1 gap-3">
+              <Link
+                to={a.to}
+                className="flex min-w-0 flex-1 gap-3"
+                onClick={() => dispatch({ type: "dismissAlert", alertId: a.id })}
+              >
                 <span
                   className={cn(
                     "mt-1.5 size-2 shrink-0 rounded-full",
