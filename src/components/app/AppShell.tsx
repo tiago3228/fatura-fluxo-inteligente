@@ -27,6 +27,7 @@ import {
   Undo2,
   Users,
   Wallet,
+  X,
 } from "lucide-react";
 import {
   Sidebar,
@@ -172,6 +173,7 @@ function CeuFinancasMenuItem() {
 
 function Notifications() {
   const alerts = useAlerts();
+  const { dispatch } = useFinance();
   const criticalCount = alerts.filter((alert) => alert.tone === "danger").length;
   const attentionCount = alerts.filter((alert) => alert.tone === "warning").length;
   return (
@@ -195,9 +197,27 @@ function Notifications() {
         <div className="border-b px-4 py-3">
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm font-bold">Central de notificações</p>
-            <span className="text-xs text-muted-foreground">
-              {alerts.length} {alerts.length === 1 ? "item" : "itens"}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">
+                {alerts.length} {alerts.length === 1 ? "item" : "itens"}
+              </span>
+              {alerts.length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  onClick={() =>
+                    dispatch({
+                      type: "dismissAllAlerts",
+                      alertIds: alerts.map((alert) => alert.id),
+                    })
+                  }
+                  title="Limpar todas as notificações"
+                >
+                  Limpar tudo
+                </Button>
+              )}
+            </div>
           </div>
           {alerts.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-medium">
@@ -225,23 +245,31 @@ function Notifications() {
             </div>
           )}
           {alerts.map((a) => (
-            <Link
-              key={a.id}
-              to={a.to}
-              className="flex gap-3 px-4 py-3 text-sm transition-colors hover:bg-muted"
-            >
-              <span
-                className={cn(
-                  "mt-1.5 size-2 shrink-0 rounded-full",
-                  a.tone === "danger"
-                    ? "bg-danger"
-                    : a.tone === "warning"
-                      ? "bg-warning"
-                      : "bg-info",
-                )}
-              />
-              <span className="leading-relaxed">{a.text}</span>
-            </Link>
+            <div key={a.id} className="flex items-start gap-2 px-4 py-3 text-sm hover:bg-muted">
+              <Link to={a.to} className="flex min-w-0 flex-1 gap-3">
+                <span
+                  className={cn(
+                    "mt-1.5 size-2 shrink-0 rounded-full",
+                    a.tone === "danger"
+                      ? "bg-danger"
+                      : a.tone === "warning"
+                        ? "bg-warning"
+                        : "bg-info",
+                  )}
+                />
+                <span className="leading-relaxed">{a.text}</span>
+              </Link>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7 shrink-0"
+                aria-label={`Marcar notificação como lida: ${a.text}`}
+                title="Marcar como lida"
+                onClick={() => dispatch({ type: "dismissAlert", alertId: a.id })}
+              >
+                <X className="size-4" />
+              </Button>
+            </div>
           ))}
         </div>
       </PopoverContent>

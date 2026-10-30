@@ -82,5 +82,6 @@ export function useAlerts(): AppAlert[] {
         text: `${p.description}: ${planRemainingCount(p, m) === 0 ? "última parcela neste mês" : "falta apenas 1 parcela"}.`,
       });
   });
-  return out;
+  const dismissed = new Set(state.dismissedAlertIds ?? []);
+  return out.filter((alert) => !dismissed.has(alert.id));
 }

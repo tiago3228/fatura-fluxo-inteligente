@@ -85,6 +85,8 @@ export type Action =
   | { type: "markInvoicePaid"; invoiceId: string; paidAt: string }
   | { type: "markMonthInvoicesPaid"; month: string; paidAt: string }
   | { type: "appendAudit"; entry: AuditEntry }
+  | { type: "dismissAlert"; alertId: string }
+  | { type: "dismissAllAlerts"; alertIds: string[] }
   | { type: "undoAudit"; auditId: string }
   | { type: "redoAudit"; auditId: string }
   | { type: "prepareNextInvoice"; invoiceId: string };
@@ -736,7 +738,13 @@ const auditForAction = (
   before: FinanceState,
   actor: AuditActor,
 ): AuditEntry | null => {
-  if (action.type === "hydrate" || action.type === "appendAudit" || action.type === "setMonth")
+  if (
+    action.type === "hydrate" ||
+    action.type === "appendAudit" ||
+    action.type === "setMonth" ||
+    action.type === "dismissAlert" ||
+    action.type === "dismissAllAlerts"
+  )
     return null;
   if (action.type === "undoAudit") {
     const original = before.auditLog?.find((entry) => entry.id === action.auditId);
@@ -1411,6 +1419,16 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
             return cleared;
           }),
         ].slice(0, 500),
+      };
+    case "dismissAlert":
+      return {
+        ...s,
+        dismissedAlertIds: Array.from(new Set([...(s.dismissedAlertIds ?? []), a.alertId])),
+      };
+    case "dismissAllAlerts":
+      return {
+        ...s,
+        dismissedAlertIds: Array.from(new Set([...(s.dismissedAlertIds ?? []), ...a.alertIds])),
       };
     case "undoAudit": {
       const entry = s.auditLog?.find((item) => item.id === a.auditId);

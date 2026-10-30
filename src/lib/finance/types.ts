@@ -184,4 +184,6 @@ export interface FinanceState {
   suppressedProjectionSources?: string[];
   /** Histórico compartilhado das alterações feitas pelas contas autorizadas. */
   auditLog?: AuditEntry[];
+  /** IDs das notificações que o usuário já leu/limpou. */
+  dismissedAlertIds?: string[];
 }
