@@ -311,6 +311,32 @@ function Compras() {
               </Button>
             )}
           </div>
+          <div className="flex flex-wrap items-center gap-2 border-t pt-3">
+            <span className="text-xs font-semibold text-muted-foreground">Filtros rápidos:</span>
+            {(
+              [
+                ["status", "pendente", "Pendentes"],
+                ["category", "__none", "Sem categoria"],
+                ["status", "dividida", "Divididas"],
+                ["type", "compra", "Compras"],
+              ] as const
+            ).map(([key, value, label]) => {
+              const active = search[key] === value;
+              return (
+                <Button
+                  key={`${key}-${value}`}
+                  type="button"
+                  size="sm"
+                  variant={active ? "secondary" : "outline"}
+                  className="h-8 rounded-full px-3 text-xs"
+                  aria-pressed={active}
+                  onClick={() => set({ [key]: active ? undefined : value })}
+                >
+                  {label}
+                </Button>
+              );
+            })}
+          </div>
         </div>
 
         <div className="grid gap-3 border-b p-3 sm:grid-cols-2 xl:grid-cols-4">
