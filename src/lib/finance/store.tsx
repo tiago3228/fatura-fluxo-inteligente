@@ -701,6 +701,27 @@ const invoiceLabel = (state: FinanceState, invoice: Invoice) => {
   return `${fmtMonthLong(invoice.month)}${card ? ` do cartão ${card.name} •••• ${card.last4}` : ""}`;
 };
 
+type UndoField =
+  | "invoices"
+  | "transactions"
+  | "people"
+  | "cards"
+  | "plans"
+  | "recurringCharges"
+  | "settings"
+  | "payments"
+  | "spreadsheets"
+  | "suppressedProjectionSources";
+
+const undoSnapshot = (
+  before: FinanceState,
+  fields: UndoField[],
+): NonNullable<AuditEntry["undo"]> => {
+  const snapshot: NonNullable<AuditEntry["undo"]> = { kind: "restoreFinance" };
+  for (const field of fields) snapshot[field] = before[field];
+  return snapshot;
+};
+
 const auditForAction = (
   action: Action,
   before: FinanceState,
@@ -734,11 +755,7 @@ const auditForAction = (
       description = `${actor.name} marcou como paga a fatura de ${invoiceLabel(before, invoice)}.`;
       entityType = "invoice";
       entityId = invoice.id;
-      undo = {
-        kind: "restoreFinance",
-        invoices: before.invoices,
-        transactions: before.transactions,
-      };
+      undo = undoSnapshot(before, ["invoices", "transactions"]);
       break;
     }
     case "markMonthInvoicesPaid": {
@@ -749,59 +766,152 @@ const auditForAction = (
       description = `${actor.name} marcou como pagas as faturas de ${fmtMonthLong(action.month)}.`;
       entityType = "invoice";
       entityId = action.month;
-      undo = {
-        kind: "restoreFinance",
-        invoices: before.invoices,
-        transactions: before.transactions,
-      };
+      undo = undoSnapshot(before, ["invoices", "transactions"]);
       break;
     }
     case "addTransaction":
       description = `${actor.name} inseriu a compra “${action.transaction.description}”.`;
       entityType = "transaction";
       entityId = action.transaction.id;
+      undo = undoSnapshot(before, ["invoices", "transactions", "suppressedProjectionSources"]);
       break;
     case "deleteTransaction": {
       const transaction = before.transactions.find((item) => item.id === action.txId);
       description = `${actor.name} excluiu a compra “${transaction?.description ?? action.txId}”.`;
       entityType = "transaction";
       entityId = action.txId;
+      undo = undoSnapshot(before, ["invoices", "transactions", "suppressedProjectionSources"]);
       break;
     }
+    case "updateTransaction": {
+      const transaction = before.transactions.find((item) => item.id === action.txId);
+      description = `${actor.name} alterou a compra “${transaction?.description ?? action.txId}”.`;
+      entityType = "transaction";
+      entityId = action.txId;
+      undo = undoSnapshot(before, ["invoices", "transactions", "suppressedProjectionSources"]);
+      break;
+    }
+    case "setTransactionNote": {
+      const transaction = before.transactions.find((item) => item.id === action.txId);
+      description = `${actor.name} alterou a descrição da compra “${transaction?.description ?? action.txId}”.`;
+      entityType = "transaction";
+      entityId = action.txId;
+      undo = undoSnapshot(before, ["transactions"]);
+      break;
+    }
+    case "setTxType": {
+      description = `${actor.name} alterou o tipo de um lançamento.`;
+      entityType = "transaction";
+      entityId = action.txId;
+      undo = undoSnapshot(before, ["invoices", "transactions", "suppressedProjectionSources"]);
+      break;
+    }
+    case "allocate":
+    case "split":
+    case "unassign":
+      description = `${actor.name} alterou a atribuição de responsáveis em lançamentos.`;
+      entityType = "transaction";
+      undo = undoSnapshot(before, ["transactions"]);
+      break;
     case "importInvoice":
       description = `${actor.name} importou a fatura de ${invoiceLabel(before, action.invoice)}.`;
       entityType = "invoice";
       entityId = action.invoice.id;
+      undo = undoSnapshot(before, ["invoices", "transactions", "plans", "recurringCharges"]);
       break;
     case "upsertPerson":
       description = `${actor.name} ${before.people.some((person) => person.id === action.person.id) ? "alterou" : "inseriu"} a pessoa “${action.person.name}”.`;
       entityType = "person";
       entityId = action.person.id;
+      undo = undoSnapshot(before, ["people"]);
       break;
     case "deletePerson": {
       const person = before.people.find((item) => item.id === action.personId);
       description = `${actor.name} excluiu a pessoa “${person?.name ?? action.personId}”.`;
       entityType = "person";
       entityId = action.personId;
+      undo = undoSnapshot(before, ["people", "transactions", "plans", "recurringCharges"]);
       break;
     }
     case "upsertCard":
       description = `${actor.name} ${before.cards.some((card) => card.id === action.card.id) ? "alterou" : "inseriu"} o cartão “${action.card.name} •••• ${action.card.last4}”.`;
       entityType = "card";
       entityId = action.card.id;
+      undo = undoSnapshot(before, ["cards"]);
+      break;
+    case "upsertPlan":
+      description = `${actor.name} ${before.plans.some((plan) => plan.id === action.plan.id) ? "alterou" : "inseriu"} o parcelamento “${action.plan.description}”.`;
+      entityType = "plan";
+      entityId = action.plan.id;
+      undo = undoSnapshot(before, [
+        "plans",
+        "invoices",
+        "transactions",
+        "suppressedProjectionSources",
+      ]);
+      break;
+    case "deletePlan":
+      description = `${actor.name} excluiu um parcelamento.`;
+      entityType = "plan";
+      entityId = action.planId;
+      undo = undoSnapshot(before, [
+        "plans",
+        "invoices",
+        "transactions",
+        "suppressedProjectionSources",
+      ]);
+      break;
+    case "upsertRecurringCharge":
+      description = `${actor.name} alterou uma cobrança recorrente.`;
+      entityType = "plan";
+      entityId = action.charge.id;
+      undo = undoSnapshot(before, ["recurringCharges", "invoices", "transactions"]);
+      break;
+    case "cancelRecurringCharge":
+      description = `${actor.name} cancelou uma cobrança recorrente a partir de ${fmtMonthLong(action.cancelledFromMonth)}.`;
+      entityType = "plan";
+      entityId = action.chargeId;
+      undo = undoSnapshot(before, ["recurringCharges", "invoices", "transactions"]);
       break;
     case "updateSettings":
       description = `${actor.name} alterou as configurações da aplicação.`;
       entityType = "settings";
+      undo = undoSnapshot(before, ["settings"]);
       break;
     case "setInvoicePayments":
       description = `${actor.name} atualizou os pagamentos por pessoa da fatura.`;
       entityType = "invoice";
       entityId = action.invoiceId;
+      undo = undoSnapshot(before, ["invoices"]);
       break;
     case "recordPersonPayment":
       description = `${actor.name} registrou um pagamento de pessoa.`;
       entityType = "system";
+      undo = undoSnapshot(before, ["payments"]);
+      break;
+    case "removePersonPayment":
+      description = `${actor.name} removeu um pagamento de pessoa.`;
+      entityType = "system";
+      entityId = action.paymentId;
+      undo = undoSnapshot(before, ["payments"]);
+      break;
+    case "setInvoiceStatus":
+      description = `${actor.name} alterou o status de uma fatura.`;
+      entityType = "invoice";
+      entityId = action.invoiceId;
+      undo = undoSnapshot(before, ["invoices"]);
+      break;
+    case "addSpreadsheet":
+      description = `${actor.name} adicionou a planilha “${action.spreadsheet.fileName}”.`;
+      entityType = "system";
+      entityId = action.spreadsheet.id;
+      undo = undoSnapshot(before, ["spreadsheets"]);
+      break;
+    case "removeSpreadsheet":
+      description = `${actor.name} removeu uma planilha.`;
+      entityType = "system";
+      entityId = action.spreadsheetId;
+      undo = undoSnapshot(before, ["spreadsheets"]);
       break;
     case "reset":
       description = `${actor.name} redefiniu os dados de demonstração.`;
@@ -1233,10 +1343,24 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
     case "undoAudit": {
       const entry = s.auditLog?.find((item) => item.id === a.auditId);
       if (!entry?.undo || entry.undoneAt) return s;
+      const hasSnapshot = (field: keyof NonNullable<AuditEntry["undo"]>) =>
+        Object.prototype.hasOwnProperty.call(entry.undo, field);
       return {
         ...s,
-        invoices: entry.undo.invoices,
-        transactions: entry.undo.transactions,
+        ...(hasSnapshot("invoices") ? { invoices: entry.undo.invoices } : {}),
+        ...(hasSnapshot("transactions") ? { transactions: entry.undo.transactions } : {}),
+        ...(hasSnapshot("people") ? { people: entry.undo.people } : {}),
+        ...(hasSnapshot("cards") ? { cards: entry.undo.cards } : {}),
+        ...(hasSnapshot("plans") ? { plans: entry.undo.plans } : {}),
+        ...(hasSnapshot("recurringCharges")
+          ? { recurringCharges: entry.undo.recurringCharges }
+          : {}),
+        ...(hasSnapshot("settings") ? { settings: entry.undo.settings } : {}),
+        ...(hasSnapshot("payments") ? { payments: entry.undo.payments } : {}),
+        ...(hasSnapshot("spreadsheets") ? { spreadsheets: entry.undo.spreadsheets } : {}),
+        ...(hasSnapshot("suppressedProjectionSources")
+          ? { suppressedProjectionSources: entry.undo.suppressedProjectionSources }
+          : {}),
         auditLog: s.auditLog?.map((item) =>
           item.id === a.auditId ? { ...item, undoneAt: new Date().toISOString() } : item,
         ),

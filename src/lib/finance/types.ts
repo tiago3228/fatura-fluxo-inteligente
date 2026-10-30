@@ -65,8 +65,17 @@ export interface AuditEntry {
   entityId?: string;
   undo?: {
     kind: "restoreFinance";
-    invoices: Invoice[];
-    transactions: Transaction[];
+    /** Campos antigos permanecem opcionais para compatibilidade com auditorias já salvas. */
+    invoices?: Invoice[];
+    transactions?: Transaction[];
+    people?: Person[];
+    cards?: CreditCard[];
+    plans?: InstallmentPlan[];
+    recurringCharges?: RecurringCharge[];
+    settings?: Settings;
+    payments?: PersonPayment[];
+    spreadsheets?: SpreadsheetArchive[];
+    suppressedProjectionSources?: string[];
   };
   undoneAt?: string;
 }
