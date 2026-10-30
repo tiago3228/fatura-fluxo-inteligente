@@ -33,6 +33,7 @@ import {
 import { cn } from "@/lib/utils";
 
 type Step = "select" | "processing" | "review";
+type ReviewFilter = "all" | "attention" | "new" | "existing";
 const STAGES = ["Arquivo selecionado", "Leitura local", "Conferência", "Conclusão"];
 type Row = ExtractedPdfRow & { amountStr: string };
 const COMPARISON_LABELS: Record<PdfComparisonStatus, string> = {
@@ -62,6 +63,7 @@ export function PdfImportDialog({
   const [rows, setRows] = useState<Row[]>([]);
   const [official, setOfficial] = useState("");
   const [dueDate, setDueDate] = useState("");
+  const [reviewFilter, setReviewFilter] = useState<ReviewFilter>("all");
   const [cardId, setCardId] = useState(state.cards[0]?.id ?? "");
   const input = useRef<HTMLInputElement>(null);
   const close = () => {
@@ -75,6 +77,7 @@ export function PdfImportDialog({
       setRows([]);
       setOfficial("");
       setDueDate("");
+      setReviewFilter("all");
     }, 200);
   };
   const pick = (next?: File | null) => {
@@ -139,6 +142,19 @@ export function PdfImportDialog({
   const comparisonStatus = new Map(comparison.rows.map((row) => [row.rowId, row.status]));
   const comparisonCount = (status: PdfComparisonStatus) =>
     comparison.rows.filter((row) => row.status === status).length;
+  const visibleRows = parsed.filter((row) => {
+    const status = comparisonStatus.get(row.id);
+    if (reviewFilter === "attention")
+      return status === "possible_duplicate" || status === "unexpected_installment";
+    if (reviewFilter === "new") return status === "new_purchase";
+    if (reviewFilter === "existing")
+      return (
+        status === "already_imported" ||
+        status === "expected_installment" ||
+        status === "expected_recurring"
+      );
+    return true;
+  });
   const confirm = () => {
     if (!card || !officialValue || invalid.length || multiCardStatement) return;
     const invoiceId = uid("invoice");
@@ -353,6 +369,32 @@ export function PdfImportDialog({
               {comparisonCount("unexpected_installment")} parcela(s) sem previsão. Duplicidades são
               apenas sinalizadas, nunca removidas automaticamente.
             </p>
+            <div className="grid gap-2 sm:grid-cols-3">
+              <div className="rounded-lg bg-muted/50 p-3">
+                <p className="text-xs text-muted-foreground">Linhas reconhecidas</p>
+                <p className="mt-1 text-lg font-bold">{parsed.length}</p>
+              </div>
+              <div className="rounded-lg bg-muted/50 p-3">
+                <p className="text-xs text-muted-foreground">Soma reconhecida</p>
+                <p className="num mt-1 text-lg font-bold">{fmtBRL(sum)}</p>
+              </div>
+              <div
+                className={cn(
+                  "rounded-lg p-3",
+                  diff === null || diff === 0 ? "bg-success-soft" : "bg-danger-soft",
+                )}
+              >
+                <p className="text-xs text-muted-foreground">Diferença para o oficial</p>
+                <p
+                  className={cn(
+                    "num mt-1 text-lg font-bold",
+                    diff !== null && diff !== 0 ? "text-danger" : "text-success",
+                  )}
+                >
+                  {diff === null ? "Não informado" : fmtBRL(diff)}
+                </p>
+              </div>
+            </div>
             {comparison.missingInstallments.length > 0 && (
               <p className="rounded-lg bg-warning-soft p-3 text-sm text-warning">
                 Parcelas previstas não encontradas:{" "}
@@ -362,6 +404,41 @@ export function PdfImportDialog({
                 .
               </p>
             )}
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <label className="text-sm">
+                Mostrar linhas
+                <Select
+                  value={reviewFilter}
+                  onValueChange={(value) => setReviewFilter(value as ReviewFilter)}
+                >
+                  <SelectTrigger className="mt-1 w-56">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas ({parsed.length})</SelectItem>
+                    <SelectItem value="attention">
+                      Conferir (
+                      {comparisonCount("possible_duplicate") +
+                        comparisonCount("unexpected_installment")}
+                      )
+                    </SelectItem>
+                    <SelectItem value="new">
+                      Compras novas ({comparisonCount("new_purchase")})
+                    </SelectItem>
+                    <SelectItem value="existing">
+                      Já reconhecidas (
+                      {comparisonCount("already_imported") +
+                        comparisonCount("expected_installment") +
+                        comparisonCount("expected_recurring")}
+                      )
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </label>
+              <p className="text-xs text-muted-foreground">
+                Exibindo {visibleRows.length} de {parsed.length} lançamento(s)
+              </p>
+            </div>
             <div className="overflow-x-auto rounded-lg border">
               <table className="w-full min-w-[760px] text-sm">
                 <thead className="bg-muted/60 text-left text-xs uppercase text-muted-foreground">
@@ -374,7 +451,7 @@ export function PdfImportDialog({
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {parsed.map((r) => (
+                  {visibleRows.map((r) => (
                     <tr
                       key={r.id}
                       className={cn(
@@ -434,6 +511,16 @@ export function PdfImportDialog({
                       </td>
                     </tr>
                   ))}
+                  {visibleRows.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={5}
+                        className="px-3 py-8 text-center text-sm text-muted-foreground"
+                      >
+                        Nenhum lançamento corresponde a este filtro.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
