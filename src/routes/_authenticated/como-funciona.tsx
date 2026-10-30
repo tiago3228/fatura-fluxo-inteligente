@@ -122,7 +122,7 @@ function ComoFunciona() {
             <Link to="/faturas" className="font-semibold text-primary hover:underline">
               Faturas
             </Link>{" "}
-            e clique em <b>Importar fatura PDF</b>.
+            e escolha <b>Importar fatura PDF</b> ou <b>Importar planilha Excel</b>.
           </p>
           <ol className="list-inside list-decimal space-y-1">
             <li>Selecione o PDF no computador ou celular.</li>
@@ -132,6 +132,11 @@ function ComoFunciona() {
           <p>
             O PDF é lido localmente no navegador, sem processamento por IA. PDFs escaneados ou com
             layout não reconhecido podem precisar de conferência manual.
+          </p>
+          <p>
+            Na importação Excel/CSV, associe a coluna <b>Categoria</b> quando ela existir. Os nomes
+            reconhecidos são aplicados automaticamente; valores desconhecidos ficam sinalizados para
+            revisão como <b>Sem categoria</b>.
           </p>
         </Tutorial>
 
