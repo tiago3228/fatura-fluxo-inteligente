@@ -17,6 +17,7 @@ import { Route as AuthenticatedCalculadoraRouteImport } from './routes/_authenti
 import { Route as AuthenticatedComoFuncionaRouteImport } from './routes/_authenticated/como-funciona'
 import { Route as AuthenticatedComprasRouteImport } from './routes/_authenticated/compras'
 import { Route as AuthenticatedConfiguracoesRouteImport } from './routes/_authenticated/configuracoes'
+import { Route as AuthenticatedEnviarContaRouteImport } from './routes/_authenticated/enviar-conta'
 import { Route as AuthenticatedParcelamentosRouteImport } from './routes/_authenticated/parcelamentos'
 import { Route as AuthenticatedPlanilhasRouteImport } from './routes/_authenticated/planilhas'
 import { Route as AuthenticatedRelatoriosRouteImport } from './routes/_authenticated/relatorios'
@@ -67,6 +68,12 @@ const AuthenticatedConfiguracoesRoute =
   AuthenticatedConfiguracoesRouteImport.update({
     id: '/configuracoes',
     path: '/configuracoes',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedEnviarContaRoute =
+  AuthenticatedEnviarContaRouteImport.update({
+    id: '/enviar-conta',
+    path: '/enviar-conta',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedParcelamentosRoute =
@@ -127,6 +134,7 @@ export interface FileRoutesByFullPath {
   '/como-funciona': typeof AuthenticatedComoFuncionaRoute
   '/compras': typeof AuthenticatedComprasRoute
   '/configuracoes': typeof AuthenticatedConfiguracoesRoute
+  '/enviar-conta': typeof AuthenticatedEnviarContaRoute
   '/parcelamentos': typeof AuthenticatedParcelamentosRoute
   '/planilhas': typeof AuthenticatedPlanilhasRoute
   '/relatorios': typeof AuthenticatedRelatoriosRoute
@@ -144,6 +152,7 @@ export interface FileRoutesByTo {
   '/como-funciona': typeof AuthenticatedComoFuncionaRoute
   '/compras': typeof AuthenticatedComprasRoute
   '/configuracoes': typeof AuthenticatedConfiguracoesRoute
+  '/enviar-conta': typeof AuthenticatedEnviarContaRoute
   '/parcelamentos': typeof AuthenticatedParcelamentosRoute
   '/planilhas': typeof AuthenticatedPlanilhasRoute
   '/relatorios': typeof AuthenticatedRelatoriosRoute
@@ -164,6 +173,7 @@ export interface FileRoutesById {
   '/_authenticated/como-funciona': typeof AuthenticatedComoFuncionaRoute
   '/_authenticated/compras': typeof AuthenticatedComprasRoute
   '/_authenticated/configuracoes': typeof AuthenticatedConfiguracoesRoute
+  '/_authenticated/enviar-conta': typeof AuthenticatedEnviarContaRoute
   '/_authenticated/parcelamentos': typeof AuthenticatedParcelamentosRoute
   '/_authenticated/planilhas': typeof AuthenticatedPlanilhasRoute
   '/_authenticated/relatorios': typeof AuthenticatedRelatoriosRoute
@@ -185,6 +195,7 @@ export interface FileRouteTypes {
     | '/como-funciona'
     | '/compras'
     | '/configuracoes'
+    | '/enviar-conta'
     | '/parcelamentos'
     | '/planilhas'
     | '/relatorios'
@@ -202,6 +213,7 @@ export interface FileRouteTypes {
     | '/como-funciona'
     | '/compras'
     | '/configuracoes'
+    | '/enviar-conta'
     | '/parcelamentos'
     | '/planilhas'
     | '/relatorios'
@@ -221,6 +233,7 @@ export interface FileRouteTypes {
     | '/_authenticated/como-funciona'
     | '/_authenticated/compras'
     | '/_authenticated/configuracoes'
+    | '/_authenticated/enviar-conta'
     | '/_authenticated/parcelamentos'
     | '/_authenticated/planilhas'
     | '/_authenticated/relatorios'
@@ -297,6 +310,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedConfiguracoesRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/enviar-conta': {
+      id: '/_authenticated/enviar-conta'
+      path: '/enviar-conta'
+      fullPath: '/enviar-conta'
+      preLoaderRoute: typeof AuthenticatedEnviarContaRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/parcelamentos': {
       id: '/_authenticated/parcelamentos'
       path: '/parcelamentos'
@@ -368,6 +388,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedComoFuncionaRoute: typeof AuthenticatedComoFuncionaRoute
   AuthenticatedComprasRoute: typeof AuthenticatedComprasRoute
   AuthenticatedConfiguracoesRoute: typeof AuthenticatedConfiguracoesRoute
+  AuthenticatedEnviarContaRoute: typeof AuthenticatedEnviarContaRoute
   AuthenticatedParcelamentosRoute: typeof AuthenticatedParcelamentosRoute
   AuthenticatedPlanilhasRoute: typeof AuthenticatedPlanilhasRoute
   AuthenticatedRelatoriosRoute: typeof AuthenticatedRelatoriosRoute
@@ -385,6 +406,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedComoFuncionaRoute: AuthenticatedComoFuncionaRoute,
   AuthenticatedComprasRoute: AuthenticatedComprasRoute,
   AuthenticatedConfiguracoesRoute: AuthenticatedConfiguracoesRoute,
+  AuthenticatedEnviarContaRoute: AuthenticatedEnviarContaRoute,
   AuthenticatedParcelamentosRoute: AuthenticatedParcelamentosRoute,
   AuthenticatedPlanilhasRoute: AuthenticatedPlanilhasRoute,
   AuthenticatedRelatoriosRoute: AuthenticatedRelatoriosRoute,

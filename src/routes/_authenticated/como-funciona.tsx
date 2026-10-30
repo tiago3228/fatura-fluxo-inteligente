@@ -13,6 +13,7 @@ import {
   HelpCircle,
   LayoutDashboard,
   LockKeyhole,
+  MessageCircle,
   Menu,
   PieChart,
   Repeat,
@@ -336,6 +337,24 @@ function ComoFunciona() {
           <p>
             O cabeçalho também oferece os comandos globais <Undo2 className="inline size-4" />{" "}
             <b>Desfazer</b> e <b>Refazer</b> para a última ação reversível.
+          </p>
+        </Tutorial>
+
+        <Tutorial
+          icon={<MessageCircle className="size-5" />}
+          title="Como enviar a conta pelo WhatsApp"
+        >
+          <p>
+            Abra <b>Enviar conta</b> no menu, escolha o mês e expanda a pessoa desejada para revisar
+            todas as compras vinculadas e o total.
+          </p>
+          <p>
+            Use <b>JPEG</b> para salvar a imagem ou <b>WhatsApp</b> para compartilhar diretamente no
+            celular. Em computadores, a imagem é baixada e o WhatsApp é aberto para você anexá-la.
+          </p>
+          <p>
+            O <b>Valor a pagar</b> já desconta pagamentos parciais registrados para aquela pessoa e
+            competência.
           </p>
         </Tutorial>
       </div>
