@@ -356,6 +356,11 @@ function ComoFunciona() {
             O <b>Valor a pagar</b> já desconta pagamentos parciais registrados para aquela pessoa e
             competência.
           </p>
+          <Button asChild size="sm" className="mt-1">
+            <Link to="/enviar-conta">
+              Abrir Enviar conta <ArrowRight className="size-4" />
+            </Link>
+          </Button>
         </Tutorial>
       </div>
 
