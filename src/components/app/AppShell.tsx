@@ -170,6 +170,8 @@ function CeuFinancasMenuItem() {
 
 function Notifications() {
   const alerts = useAlerts();
+  const criticalCount = alerts.filter((alert) => alert.tone === "danger").length;
+  const attentionCount = alerts.filter((alert) => alert.tone === "warning").length;
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -187,14 +189,45 @@ function Notifications() {
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-80 p-0">
-        <p className="border-b px-4 py-2.5 text-sm font-bold">Alertas do mês</p>
-        <div className="max-h-80 divide-y overflow-y-auto">
+      <PopoverContent align="end" className="w-[min(22rem,calc(100vw-2rem))] p-0">
+        <div className="border-b px-4 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm font-bold">Central de notificações</p>
+            <span className="text-xs text-muted-foreground">
+              {alerts.length} {alerts.length === 1 ? "item" : "itens"}
+            </span>
+          </div>
+          {alerts.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-medium">
+              {criticalCount > 0 && (
+                <span className="rounded-full bg-danger-soft px-2 py-1 text-danger">
+                  {criticalCount} crítico(s)
+                </span>
+              )}
+              {attentionCount > 0 && (
+                <span className="rounded-full bg-warning-soft px-2 py-1 text-warning">
+                  {attentionCount} atenção
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+        <div className="max-h-[min(24rem,60vh)] divide-y overflow-y-auto">
           {alerts.length === 0 && (
-            <p className="px-4 py-6 text-center text-sm text-muted-foreground">Tudo em ordem.</p>
+            <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
+              <CheckCircle2 className="size-6 text-success" />
+              <p className="text-sm font-medium">Tudo em ordem</p>
+              <p className="text-xs text-muted-foreground">
+                Nenhuma pendência identificada para este mês.
+              </p>
+            </div>
           )}
           {alerts.map((a) => (
-            <Link key={a.id} to={a.to} className="flex gap-2 px-4 py-2.5 text-sm hover:bg-muted">
+            <Link
+              key={a.id}
+              to={a.to}
+              className="flex gap-3 px-4 py-3 text-sm transition-colors hover:bg-muted"
+            >
               <span
                 className={cn(
                   "mt-1.5 size-2 shrink-0 rounded-full",
@@ -205,7 +238,7 @@ function Notifications() {
                       : "bg-info",
                 )}
               />
-              {a.text}
+              <span className="leading-relaxed">{a.text}</span>
             </Link>
           ))}
         </div>
