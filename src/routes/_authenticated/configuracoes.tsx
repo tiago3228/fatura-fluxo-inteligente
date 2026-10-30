@@ -72,12 +72,45 @@ function Row({
 
 function AuditPanel() {
   const { state, dispatch } = useFinance();
+  const [actorFilter, setActorFilter] = useState("todos");
   const entries = state.auditLog ?? [];
+  const actors = [
+    ...new Map(entries.map((entry) => [entry.actorId, entry.actorName])).entries(),
+  ].sort((a, b) => a[1].localeCompare(b[1], "pt-BR"));
+  const filteredEntries =
+    actorFilter === "todos" ? entries : entries.filter((entry) => entry.actorId === actorFilter);
   return (
     <Panel
       title="Histórico de atividades"
       description="Alterações feitas pelas contas autorizadas no workspace compartilhado."
     >
+      {entries.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 border-b px-4 py-3">
+          <label htmlFor="audit-actor" className="text-sm font-medium">
+            Filtrar por usuário
+          </label>
+          <Select value={actorFilter} onValueChange={setActorFilter}>
+            <SelectTrigger
+              id="audit-actor"
+              className="w-52"
+              aria-label="Filtrar auditoria por usuário"
+            >
+              <SelectValue placeholder="Todos os usuários" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos os usuários</SelectItem>
+              {actors.map(([id, name]) => (
+                <SelectItem key={id} value={id}>
+                  {name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <span className="text-xs text-muted-foreground">
+            {filteredEntries.length} {filteredEntries.length === 1 ? "registro" : "registros"}
+          </span>
+        </div>
+      )}
       {entries.length === 0 ? (
         <div className="flex flex-col items-center gap-2 px-6 py-12 text-center">
           <History className="size-8 text-muted-foreground" />
@@ -86,9 +119,13 @@ function AuditPanel() {
             As próximas alterações feitas por você ou sua irmã aparecerão aqui.
           </p>
         </div>
+      ) : filteredEntries.length === 0 ? (
+        <div className="px-6 py-10 text-center text-sm text-muted-foreground">
+          Nenhuma atividade encontrada para este usuário.
+        </div>
       ) : (
         <div className="divide-y">
-          {entries.map((entry) => (
+          {filteredEntries.map((entry) => (
             <ContextMenu key={entry.id}>
               <ContextMenuTrigger asChild>
                 <div className="flex items-start gap-3 px-4 py-3 hover:bg-muted/40">
