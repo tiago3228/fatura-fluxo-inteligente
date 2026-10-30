@@ -4,6 +4,8 @@ export type TxType =
 export interface Person {
   id: string;
   name: string;
+  address?: string | undefined;
+  whatsapp?: string | undefined;
   limit: number;
   notes?: string | undefined;
   active: boolean;

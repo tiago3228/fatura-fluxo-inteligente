@@ -4,7 +4,13 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 import { useFinance } from "@/lib/finance/store";
 import { parseBRL, uid } from "@/lib/finance/format";
 import type { Person } from "@/lib/finance/types";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,9 +18,19 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field } from "./common";
 
-export function PersonDialog({ person, onClose, onSaved }: { person?: Person; onClose: () => void; onSaved?: (person: Person) => void }) {
+export function PersonDialog({
+  person,
+  onClose,
+  onSaved,
+}: {
+  person?: Person;
+  onClose: () => void;
+  onSaved?: (person: Person) => void;
+}) {
   const { state, dispatch } = useFinance();
   const [name, setName] = useState(person?.name ?? "");
+  const [address, setAddress] = useState(person?.address ?? "");
+  const [whatsapp, setWhatsapp] = useState(person?.whatsapp ?? "");
   const [limit, setLimit] = useState(person ? person.limit.toFixed(2).replace(".", ",") : "");
   const [notes, setNotes] = useState(person?.notes ?? "");
   const [active, setActive] = useState(person?.active ?? true);
@@ -32,7 +48,16 @@ export function PersonDialog({ person, onClose, onSaved }: { person?: Person; on
   const save = () => {
     setTouched(true);
     if (!valid) return;
-    const savedPerson: Person = { id: person?.id ?? uid("p"), name: name.trim(), limit: lim!, notes: notes.trim() || undefined, active, cardIds };
+    const savedPerson: Person = {
+      id: person?.id ?? uid("p"),
+      name: name.trim(),
+      address: address.trim() || undefined,
+      whatsapp: whatsapp.trim() || undefined,
+      limit: lim!,
+      notes: notes.trim() || undefined,
+      active,
+      cardIds,
+    };
     dispatch({ type: "upsertPerson", person: savedPerson });
     toast.success(person ? "Pessoa atualizada" : "Pessoa adicionada", { description: name.trim() });
     onSaved?.(savedPerson);
@@ -42,13 +67,56 @@ export function PersonDialog({ person, onClose, onSaved }: { person?: Person; on
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[92vh] overflow-y-scroll sm:max-w-md">
-        <DialogHeader><DialogTitle>{person ? "Editar pessoa" : "Adicionar pessoa"}</DialogTitle></DialogHeader>
-        <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); save(); }}>
-          <Field label="Nome completo" htmlFor="p-name" required error={touched ? errors.name : undefined}>
+        <DialogHeader>
+          <DialogTitle>{person ? "Editar pessoa" : "Adicionar pessoa"}</DialogTitle>
+        </DialogHeader>
+        <form
+          className="space-y-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            save();
+          }}
+        >
+          <Field
+            label="Nome completo"
+            htmlFor="p-name"
+            required
+            error={touched ? errors.name : undefined}
+          >
             <Input id="p-name" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
           </Field>
-          <Field label="Limite mensal de gastos (R$)" htmlFor="p-limit" required error={touched ? errors.limit : undefined}>
-            <Input id="p-limit" inputMode="decimal" placeholder="1.500,00" value={limit} onChange={(e) => setLimit(e.target.value)} className="num" />
+          <Field label="WhatsApp" htmlFor="p-whatsapp" hint="Com DDD. Ex.: (11) 99999-9999">
+            <Input
+              id="p-whatsapp"
+              type="tel"
+              inputMode="tel"
+              placeholder="(11) 99999-9999"
+              value={whatsapp}
+              onChange={(e) => setWhatsapp(e.target.value)}
+            />
+          </Field>
+          <Field label="Endereço" htmlFor="p-address">
+            <Input
+              id="p-address"
+              placeholder="Rua, número, bairro e cidade"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+            />
+          </Field>
+          <Field
+            label="Limite mensal de gastos (R$)"
+            htmlFor="p-limit"
+            required
+            error={touched ? errors.limit : undefined}
+          >
+            <Input
+              id="p-limit"
+              inputMode="decimal"
+              placeholder="1.500,00"
+              value={limit}
+              onChange={(e) => setLimit(e.target.value)}
+              className="num"
+            />
           </Field>
           <Field label="Cartões que utiliza">
             <div className="rounded-lg border">
@@ -60,15 +128,26 @@ export function PersonDialog({ person, onClose, onSaved }: { person?: Person; on
                 aria-controls="person-card-list"
               >
                 <span className="text-muted-foreground">
-                  {cardIds.length === 0 ? "Nenhum cartão selecionado" : `${cardIds.length} cartão(ões) selecionado(s)`}
+                  {cardIds.length === 0
+                    ? "Nenhum cartão selecionado"
+                    : `${cardIds.length} cartão(ões) selecionado(s)`}
                 </span>
-                {showCards ? <ChevronUp className="size-4 text-muted-foreground" /> : <ChevronDown className="size-4 text-muted-foreground" />}
+                {showCards ? (
+                  <ChevronUp className="size-4 text-muted-foreground" />
+                ) : (
+                  <ChevronDown className="size-4 text-muted-foreground" />
+                )}
               </button>
               {showCards && (
                 <div id="person-card-list" className="space-y-2 border-t p-3">
                   {state.cards.map((c) => (
                     <label key={c.id} className="flex items-center gap-2 text-sm">
-                      <Checkbox checked={cardIds.includes(c.id)} onCheckedChange={(v) => setCardIds((ids) => (v ? [...ids, c.id] : ids.filter((x) => x !== c.id)))} />
+                      <Checkbox
+                        checked={cardIds.includes(c.id)}
+                        onCheckedChange={(v) =>
+                          setCardIds((ids) => (v ? [...ids, c.id] : ids.filter((x) => x !== c.id)))
+                        }
+                      />
                       {c.name} <span className="num text-muted-foreground">•••• {c.last4}</span>
                     </label>
                   ))}
@@ -77,14 +156,26 @@ export function PersonDialog({ person, onClose, onSaved }: { person?: Person; on
             </div>
           </Field>
           <Field label="Observações" htmlFor="p-notes">
-            <Textarea id="p-notes" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
+            <Textarea
+              id="p-notes"
+              rows={2}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+            />
           </Field>
           <label className="flex items-center justify-between rounded-lg border p-3 text-sm">
-            <span><b>Ativa</b><span className="block text-xs text-muted-foreground">Pessoas inativas não aparecem para novas atribuições</span></span>
+            <span>
+              <b>Ativa</b>
+              <span className="block text-xs text-muted-foreground">
+                Pessoas inativas não aparecem para novas atribuições
+              </span>
+            </span>
             <Switch checked={active} onCheckedChange={setActive} />
           </label>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancelar
+            </Button>
             <Button type="submit">Salvar</Button>
           </DialogFooter>
         </form>

@@ -25,7 +25,9 @@ export async function createPersonAccountJpeg({
 }): Promise<Blob> {
   const width = 1200;
   const rowHeight = 48;
-  const height = Math.min(18000, 270 + rows.length * rowHeight);
+  // Reserve espaço para o cabeçalho, a tabela e o resumo final. Sem essa margem,
+  // o limite de segurança abaixo impedia as linhas de aparecerem em imagens curtas.
+  const height = Math.min(18000, 390 + rows.length * rowHeight);
   const scale = 2;
   const canvas = document.createElement("canvas");
   canvas.width = width * scale;
