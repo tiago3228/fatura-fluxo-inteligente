@@ -9,6 +9,7 @@ import {
   FileDown,
   FileUp,
   Filter,
+  History,
   HelpCircle,
   LayoutDashboard,
   LockKeyhole,
@@ -18,6 +19,8 @@ import {
   RefreshCw,
   Smartphone,
   Split,
+  Tag,
+  Undo2,
   Users,
 } from "lucide-react";
 import { PageHeader, Panel } from "@/components/app/common";
@@ -189,8 +192,8 @@ function ComoFunciona() {
 
         <Tutorial icon={<Filter className="size-5" />} title="5. Como encontrar o que falta">
           <p>
-            Na tela Compras, combine os filtros de período, pessoa, cartão, final do cartão, status
-            e tipo.
+            Na tela Compras, combine os filtros de período, pessoa, cartão, final do cartão, status,
+            tipo e categoria.
           </p>
           <p>
             Escolha <b>Pendentes de direcionamento</b> para ver somente compras que ainda não têm
@@ -199,6 +202,20 @@ function ComoFunciona() {
           <p>
             O filtro <b>Final do cartão</b> permite localizar rapidamente compras do 0548, 7432,
             4494 ou qualquer outro cartão cadastrado.
+          </p>
+        </Tutorial>
+
+        <Tutorial icon={<Tag className="size-5" />} title="Como categorizar compras">
+          <p>
+            Ao criar ou editar uma compra, escolha uma categoria como Alimentação, Casa, Saúde,
+            Transporte ou Serviços e assinaturas.
+          </p>
+          <p>
+            A categoria aparece na lista de compras, pode ser usada como filtro e alimenta o painel
+            <b> Gastos por categoria</b> na Visão geral.
+          </p>
+          <p>
+            Compras antigas continuam válidas e ficam como <b>Sem categoria</b> até serem revisadas.
           </p>
         </Tutorial>
 
@@ -281,6 +298,35 @@ function ComoFunciona() {
           <p>
             Informe valor, número de parcelas, juros e pessoa. A simulação não altera a fatura nem
             cria uma compra automaticamente.
+          </p>
+        </Tutorial>
+
+        <Tutorial icon={<CheckCircle2 className="size-5" />} title="Como registrar pagamentos">
+          <p>
+            Em{" "}
+            <Link to="/pessoas" className="font-semibold text-primary hover:underline">
+              Pessoas
+            </Link>{" "}
+            abra o menu de ações da pessoa e escolha <b>Registrar pagamento parcial</b>.
+          </p>
+          <p>
+            O diálogo mostra o saldo restante e impede registrar um valor maior que o devido. Para
+            quitar tudo de uma vez, use <b>Marcar parcela do mês como paga</b>.
+          </p>
+        </Tutorial>
+
+        <Tutorial icon={<History className="size-5" />} title="Como conferir e desfazer ações">
+          <p>
+            Em <b>Configurações → Auditoria</b>, confira as ações feitas por cada usuário, como
+            importações, alterações de pessoas, compras e pagamentos.
+          </p>
+          <p>
+            Para reverter um registro, use o botão direito sobre a ação ou o comando <b>Desfazer</b>
+            . Quando disponível, <b>Refazer</b> reaplica a última alteração desfeita.
+          </p>
+          <p>
+            O cabeçalho também oferece os comandos globais <Undo2 className="inline size-4" />{" "}
+            <b>Desfazer</b> e <b>Refazer</b> para a última ação reversível.
           </p>
         </Tutorial>
       </div>
