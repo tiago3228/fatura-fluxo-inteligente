@@ -62,6 +62,7 @@ export type Action =
         installmentTotal: number | null;
       };
     }
+  | { type: "setTransactionCategory"; txIds: string[]; category?: string }
   | { type: "setTransactionNote"; txId: string; note: string }
   | { type: "deleteTransaction"; txId: string }
   | { type: "addTransaction"; transaction: Transaction }
@@ -811,6 +812,16 @@ const auditForAction = (
       undo = undoSnapshot(before, ["invoices", "transactions", "suppressedProjectionSources"]);
       break;
     }
+    case "setTransactionCategory": {
+      const count = action.txIds.filter((id) =>
+        before.transactions.some((item) => item.id === id),
+      ).length;
+      description = `${actor.name} categorizou ${count} compra(s)${action.category ? ` como “${action.category}”` : " sem categoria"}.`;
+      entityType = "transaction";
+      entityId = action.txIds[0];
+      undo = undoSnapshot(before, ["transactions"]);
+      break;
+    }
     case "setTransactionNote": {
       const transaction = before.transactions.find((item) => item.id === action.txId);
       description = `${actor.name} alterou a descrição da compra “${transaction?.description ?? action.txId}”.`;
@@ -1050,6 +1061,7 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
         const updated: Transaction = {
           ...t,
           description: a.patch.description,
+          category: a.patch.category,
           date: a.patch.date,
           amount: a.patch.amount,
         };
@@ -1358,6 +1370,15 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
       }
       return paid;
     }
+    case "setTransactionCategory":
+      return {
+        ...s,
+        transactions: s.transactions.map((transaction) =>
+          a.txIds.includes(transaction.id)
+            ? { ...transaction, category: a.category || undefined }
+            : transaction,
+        ),
+      };
     case "appendAudit":
       return {
         ...s,

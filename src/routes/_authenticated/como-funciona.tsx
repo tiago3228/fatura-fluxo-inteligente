@@ -222,6 +222,10 @@ function ComoFunciona() {
           <p>
             Compras antigas continuam válidas e ficam como <b>Sem categoria</b> até serem revisadas.
           </p>
+          <p>
+            Para classificar várias de uma vez, selecione as compras na tela Compras e use{" "}
+            <b>Aplicar categoria</b> na barra de ações.
+          </p>
         </Tutorial>
 
         <Tutorial icon={<PieChart className="size-5" />} title="6. Como conferir os totais">

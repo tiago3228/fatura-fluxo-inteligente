@@ -21,6 +21,13 @@ import { TransactionTable } from "@/components/app/TransactionTable";
 import { useTxActions } from "@/components/app/tx-actions";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { FilterSelect, ALL } from "@/components/app/FilterSelect";
 import { PURCHASE_CATEGORIES } from "@/lib/finance/categories";
 
@@ -415,6 +422,28 @@ function Compras() {
                 <Scissors className="size-4" /> Dividir compra
               </Button>
             )}
+            <Select
+              onValueChange={(value) => {
+                const category = value === "__none" ? undefined : value;
+                dispatch({ type: "setTransactionCategory", txIds: selValid, category });
+                toast.success(`${selValid.length} compra(s) categorizada(s)`, {
+                  description: category ?? "As compras ficaram sem categoria.",
+                });
+                setSelected([]);
+              }}
+            >
+              <SelectTrigger className="h-9 w-auto min-w-40" aria-label="Aplicar categoria">
+                <SelectValue placeholder="Aplicar categoria" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none">Sem categoria</SelectItem>
+                {PURCHASE_CATEGORIES.map((category) => (
+                  <SelectItem key={category} value={category}>
+                    {category}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Button
               size="sm"
               variant="outline"
