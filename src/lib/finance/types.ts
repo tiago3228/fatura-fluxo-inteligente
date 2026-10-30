@@ -62,6 +62,7 @@ export interface AuditSnapshot {
   /** Campos antigos permanecem opcionais para compatibilidade com auditorias já salvas. */
   invoices?: Invoice[];
   transactions?: Transaction[];
+  categoryRules?: { merchant: string; category: string }[];
   people?: Person[];
   cards?: CreditCard[];
   plans?: InstallmentPlan[];
@@ -173,6 +174,8 @@ export interface FinanceState {
   cards: CreditCard[];
   invoices: Invoice[];
   transactions: Transaction[];
+  /** Regras aprendidas a partir das categorias escolhidas para estabelecimentos. */
+  categoryRules?: { merchant: string; category: string }[];
   plans: InstallmentPlan[];
   recurringCharges: RecurringCharge[];
   settings: Settings;

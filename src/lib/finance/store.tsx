@@ -24,6 +24,7 @@ import {
 } from "./calc";
 import { fmtMonthLong, round2, uid } from "./format";
 import { OCTOBER_ASSIGNMENTS } from "./octoberAssignments";
+import { categoryForMerchant, DEFAULT_CATEGORY_RULES, learnCategoryRule } from "./categories";
 import type {
   Allocation,
   AuditEntry,
@@ -95,6 +96,25 @@ const upsert = <T extends { id: string }>(list: T[], item: T) =>
   list.some((x) => x.id === item.id)
     ? list.map((x) => (x.id === item.id ? item : x))
     : [...list, item];
+
+const applyCategoryRules = (transactions: Transaction[], rules: FinanceState["categoryRules"]) =>
+  transactions.map((transaction) => {
+    if (transaction.category) return transaction;
+    const category = categoryForMerchant(transaction.description, rules ?? []);
+    return category ? { ...transaction, category } : transaction;
+  });
+
+const learnFromTransactions = (
+  initialRules: NonNullable<FinanceState["categoryRules"]>,
+  transactions: Transaction[],
+) =>
+  transactions.reduce(
+    (rules, transaction) =>
+      transaction.category
+        ? learnCategoryRule(rules, transaction.description, transaction.category)
+        : rules,
+    initialRules,
+  );
 
 type InstallmentReference = { number: number; total: number };
 
@@ -712,6 +732,7 @@ const invoiceLabel = (state: FinanceState, invoice: Invoice) => {
 type UndoField =
   | "invoices"
   | "transactions"
+  | "categoryRules"
   | "people"
   | "cards"
   | "plans"
@@ -726,7 +747,7 @@ const undoSnapshot = (
   fields: UndoField[],
 ): NonNullable<AuditEntry["undo"]> => {
   const snapshot: NonNullable<AuditEntry["undo"]> = { kind: "restoreFinance" };
-  for (const field of fields) snapshot[field] = before[field];
+  for (const field of fields) Object.assign(snapshot, { [field]: before[field] });
   return snapshot;
 };
 
@@ -803,7 +824,12 @@ const auditForAction = (
       description = `${actor.name} inseriu a compra “${action.transaction.description}”.`;
       entityType = "transaction";
       entityId = action.transaction.id;
-      undo = undoSnapshot(before, ["invoices", "transactions", "suppressedProjectionSources"]);
+      undo = undoSnapshot(before, [
+        "invoices",
+        "transactions",
+        "categoryRules",
+        "suppressedProjectionSources",
+      ]);
       break;
     case "deleteTransaction": {
       const transaction = before.transactions.find((item) => item.id === action.txId);
@@ -818,7 +844,12 @@ const auditForAction = (
       description = `${actor.name} alterou a compra “${transaction?.description ?? action.txId}”.`;
       entityType = "transaction";
       entityId = action.txId;
-      undo = undoSnapshot(before, ["invoices", "transactions", "suppressedProjectionSources"]);
+      undo = undoSnapshot(before, [
+        "invoices",
+        "transactions",
+        "categoryRules",
+        "suppressedProjectionSources",
+      ]);
       break;
     }
     case "setTransactionCategory": {
@@ -828,7 +859,7 @@ const auditForAction = (
       description = `${actor.name} categorizou ${count} compra(s)${action.category ? ` como “${action.category}”` : " sem categoria"}.`;
       entityType = "transaction";
       entityId = action.txIds[0];
-      undo = undoSnapshot(before, ["transactions"]);
+      undo = undoSnapshot(before, ["transactions", "categoryRules"]);
       break;
     }
     case "setTransactionNote": {
@@ -857,7 +888,13 @@ const auditForAction = (
       description = `${actor.name} importou a fatura de ${invoiceLabel(before, action.invoice)}.`;
       entityType = "invoice";
       entityId = action.invoice.id;
-      undo = undoSnapshot(before, ["invoices", "transactions", "plans", "recurringCharges"]);
+      undo = undoSnapshot(before, [
+        "invoices",
+        "transactions",
+        "categoryRules",
+        "plans",
+        "recurringCharges",
+      ]);
       break;
     case "upsertPerson":
       description = `${actor.name} ${before.people.some((person) => person.id === action.person.id) ? "alterou" : "inseriu"} a pessoa “${action.person.name}”.`;
@@ -989,11 +1026,16 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
   switch (a.type) {
     case "hydrate": {
       const raw = a.state as FinanceState & { recurringCharges?: RecurringCharge[] };
+      let categoryRules = learnFromTransactions(DEFAULT_CATEGORY_RULES, raw.transactions);
+      for (const rule of raw.categoryRules ?? []) {
+        categoryRules = learnCategoryRule(categoryRules, rule.merchant, rule.category);
+      }
+      const categorizedTransactions = applyCategoryRules(raw.transactions, categoryRules);
       const seededCharges = createDemoState().recurringCharges.filter((charge) =>
         raw.transactions.some((transaction) => transaction.id === charge.sourceTransactionId),
       );
       const recurringCharges = raw.recurringCharges ?? seededCharges;
-      const transactions = raw.transactions.map((transaction) => {
+      const transactions = categorizedTransactions.map((transaction) => {
         const charge = recurringCharges.find((item) => item.sourceTransactionId === transaction.id);
         return transaction.recurringChargeId || !charge
           ? transaction
@@ -1002,6 +1044,7 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
       const normalized = {
         ...raw,
         recurringCharges,
+        categoryRules,
         transactions,
         payments: raw.payments ?? [],
         suppressedProjectionSources: raw.suppressedProjectionSources ?? [],
@@ -1092,10 +1135,19 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
         else updated.installmentTotal = a.patch.installmentTotal;
         return updated;
       });
+      const categoryRules = a.patch.category
+        ? learnCategoryRule(
+            s.categoryRules ?? DEFAULT_CATEGORY_RULES,
+            a.patch.description,
+            a.patch.category,
+          )
+        : (s.categoryRules ?? DEFAULT_CATEGORY_RULES);
+      const categorizedUpdates = applyCategoryRules(updatedTransactions, categoryRules);
       if (original.isProjected) {
         return recalculateForecastTotals({
           ...s,
-          transactions: syncProjectedAllocations(updatedTransactions),
+          categoryRules,
+          transactions: syncProjectedAllocations(categorizedUpdates),
         });
       }
       const projectionRoot = original.projectionSourceId ?? original.id;
@@ -1114,7 +1166,10 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
       const next = normalizeInstallmentTransactions(
         recalculateForecastTotals({
           ...s,
-          transactions: syncProjectedAllocations(remainingTransactions),
+          categoryRules,
+          transactions: syncProjectedAllocations(
+            applyCategoryRules(remainingTransactions, categoryRules),
+          ),
           suppressedProjectionSources,
         }),
       );
@@ -1151,13 +1206,22 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
         ...(suppressedProjectionSources ? { suppressedProjectionSources } : {}),
       });
     }
-    case "addTransaction":
+    case "addTransaction": {
+      const categoryRules = a.transaction.category
+        ? learnCategoryRule(
+            s.categoryRules ?? DEFAULT_CATEGORY_RULES,
+            a.transaction.description,
+            a.transaction.category,
+          )
+        : (s.categoryRules ?? DEFAULT_CATEGORY_RULES);
       return ensureInstallmentProjections(
         normalizeInstallmentTransactions({
           ...s,
-          transactions: [...s.transactions, a.transaction],
+          categoryRules,
+          transactions: applyCategoryRules([...s.transactions, a.transaction], categoryRules),
         }),
       );
+    }
     case "setTxType": {
       const next = normalizeInstallmentTransactions({
         ...s,
@@ -1318,13 +1382,21 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
             ...(existing.payments !== undefined ? { payments: existing.payments } : {}),
           }
         : a.invoice;
-      const incoming = a.transactions.map((transaction) => ({
-        ...transaction,
-        invoiceId: invoice.id,
-      }));
+      const categoryRules = learnFromTransactions(
+        s.categoryRules ?? DEFAULT_CATEGORY_RULES,
+        a.transactions,
+      );
+      const incoming = applyCategoryRules(
+        a.transactions.map((transaction) => ({
+          ...transaction,
+          invoiceId: invoice.id,
+        })),
+        categoryRules,
+      );
       const reconciled = reconcileImportedTransactions(s, invoice, incoming);
       const imported = {
         ...s,
+        categoryRules,
         invoices: upsert(s.invoices, invoice),
         plans: s.plans.filter(
           (plan) =>
@@ -1398,15 +1470,29 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
       }
       return paid;
     }
-    case "setTransactionCategory":
+    case "setTransactionCategory": {
+      const selectedTransactions = s.transactions.filter((transaction) =>
+        a.txIds.includes(transaction.id),
+      );
+      const categoryRules = a.category
+        ? selectedTransactions.reduce(
+            (rules, transaction) => learnCategoryRule(rules, transaction.description, a.category),
+            s.categoryRules ?? DEFAULT_CATEGORY_RULES,
+          )
+        : (s.categoryRules ?? DEFAULT_CATEGORY_RULES);
       return {
         ...s,
-        transactions: s.transactions.map((transaction) =>
-          a.txIds.includes(transaction.id)
-            ? { ...transaction, category: a.category || undefined }
-            : transaction,
+        categoryRules,
+        transactions: applyCategoryRules(
+          s.transactions.map((transaction) =>
+            a.txIds.includes(transaction.id)
+              ? { ...transaction, category: a.category || undefined }
+              : transaction,
+          ),
+          categoryRules,
         ),
       };
+    }
     case "appendAudit":
       return {
         ...s,
@@ -1439,6 +1525,7 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
         ...s,
         ...(hasSnapshot("invoices") ? { invoices: entry.undo.invoices } : {}),
         ...(hasSnapshot("transactions") ? { transactions: entry.undo.transactions } : {}),
+        ...(hasSnapshot("categoryRules") ? { categoryRules: entry.undo.categoryRules } : {}),
         ...(hasSnapshot("people") ? { people: entry.undo.people } : {}),
         ...(hasSnapshot("cards") ? { cards: entry.undo.cards } : {}),
         ...(hasSnapshot("plans") ? { plans: entry.undo.plans } : {}),
@@ -1465,6 +1552,7 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
         ...s,
         ...(hasSnapshot("invoices") ? { invoices: entry.redo.invoices } : {}),
         ...(hasSnapshot("transactions") ? { transactions: entry.redo.transactions } : {}),
+        ...(hasSnapshot("categoryRules") ? { categoryRules: entry.redo.categoryRules } : {}),
         ...(hasSnapshot("people") ? { people: entry.redo.people } : {}),
         ...(hasSnapshot("cards") ? { cards: entry.redo.cards } : {}),
         ...(hasSnapshot("plans") ? { plans: entry.redo.plans } : {}),
