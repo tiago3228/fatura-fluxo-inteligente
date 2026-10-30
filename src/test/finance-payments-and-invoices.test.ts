@@ -198,6 +198,40 @@ describe("pagamentos e competências", () => {
     expect(personPaymentStatus(state, personId, "2026-10")).toBe("pago");
   });
 
+  it("permite marcar uma pessoa como pendente removendo os pagamentos do mês", () => {
+    let state = stateWithSinglePurchase();
+    state = reducer(state, {
+      type: "recordPersonPayment",
+      payment: {
+        id: "payment_current",
+        personId,
+        amount: 120,
+        paidAt: "2026-10-20",
+        month: "2026-10",
+      },
+    });
+    state = reducer(state, {
+      type: "recordPersonPayment",
+      payment: {
+        id: "payment_other_month",
+        personId,
+        amount: 10,
+        paidAt: "2026-11-20",
+        month: "2026-11",
+      },
+    });
+
+    state = reducer(state, {
+      type: "clearPersonMonthPayments",
+      personId,
+      month: "2026-10",
+    });
+
+    expect(personMonthPaid(state, personId, "2026-10")).toBe(0);
+    expect(personPaymentStatus(state, personId, "2026-10")).toBe("pendente");
+    expect(personMonthPaid(state, personId, "2026-11")).toBe(10);
+  });
+
   it("não confunde o pagamento da fatura do cartão com recebimento da pessoa", () => {
     const state = stateWithSinglePurchase();
     const invoiceId = state.invoices[0]!.id;

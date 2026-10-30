@@ -81,6 +81,7 @@ export type Action =
   | { type: "removeSpreadsheet"; spreadsheetId: string }
   | { type: "recordPersonPayment"; payment: PersonPayment }
   | { type: "removePersonPayment"; paymentId: string }
+  | { type: "clearPersonMonthPayments"; personId: string; month: string }
   | { type: "markInvoicePaid"; invoiceId: string; paidAt: string }
   | { type: "markMonthInvoicesPaid"; month: string; paidAt: string }
   | { type: "appendAudit"; entry: AuditEntry }
@@ -926,6 +927,18 @@ const auditForAction = (
       entityId = action.paymentId;
       undo = undoSnapshot(before, ["payments"]);
       break;
+    case "clearPersonMonthPayments": {
+      const person = before.people.find((item) => item.id === action.personId);
+      const count = (before.payments ?? []).filter(
+        (payment) => payment.personId === action.personId && payment.month === action.month,
+      ).length;
+      if (count === 0) return null;
+      description = `${actor.name} marcou ${person?.name ?? action.personId} como pendente em ${fmtMonthLong(action.month)}.`;
+      entityType = "person";
+      entityId = action.personId;
+      undo = undoSnapshot(before, ["payments"]);
+      break;
+    }
     case "setInvoiceStatus":
       description = `${actor.name} alterou o status de uma fatura.`;
       entityType = "invoice";
@@ -1344,6 +1357,13 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
       return { ...s, payments: upsert(s.payments ?? [], a.payment) };
     case "removePersonPayment":
       return { ...s, payments: (s.payments ?? []).filter((payment) => payment.id !== a.paymentId) };
+    case "clearPersonMonthPayments":
+      return {
+        ...s,
+        payments: (s.payments ?? []).filter(
+          (payment) => !(payment.personId === a.personId && payment.month === a.month),
+        ),
+      };
     case "markInvoicePaid": {
       const paid: FinanceState = {
         ...s,

@@ -200,6 +200,22 @@ function Pessoas() {
                           >
                             Registrar pagamento parcial
                           </DropdownMenuItem>
+                          <DropdownMenuItem
+                            disabled={paid <= 0}
+                            onSelect={() => {
+                              if (paid <= 0) return;
+                              dispatch({
+                                type: "clearPersonMonthPayments",
+                                personId: p.id,
+                                month: m,
+                              });
+                              toast.success(`${p.name} marcada como pendente`, {
+                                description: `Pagamentos de ${fmtMonthLong(m)} removidos.`,
+                              });
+                            }}
+                          >
+                            Marcar como pendente
+                          </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem className="text-danger" onSelect={() => setDel(p)}>
                             <Trash2 className="size-4" /> Excluir
@@ -453,6 +469,22 @@ function Pessoas() {
                                     }
                                   >
                                     Registrar pagamento parcial
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    disabled={paid <= 0}
+                                    onSelect={() => {
+                                      if (paid <= 0) return;
+                                      dispatch({
+                                        type: "clearPersonMonthPayments",
+                                        personId: p.id,
+                                        month: m,
+                                      });
+                                      toast.success(`${p.name} marcada como pendente`, {
+                                        description: `Pagamentos de ${fmtMonthLong(m)} removidos.`,
+                                      });
+                                    }}
+                                  >
+                                    Marcar como pendente
                                   </DropdownMenuItem>
                                   <DropdownMenuSeparator />
                                   <DropdownMenuItem
