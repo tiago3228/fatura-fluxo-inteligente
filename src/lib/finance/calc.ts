@@ -159,6 +159,30 @@ export const invoiceAllocatedTotal = (s: FinanceState, inv: Invoice) =>
 export const invoicePendingCount = (s: FinanceState, inv: Invoice) =>
   invoiceTxs(s, inv.id).filter((t) => txStatus(t) === "pendente").length;
 
+/** Saldo restante de uma fatura aberta, descontando pagamentos já registrados. */
+export const invoiceOutstandingBalance = (s: FinanceState, invoice: Invoice) => {
+  if (invoice.status === "paga") return 0;
+  const isForecast = invoice.source === "planilha" && invoice.id.includes("_next_");
+  const total = isForecast
+    ? invoiceTxs(s, invoice.id)
+        .filter(
+          (transaction) =>
+            transaction.type !== "pagamento" && transaction.recurringChargeId === undefined,
+        )
+        .reduce((sum, transaction) => sum + transaction.amount, 0)
+    : Math.max(invoice.officialTotal, invoiceLaunchesTotal(s, invoice));
+  const paid = invoice.payments?.reduce((sum, payment) => sum + payment.amount, 0) ?? 0;
+  return round2(Math.max(0, total - paid));
+};
+
+/** Soma faturas abertas e parcelas futuras conhecidas para um cartão. */
+export const cardOutstandingBalance = (s: FinanceState, cardId: string) =>
+  round2(
+    s.invoices
+      .filter((invoice) => invoice.cardId === cardId)
+      .reduce((sum, invoice) => sum + invoiceOutstandingBalance(s, invoice), 0),
+  );
+
 export const monthInvoices = (s: FinanceState, month: string) =>
   s.invoices.filter((i) => i.month === month);
 export const monthTxs = (s: FinanceState, month: string) => {

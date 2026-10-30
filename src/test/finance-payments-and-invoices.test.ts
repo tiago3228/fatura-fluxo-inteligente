@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  cardOutstandingBalance,
   cardLimitAvailable,
   cardLimitUsed,
   committedMonthTotal,
@@ -498,6 +499,74 @@ describe("pagamentos e competências", () => {
     };
     expect(cardLimitUsed(paidCurrentInvoice, "c_8222")).toBe(329.88);
     expect(cardLimitAvailable(paidCurrentInvoice, "c_8222")).toBe(670.12);
+  });
+
+  it("calcula quanto falta pagar no cartão após pagamentos parciais e parcelas futuras", () => {
+    const base = createDemoState();
+    const invoiceTemplate = base.invoices[0];
+    const transactionTemplate = base.transactions[0];
+    if (!invoiceTemplate || !transactionTemplate)
+      throw new Error("A fixture precisa de faturas e lançamentos");
+    const cardId = invoiceTemplate.cardId;
+    const openInvoice = {
+      ...invoiceTemplate,
+      id: "inv_balance_open",
+      cardId,
+      status: "conferida" as const,
+      source: "pdf" as const,
+      officialTotal: 1000,
+      payments: [{ personId, amount: 250, paidAt: "2026-10-15" }],
+    };
+    const futureInvoice = {
+      ...invoiceTemplate,
+      id: "inv_balance_next_2026_12",
+      cardId,
+      month: "2026-12",
+      status: "conferida" as const,
+      source: "planilha" as const,
+      officialTotal: 0,
+      payments: [],
+    };
+    const paidInvoice = {
+      ...invoiceTemplate,
+      id: "inv_balance_paid",
+      cardId,
+      status: "paga" as const,
+      source: "pdf" as const,
+      officialTotal: 500,
+      payments: [],
+    };
+    const state: FinanceState = {
+      ...base,
+      invoices: [openInvoice, futureInvoice, paidInvoice],
+      transactions: [
+        {
+          ...transactionTemplate,
+          id: "tx_future_installment",
+          invoiceId: futureInvoice.id,
+          amount: 300,
+          type: "parcela",
+          recurringChargeId: undefined,
+        },
+        {
+          ...transactionTemplate,
+          id: "tx_future_recurring",
+          invoiceId: futureInvoice.id,
+          amount: 90,
+          type: "compra",
+          recurringChargeId: "recurring_balance_test",
+        },
+        {
+          ...transactionTemplate,
+          id: "tx_already_paid",
+          invoiceId: paidInvoice.id,
+          amount: 500,
+          type: "compra",
+        },
+      ],
+    };
+
+    expect(cardOutstandingBalance(state, cardId)).toBe(1050);
   });
 
   it("unifica o limite e soma os compromissos de todos os cartões", () => {
