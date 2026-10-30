@@ -11,6 +11,7 @@ import {
   txCard,
 } from "./calc";
 import { fmtDate, fmtMonth, fmtMonthLong, round2 } from "./format";
+import { categoryLabel } from "./categories";
 import type { ExportTable } from "./export";
 import type { FinanceState } from "./types";
 
@@ -58,6 +59,20 @@ export function personReport(s: FinanceState, personId: string, month: string) {
     forecast: fc,
     splitTotal: round2(rows.filter((r) => r.split).reduce((a, r) => a + r.share, 0)),
   };
+}
+
+export function personCategorySummary(s: FinanceState, personId: string, month: string) {
+  const totals = new Map<string, number>();
+  for (const transaction of monthTxs(s, month)) {
+    if (transaction.type === "pagamento") continue;
+    const share = transaction.allocations.find((allocation) => allocation.personId === personId);
+    if (!share || share.amount <= 0) continue;
+    const category = categoryLabel(transaction.category);
+    totals.set(category, (totals.get(category) ?? 0) + share.amount);
+  }
+  return Array.from(totals, ([category, total]) => ({ category, total: round2(total) })).sort(
+    (a, b) => b.total - a.total || a.category.localeCompare(b.category, "pt-BR"),
+  );
 }
 
 export function personReportTable(s: FinanceState, personId: string, month: string): ExportTable {
