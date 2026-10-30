@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useRouter, useRouterState } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -59,6 +60,7 @@ import { TxActionsProvider } from "./tx-actions";
 import { FloatingCalculator } from "./FloatingCalculator";
 import { PersonLimitAlert } from "./PersonLimitAlert";
 import { cn } from "@/lib/utils";
+import { createCeuSsoLink } from "@/lib/ceu-sso.functions";
 
 const NAV = [
   { title: "Visão geral", url: "/", icon: LayoutDashboard },
@@ -113,19 +115,7 @@ function AppSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild tooltip="Abrir CEU Finanças em uma nova aba">
-                  <a
-                    href="https://ceu-financas.lovable.app"
-                    target="_blank"
-                    rel="noreferrer"
-                    aria-label="Abrir CEU Finanças em uma nova aba"
-                  >
-                    <ExternalLink />
-                    <span>CEU Finanças</span>
-                  </a>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
+              <CeuFinancasMenuItem />
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -136,6 +126,45 @@ function AppSidebar() {
         </p>
       </SidebarFooter>
     </Sidebar>
+  );
+}
+
+function CeuFinancasMenuItem() {
+  const createLink = useServerFn(createCeuSsoLink);
+  const [loading, setLoading] = useState(false);
+
+  const openCeu = async () => {
+    setLoading(true);
+    const popup = window.open("about:blank", "_blank", "noopener,noreferrer");
+    try {
+      const { url } = await createLink();
+      if (popup) popup.location.href = url;
+      else window.location.assign(url);
+    } catch (error) {
+      popup?.close();
+      console.error("[CEU SSO] Falha ao abrir o CEU Finanças", error);
+      toast.error("Não foi possível abrir o CEU Finanças", {
+        description: "Verifique se o SSO já foi configurado no ambiente.",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton asChild tooltip="Abrir CEU Finanças já conectado com sua conta">
+        <button
+          type="button"
+          onClick={() => void openCeu()}
+          disabled={loading}
+          aria-label="Abrir CEU Finanças"
+        >
+          <ExternalLink />
+          <span>{loading ? "Abrindo CEU..." : "CEU Finanças"}</span>
+        </button>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
   );
 }
 
