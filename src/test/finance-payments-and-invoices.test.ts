@@ -275,6 +275,11 @@ describe("pagamentos e competências", () => {
         invoices: initial.invoices,
         transactions: initial.transactions,
       },
+      redo: {
+        kind: "restoreFinance" as const,
+        invoices: paid.invoices,
+        transactions: paid.transactions,
+      },
     };
     const audited = reducer(paid, { type: "appendAudit", entry });
     const undone = reducer(audited, { type: "undoAudit", auditId: entry.id });
@@ -282,6 +287,11 @@ describe("pagamentos e competências", () => {
     expect(undone.invoices).toEqual(initial.invoices);
     expect(undone.transactions).toEqual(initial.transactions);
     expect(undone.auditLog?.find((item) => item.id === entry.id)?.undoneAt).toBeTruthy();
+
+    const redone = reducer(undone, { type: "redoAudit", auditId: entry.id });
+    expect(redone.invoices).toEqual(paid.invoices);
+    expect(redone.transactions).toEqual(paid.transactions);
+    expect(redone.auditLog?.find((item) => item.id === entry.id)?.undoneAt).toBeUndefined();
   });
 
   it("avança 10/12 para 11/12 e 12/12, sem copiar compra à vista nem alterar o histórico", () => {

@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { FileSpreadsheet, History, RotateCcw, Undo2 } from "lucide-react";
+import { FileSpreadsheet, History, Redo2, RotateCcw, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import { useFinance } from "@/lib/finance/store";
 import { DemoTag, Field, MonthSelect, PageHeader, Panel } from "@/components/app/common";
@@ -157,10 +157,17 @@ function AuditPanel() {
                   >
                     <Undo2 className="size-4" /> Desfazer
                   </ContextMenuItem>
-                ) : (
-                  <ContextMenuItem disabled>
-                    {entry.undoneAt ? "Ação já desfeita" : "Esta ação não pode ser desfeita"}
+                ) : entry.redo && entry.undoneAt ? (
+                  <ContextMenuItem
+                    onSelect={() => {
+                      dispatch({ type: "redoAudit", auditId: entry.id });
+                      toast.success("Ação refeita");
+                    }}
+                  >
+                    <Redo2 className="size-4" /> Refazer
                   </ContextMenuItem>
+                ) : (
+                  <ContextMenuItem disabled>Esta ação não pode ser desfeita</ContextMenuItem>
                 )}
               </ContextMenuContent>
             </ContextMenu>

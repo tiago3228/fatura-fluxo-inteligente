@@ -55,6 +55,21 @@ export interface InvoicePayment {
   paidAt: string;
 }
 
+export interface AuditSnapshot {
+  kind: "restoreFinance";
+  /** Campos antigos permanecem opcionais para compatibilidade com auditorias já salvas. */
+  invoices?: Invoice[];
+  transactions?: Transaction[];
+  people?: Person[];
+  cards?: CreditCard[];
+  plans?: InstallmentPlan[];
+  recurringCharges?: RecurringCharge[];
+  settings?: Settings;
+  payments?: PersonPayment[];
+  spreadsheets?: SpreadsheetArchive[];
+  suppressedProjectionSources?: string[];
+}
+
 export interface AuditEntry {
   id: string;
   actorId: string;
@@ -63,20 +78,8 @@ export interface AuditEntry {
   createdAt: string;
   entityType?: "invoice" | "transaction" | "person" | "card" | "plan" | "settings" | "system";
   entityId?: string;
-  undo?: {
-    kind: "restoreFinance";
-    /** Campos antigos permanecem opcionais para compatibilidade com auditorias já salvas. */
-    invoices?: Invoice[];
-    transactions?: Transaction[];
-    people?: Person[];
-    cards?: CreditCard[];
-    plans?: InstallmentPlan[];
-    recurringCharges?: RecurringCharge[];
-    settings?: Settings;
-    payments?: PersonPayment[];
-    spreadsheets?: SpreadsheetArchive[];
-    suppressedProjectionSources?: string[];
-  };
+  undo?: AuditSnapshot;
+  redo?: AuditSnapshot;
   undoneAt?: string;
 }
 

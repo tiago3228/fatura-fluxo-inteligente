@@ -17,21 +17,42 @@ import {
   Loader2,
   LogOut,
   Moon,
+  Redo2,
   Settings,
   ShoppingBag,
   Sun,
+  Undo2,
   Users,
   Wallet,
 } from "lucide-react";
 import {
-  Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarHeader, SidebarInset, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger,
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarHeader,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAlerts } from "@/lib/finance/alerts";
 import { useFinance } from "@/lib/finance/store";
+import { toast } from "sonner";
 import { DemoTag } from "./common";
 import { TxActionsProvider } from "./tx-actions";
 import { FloatingCalculator } from "./FloatingCalculator";
@@ -65,7 +86,9 @@ function AppSidebar() {
             <Wallet className="size-4" />
           </span>
           <div className="min-w-0 group-data-[collapsible=icon]:hidden">
-            <p className="truncate text-sm font-bold text-sidebar-accent-foreground">Fatura em Dia</p>
+            <p className="truncate text-sm font-bold text-sidebar-accent-foreground">
+              Fatura em Dia
+            </p>
             <p className="truncate text-xs opacity-70">Organizador de cartões</p>
           </div>
           <SidebarTrigger
@@ -107,7 +130,12 @@ function Notifications() {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative" aria-label={`Notificações (${alerts.length})`}>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="relative"
+          aria-label={`Notificações (${alerts.length})`}
+        >
           <Bell className="size-4" />
           {alerts.length > 0 && (
             <span className="absolute right-1.5 top-1.5 grid size-4 place-items-center rounded-full bg-danger text-[10px] font-bold text-primary-foreground">
@@ -119,10 +147,21 @@ function Notifications() {
       <PopoverContent align="end" className="w-80 p-0">
         <p className="border-b px-4 py-2.5 text-sm font-bold">Alertas do mês</p>
         <div className="max-h-80 divide-y overflow-y-auto">
-          {alerts.length === 0 && <p className="px-4 py-6 text-center text-sm text-muted-foreground">Tudo em ordem.</p>}
+          {alerts.length === 0 && (
+            <p className="px-4 py-6 text-center text-sm text-muted-foreground">Tudo em ordem.</p>
+          )}
           {alerts.map((a) => (
             <Link key={a.id} to={a.to} className="flex gap-2 px-4 py-2.5 text-sm hover:bg-muted">
-              <span className={cn("mt-1.5 size-2 shrink-0 rounded-full", a.tone === "danger" ? "bg-danger" : a.tone === "warning" ? "bg-warning" : "bg-info")} />
+              <span
+                className={cn(
+                  "mt-1.5 size-2 shrink-0 rounded-full",
+                  a.tone === "danger"
+                    ? "bg-danger"
+                    : a.tone === "warning"
+                      ? "bg-warning"
+                      : "bg-info",
+                )}
+              />
               {a.text}
             </Link>
           ))}
@@ -142,7 +181,9 @@ function Profile() {
     supabase.auth.getUser().then(({ data }) => {
       if (active) setEmail(data.user?.email ?? null);
     });
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, []);
 
   const handleSignOut = async () => {
@@ -161,17 +202,23 @@ function Profile() {
           <span className="grid size-7 place-items-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
             {(email?.[0] ?? "V").toUpperCase()}
           </span>
-          <span className="hidden max-w-40 truncate text-sm font-medium sm:inline">{email ?? "Sua conta"}</span>
+          <span className="hidden max-w-40 truncate text-sm font-medium sm:inline">
+            {email ?? "Sua conta"}
+          </span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-60">
         <DropdownMenuLabel>
           Sua conta
-          <p className="truncate text-xs font-normal text-muted-foreground">{email ?? "Carregando..."}</p>
+          <p className="truncate text-xs font-normal text-muted-foreground">
+            {email ?? "Carregando..."}
+          </p>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
-          <Link to="/configuracoes"><Settings className="size-4" /> Configurações</Link>
+          <Link to="/configuracoes">
+            <Settings className="size-4" /> Configurações
+          </Link>
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => void handleSignOut()}>
           <LogOut className="size-4" /> Sair
@@ -182,7 +229,9 @@ function Profile() {
 }
 
 function ConnectionStatus() {
-  const [online, setOnline] = useState(() => typeof navigator === "undefined" ? true : navigator.onLine);
+  const [online, setOnline] = useState(() =>
+    typeof navigator === "undefined" ? true : navigator.onLine,
+  );
 
   useEffect(() => {
     const onOnline = () => setOnline(true);
@@ -196,7 +245,12 @@ function ConnectionStatus() {
   }, []);
 
   if (online) return null;
-  return <div className="border-b border-warning/30 bg-warning-soft px-4 py-2 text-center text-xs font-medium text-warning">Você está sem conexão. Alterações financeiras só serão confirmadas quando o servidor responder.</div>;
+  return (
+    <div className="border-b border-warning/30 bg-warning-soft px-4 py-2 text-center text-xs font-medium text-warning">
+      Você está sem conexão. Alterações financeiras só serão confirmadas quando o servidor
+      responder.
+    </div>
+  );
 }
 
 function SyncStatusIndicator() {
@@ -275,6 +329,50 @@ function ThemeToggle({ darkMode, onToggle }: { darkMode: boolean; onToggle: () =
   );
 }
 
+function UndoButton() {
+  const { state, dispatch } = useFinance();
+  const latestUndo = state.auditLog?.find((entry) => entry.undo && !entry.undoneAt);
+  if (!latestUndo) return null;
+
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={() => {
+        dispatch({ type: "undoAudit", auditId: latestUndo.id });
+        toast.success("Ação desfeita", { description: latestUndo.description });
+      }}
+      title={latestUndo.description}
+      aria-label="Desfazer última ação reversível"
+    >
+      <Undo2 className="size-4" />
+      <span className="hidden sm:inline">Desfazer</span>
+    </Button>
+  );
+}
+
+function RedoButton() {
+  const { state, dispatch } = useFinance();
+  const latestRedo = state.auditLog?.find((entry) => entry.redo && entry.undoneAt);
+  if (!latestRedo) return null;
+
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={() => {
+        dispatch({ type: "redoAudit", auditId: latestRedo.id });
+        toast.success("Ação refeita", { description: latestRedo.description });
+      }}
+      title={latestRedo.description}
+      aria-label="Refazer última ação desfeita"
+    >
+      <Redo2 className="size-4" />
+      <span className="hidden sm:inline">Refazer</span>
+    </Button>
+  );
+}
+
 export function AppShell({ children }: { children: ReactNode }) {
   const [quickCalculatorOpen, setQuickCalculatorOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
@@ -309,8 +407,12 @@ export function AppShell({ children }: { children: ReactNode }) {
                 title="Abrir ou recolher menu lateral"
                 className="max-md:size-11 max-md:[&_svg]:size-6"
               />
-              <div className="hidden sm:block"><DemoTag /></div>
+              <div className="hidden sm:block">
+                <DemoTag />
+              </div>
               <div className="ml-auto flex items-center gap-1">
+                <UndoButton />
+                <RedoButton />
                 <ThemeToggle darkMode={darkMode} onToggle={toggleTheme} />
                 <SyncStatusIndicator />
                 <Notifications />
@@ -329,7 +431,10 @@ export function AppShell({ children }: { children: ReactNode }) {
               </span>
             </footer>
             <PersonLimitAlert />
-            <FloatingCalculator open={quickCalculatorOpen} onClose={() => setQuickCalculatorOpen(false)} />
+            <FloatingCalculator
+              open={quickCalculatorOpen}
+              onClose={() => setQuickCalculatorOpen(false)}
+            />
             {!quickCalculatorOpen && (
               <Button
                 type="button"

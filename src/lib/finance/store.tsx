@@ -83,6 +83,7 @@ export type Action =
   | { type: "markMonthInvoicesPaid"; month: string; paidAt: string }
   | { type: "appendAudit"; entry: AuditEntry }
   | { type: "undoAudit"; auditId: string }
+  | { type: "redoAudit"; auditId: string }
   | { type: "prepareNextInvoice"; invoiceId: string };
 
 const upsert = <T extends { id: string }>(list: T[], item: T) =>
@@ -722,6 +723,9 @@ const undoSnapshot = (
   return snapshot;
 };
 
+const snapshotFields = (snapshot: NonNullable<AuditEntry["undo"]>): UndoField[] =>
+  Object.keys(snapshot).filter((field) => field !== "kind") as UndoField[];
+
 const auditForAction = (
   action: Action,
   before: FinanceState,
@@ -737,6 +741,19 @@ const auditForAction = (
       actorId: actor.id,
       actorName: actor.name,
       description: `${actor.name} desfez: ${original.description}`,
+      createdAt: new Date().toISOString(),
+      entityType: original.entityType,
+      entityId: original.entityId,
+    };
+  }
+  if (action.type === "redoAudit") {
+    const original = before.auditLog?.find((entry) => entry.id === action.auditId);
+    if (!original || !original.redo || !original.undoneAt) return null;
+    return {
+      id: uid("audit"),
+      actorId: actor.id,
+      actorName: actor.name,
+      description: `${actor.name} refez: ${original.description}`,
       createdAt: new Date().toISOString(),
       entityType: original.entityType,
       entityId: original.entityId,
@@ -1339,7 +1356,18 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
       return paid;
     }
     case "appendAudit":
-      return { ...s, auditLog: [a.entry, ...(s.auditLog ?? [])].slice(0, 500) };
+      return {
+        ...s,
+        auditLog: [
+          a.entry,
+          ...(s.auditLog ?? []).map((entry) => {
+            if (!a.entry.undo || !entry.redo) return entry;
+            const cleared = { ...entry };
+            delete cleared.redo;
+            return cleared;
+          }),
+        ].slice(0, 500),
+      };
     case "undoAudit": {
       const entry = s.auditLog?.find((item) => item.id === a.auditId);
       if (!entry?.undo || entry.undoneAt) return s;
@@ -1364,6 +1392,35 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
         auditLog: s.auditLog?.map((item) =>
           item.id === a.auditId ? { ...item, undoneAt: new Date().toISOString() } : item,
         ),
+      };
+    }
+    case "redoAudit": {
+      const entry = s.auditLog?.find((item) => item.id === a.auditId);
+      if (!entry?.redo || !entry.undoneAt) return s;
+      const hasSnapshot = (field: keyof NonNullable<AuditEntry["redo"]>) =>
+        Object.prototype.hasOwnProperty.call(entry.redo, field);
+      return {
+        ...s,
+        ...(hasSnapshot("invoices") ? { invoices: entry.redo.invoices } : {}),
+        ...(hasSnapshot("transactions") ? { transactions: entry.redo.transactions } : {}),
+        ...(hasSnapshot("people") ? { people: entry.redo.people } : {}),
+        ...(hasSnapshot("cards") ? { cards: entry.redo.cards } : {}),
+        ...(hasSnapshot("plans") ? { plans: entry.redo.plans } : {}),
+        ...(hasSnapshot("recurringCharges")
+          ? { recurringCharges: entry.redo.recurringCharges }
+          : {}),
+        ...(hasSnapshot("settings") ? { settings: entry.redo.settings } : {}),
+        ...(hasSnapshot("payments") ? { payments: entry.redo.payments } : {}),
+        ...(hasSnapshot("spreadsheets") ? { spreadsheets: entry.redo.spreadsheets } : {}),
+        ...(hasSnapshot("suppressedProjectionSources")
+          ? { suppressedProjectionSources: entry.redo.suppressedProjectionSources }
+          : {}),
+        auditLog: s.auditLog?.map((item) => {
+          if (item.id !== a.auditId) return item;
+          const active = { ...item };
+          delete active.undoneAt;
+          return active;
+        }),
       };
     }
     case "prepareNextInvoice":
@@ -1631,7 +1688,15 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
   }, [state, cloudReadyVersion]);
 
   const auditedDispatch: React.Dispatch<Action> = (action) => {
-    const entry = auditForAction(action, stateRef.current, actorRef.current);
+    const before = stateRef.current;
+    const next = reducer(before, action);
+    let entry = auditForAction(action, before, actorRef.current);
+    if (entry?.undo && next !== before) {
+      entry = {
+        ...entry,
+        redo: undoSnapshot(next, snapshotFields(entry.undo)),
+      };
+    }
     dispatch(action);
     if (entry) dispatch({ type: "appendAudit", entry });
   };
