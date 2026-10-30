@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   CloudOff,
   CreditCard,
+  ExternalLink,
   FileSpreadsheet,
   FileText,
   LayoutDashboard,
@@ -112,6 +113,19 @@ function AppSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild tooltip="Abrir CEU Finanças em uma nova aba">
+                  <a
+                    href="https://ceu-financas.lovable.app"
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label="Abrir CEU Finanças em uma nova aba"
+                  >
+                    <ExternalLink />
+                    <span>CEU Finanças</span>
+                  </a>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
