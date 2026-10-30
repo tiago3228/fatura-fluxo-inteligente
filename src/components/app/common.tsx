@@ -4,7 +4,13 @@ import { cn } from "@/lib/utils";
 import { useFinance } from "@/lib/finance/store";
 import { availableMonths, limitPct, limitStatus } from "@/lib/finance/calc";
 import { fmtMonthLong } from "@/lib/finance/format";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export function PageHeader({
   title,
@@ -18,12 +24,12 @@ export function PageHeader({
   showMonth?: boolean;
 }) {
   return (
-    <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+    <div className="mb-6 flex flex-col gap-4 sm:mb-7 md:flex-row md:items-end md:justify-between">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
+        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{title}</h1>
         {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
       </div>
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex w-full flex-wrap items-center gap-2 md:w-auto md:justify-end">
         {showMonth && <MonthSelect />}
         {actions}
       </div>
@@ -34,8 +40,11 @@ export function PageHeader({
 export function MonthSelect() {
   const { state, dispatch } = useFinance();
   return (
-    <Select value={state.settings.month} onValueChange={(m) => dispatch({ type: "setMonth", month: m })}>
-      <SelectTrigger className="w-[190px] bg-card" aria-label="Mês de referência">
+    <Select
+      value={state.settings.month}
+      onValueChange={(m) => dispatch({ type: "setMonth", month: m })}
+    >
+      <SelectTrigger className="w-full bg-card sm:w-[190px]" aria-label="Mês de referência">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -71,7 +80,7 @@ export function KpiCard({
     success: "bg-success-soft text-success",
   }[tone];
   return (
-    <div className="fade-in-up min-w-0 rounded-xl border bg-card p-4 shadow-xs">
+    <div className="fade-in-up min-w-0 rounded-2xl border bg-card p-4 shadow-sm transition-shadow duration-200 hover:shadow-md sm:p-5">
       <div className="flex items-start justify-between gap-2">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           {label}
@@ -92,12 +101,24 @@ export function KpiCard({
   );
 }
 
-export function Panel({ title, description, actions, children, className }: { title?: string; description?: string | undefined; actions?: ReactNode; children: ReactNode; className?: string }) {
+export function Panel({
+  title,
+  description,
+  actions,
+  children,
+  className,
+}: {
+  title?: string;
+  description?: string | undefined;
+  actions?: ReactNode;
+  children: ReactNode;
+  className?: string;
+}) {
   return (
-    <section className={cn("rounded-xl border bg-card shadow-xs", className)}>
+    <section className={cn("min-w-0 rounded-2xl border bg-card shadow-sm", className)}>
       {(title || actions) && (
-        <header className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
-          <div>
+        <header className="flex flex-wrap items-center justify-between gap-3 border-b bg-muted/20 px-4 py-3.5 sm:px-5">
+          <div className="min-w-0">
             {title && <h2 className="text-sm font-bold">{title}</h2>}
             {description && <p className="text-xs text-muted-foreground">{description}</p>}
           </div>
@@ -116,15 +137,32 @@ export function LimitBar({ total, limit }: { total: number; limit: number }) {
   const color = st === "normal" ? "bg-success" : st === "atencao" ? "bg-warning" : "bg-danger";
   return (
     <div className="flex items-center gap-2">
-      <div className="h-1.5 w-full min-w-16 overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100}>
-        <div className={cn("h-full rounded-full transition-all", color)} style={{ width: `${Math.min(100, pct)}%` }} />
+      <div
+        className="h-1.5 w-full min-w-16 overflow-hidden rounded-full bg-muted"
+        role="progressbar"
+        aria-valuenow={Math.round(pct)}
+        aria-valuemin={0}
+        aria-valuemax={100}
+      >
+        <div
+          className={cn("h-full rounded-full transition-all", color)}
+          style={{ width: `${Math.min(100, pct)}%` }}
+        />
       </div>
       <span className="num w-10 text-right text-xs font-semibold">{Math.round(pct)}%</span>
     </div>
   );
 }
 
-export function EmptyState({ title, description, action }: { title: string; description?: string | undefined; action?: ReactNode }) {
+export function EmptyState({
+  title,
+  description,
+  action,
+}: {
+  title: string;
+  description?: string | undefined;
+  action?: ReactNode;
+}) {
   return (
     <div className="flex flex-col items-center justify-center gap-2 px-6 py-12 text-center">
       <span className="grid size-10 place-items-center rounded-full bg-muted text-muted-foreground">
@@ -145,14 +183,32 @@ export function DemoTag() {
   );
 }
 
-export function Field({ label, htmlFor, error, hint, required, children }: { label: string; htmlFor?: string; error?: string | undefined; hint?: string | undefined; required?: boolean; children: ReactNode }) {
+export function Field({
+  label,
+  htmlFor,
+  error,
+  hint,
+  required,
+  children,
+}: {
+  label: string;
+  htmlFor?: string;
+  error?: string | undefined;
+  hint?: string | undefined;
+  required?: boolean;
+  children: ReactNode;
+}) {
   return (
     <div className="space-y-1.5">
       <label htmlFor={htmlFor} className="text-sm font-medium">
         {label} {required && <span className="text-danger">*</span>}
       </label>
       {children}
-      {error ? <p className="text-xs font-medium text-danger">{error}</p> : hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
+      {error ? (
+        <p className="text-xs font-medium text-danger">{error}</p>
+      ) : hint ? (
+        <p className="text-xs text-muted-foreground">{hint}</p>
+      ) : null}
     </div>
   );
 }

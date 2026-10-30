@@ -87,8 +87,8 @@ function AppSidebar() {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
-        <div className="flex items-center gap-2 px-1 py-1.5">
-          <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+        <div className="flex items-center gap-2 px-1 py-2">
+          <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-sidebar-primary text-sidebar-primary-foreground shadow-sm">
             <Wallet className="size-4" />
           </span>
           <div className="min-w-0 group-data-[collapsible=icon]:hidden">
@@ -394,7 +394,7 @@ function SyncStatusIndicator() {
       aria-live={isAlert ? "assertive" : "polite"}
       aria-label={status.label}
       title={status.label}
-      className={`flex items-center gap-1.5 px-2 text-xs font-medium ${status.className}`}
+      className={`flex shrink-0 items-center gap-1.5 px-1.5 text-xs font-medium sm:px-2 ${status.className}`}
     >
       <Icon
         aria-hidden="true"
@@ -511,7 +511,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <SidebarProvider>
           <AppSidebar />
           <SidebarInset className="min-w-0">
-            <header className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b bg-background/85 px-3 backdrop-blur md:px-6">
+            <header className="sticky top-0 z-20 flex h-14 items-center gap-1.5 border-b bg-card/90 px-2 shadow-xs backdrop-blur-xl sm:gap-2 sm:px-4 lg:px-6">
               <SidebarTrigger
                 aria-label="Abrir ou recolher menu lateral"
                 title="Abrir ou recolher menu lateral"
@@ -520,7 +520,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <div className="hidden sm:block">
                 <DemoTag />
               </div>
-              <div className="ml-auto flex items-center gap-1">
+              <div className="ml-auto flex min-w-0 items-center gap-0.5 sm:gap-1">
                 <UndoButton />
                 <RedoButton />
                 <ThemeToggle darkMode={darkMode} onToggle={toggleTheme} />
@@ -531,7 +531,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             </header>
             <ConnectionStatus />
             <SyncStatusBanner />
-            <main className="mx-auto w-full max-w-[1400px] flex-1 p-4 md:p-6">{children}</main>
+            <main className="mx-auto w-full max-w-[1520px] min-w-0 flex-1 p-3 sm:p-4 lg:p-6">
+              {children}
+            </main>
             <footer
               className="pointer-events-none select-none px-4 pb-3 text-left md:px-6"
               aria-label="Marca d’água"
