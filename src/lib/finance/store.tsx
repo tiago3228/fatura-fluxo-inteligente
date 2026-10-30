@@ -23,6 +23,7 @@ import {
   stripInstallmentReference,
 } from "./calc";
 import { fmtMonthLong, round2, uid } from "./format";
+import { stableJsonStringify } from "./sync";
 import { OCTOBER_ASSIGNMENTS } from "./octoberAssignments";
 import {
   categoryForMerchant,
@@ -1641,13 +1642,13 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     let pendingRemote: FinanceState | null = null;
 
     const applyRemote = (remote: FinanceState) => {
-      const json = JSON.stringify(remote);
+      const json = stableJsonStringify(remote);
       if (json === lastSynced.current) return;
       if (json === savingJson.current) {
         lastSynced.current = json;
         return;
       }
-      const localJson = JSON.stringify(stateRef.current);
+      const localJson = stableJsonStringify(stateRef.current);
       if (lastSynced.current !== null && localJson !== lastSynced.current) {
         setSyncStatus("conflict");
         return;
@@ -1728,7 +1729,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
 
         const cloudState = pendingRemote ?? (result.kind === "loaded" ? result.state : null);
         if (cloudState) {
-          lastSynced.current = JSON.stringify(cloudState);
+          lastSynced.current = stableJsonStringify(cloudState);
           stateRef.current = cloudState;
           cloudReady.current = true;
           setCloudReadyVersion((version) => version + 1);
@@ -1747,7 +1748,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
           setSyncStatus("error");
           return;
         }
-        lastSynced.current = JSON.stringify(initialState);
+        lastSynced.current = stableJsonStringify(initialState);
         cloudReady.current = true;
         setCloudReadyVersion((version) => version + 1);
         setSyncStatus("synced");
@@ -1817,7 +1818,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       const task = saveQueue.current.then(async () => {
         if (cancelled || ws !== workspaceId.current || !cloudReady.current) return;
         const snapshot = stateRef.current;
-        const json = JSON.stringify(snapshot);
+        const json = stableJsonStringify(snapshot);
         if (json === lastSynced.current) {
           setSyncStatus("synced");
           return;
@@ -1830,7 +1831,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
           lastSynced.current = json;
           if (savingJson.current === json) savingJson.current = null;
           if (!cancelled && syncStatusRef.current !== "conflict") {
-            setSyncStatus(JSON.stringify(stateRef.current) === json ? "synced" : "saving");
+            setSyncStatus(stableJsonStringify(stateRef.current) === json ? "synced" : "saving");
           }
           return;
         }
