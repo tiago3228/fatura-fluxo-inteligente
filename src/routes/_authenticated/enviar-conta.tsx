@@ -3,7 +3,16 @@ import { useState } from "react";
 import { Check, ChevronDown, ChevronUp, Download, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useFinance } from "@/lib/finance/store";
-import { availableMonths, monthTxs, personMonthPaid, personMonthTotal } from "@/lib/finance/calc";
+import {
+  addMonths,
+  availableMonths,
+  detectedInstallmentPlans,
+  installmentReferenceFromDescription,
+  monthTxs,
+  personMonthPaid,
+  personMonthTotal,
+  stripInstallmentReference,
+} from "@/lib/finance/calc";
 import { fmtBRL, fmtDate, fmtMonthLong } from "@/lib/finance/format";
 import { createPersonAccountJpeg, type ShareAccountRow } from "@/lib/finance/share-image";
 import type { Person } from "@/lib/finance/types";
@@ -44,6 +53,10 @@ function EnviarConta() {
   const [expanded, setExpanded] = useState<string[]>([]);
   const [sharePersonId, setSharePersonId] = useState<string | null>(null);
   const months = availableMonths(state);
+  const sortedPeople = [...state.people].sort((a, b) =>
+    a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" }),
+  );
+  const detectedPlans = detectedInstallmentPlans(state);
 
   const toggle = (personId: string) => {
     setExpanded((current) =>
@@ -79,8 +92,8 @@ function EnviarConta() {
           />
         ) : (
           <div className="divide-y">
-            {state.people.map((person) => {
-              const rows = rowsForPerson(state, person.id, month);
+            {sortedPeople.map((person) => {
+              const rows = rowsForPerson(state, person.id, month, detectedPlans);
               const total = personMonthTotal(state, person.id, month);
               const paid = personMonthPaid(state, person.id, month);
               const isExpanded = expanded.includes(person.id);
@@ -104,7 +117,8 @@ function EnviarConta() {
       <WhatsAppRecipientDialog
         open={sharePersonId !== null}
         onOpenChange={(open) => !open && setSharePersonId(null)}
-        people={state.people}
+        people={sortedPeople}
+        detectedPlans={detectedPlans}
         selectedPersonId={sharePersonId}
         state={state}
         month={month}
@@ -118,6 +132,7 @@ function rowsForPerson(
   state: ReturnType<typeof useFinance>["state"],
   personId: string,
   month: string,
+  detectedPlans: ReturnType<typeof detectedInstallmentPlans>,
 ): ShareAccountRow[] {
   return monthTxs(state, month)
     .filter(
@@ -125,12 +140,79 @@ function rowsForPerson(
         transaction.type !== "pagamento" &&
         transaction.allocations.some((allocation) => allocation.personId === personId),
     )
-    .map((transaction) => ({
-      transaction,
-      amount: transaction.allocations
-        .filter((allocation) => allocation.personId === personId)
-        .reduce((sum, allocation) => sum + allocation.amount, 0),
-    }))
+    .map((transaction) => {
+      const invoice = state.invoices.find((item) => item.id === transaction.invoiceId);
+      const registeredPlan = transaction.planId
+        ? state.plans.find((plan) => plan.id === transaction.planId)
+        : undefined;
+      const structuredReference =
+        Number.isInteger(transaction.installmentNumber) &&
+        Number.isInteger(transaction.installmentTotal)
+          ? { number: transaction.installmentNumber!, total: transaction.installmentTotal! }
+          : installmentReferenceFromDescription(transaction.description);
+      const descriptionKey = stripInstallmentReference(transaction.description)
+        .replace(/^\s*\d{1,2}\/\d{1,2}\s*/, "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .toLocaleLowerCase("pt-BR");
+      const matchedPlan =
+        !registeredPlan && invoice && structuredReference
+          ? [...state.plans, ...detectedPlans.map(({ plan }) => plan)].find(
+              (plan) =>
+                plan.cardId === invoice.cardId &&
+                plan.firstMonth === addMonths(invoice.month, 1 - structuredReference.number) &&
+                plan.amounts.length === structuredReference.total &&
+                stripInstallmentReference(plan.description)
+                  .replace(/^\s*\d{1,2}\/\d{1,2}\s*/, "")
+                  .replace(/\s+/g, " ")
+                  .trim()
+                  .toLocaleLowerCase("pt-BR") === descriptionKey,
+            )
+          : undefined;
+      const firstInstallmentKnown =
+        !!invoice &&
+        !!structuredReference &&
+        state.transactions.some((candidate) => {
+          const candidateInvoice = state.invoices.find((item) => item.id === candidate.invoiceId);
+          const candidateReference =
+            Number.isInteger(candidate.installmentNumber) &&
+            Number.isInteger(candidate.installmentTotal)
+              ? { number: candidate.installmentNumber!, total: candidate.installmentTotal! }
+              : installmentReferenceFromDescription(candidate.description);
+          const candidateKey = stripInstallmentReference(candidate.description)
+            .replace(/^\s*\d{1,2}\/\d{1,2}\s*/, "")
+            .replace(/\s+/g, " ")
+            .trim()
+            .toLocaleLowerCase("pt-BR");
+          return (
+            !candidate.isProjected &&
+            candidateReference?.number === 1 &&
+            candidateReference.total === structuredReference.total &&
+            candidateInvoice?.cardId === invoice.cardId &&
+            candidateKey === descriptionKey
+          );
+        });
+      const purchasePlan = registeredPlan ?? matchedPlan;
+      const exactPlanDate =
+        !!registeredPlan || state.plans.some((plan) => plan.id === matchedPlan?.id);
+      const dateInfo = purchasePlan
+        ? !exactPlanDate && !firstInstallmentKnown
+          ? { displayDate: null, dateKind: "unknown" as const }
+          : { displayDate: purchasePlan.purchaseDate, dateKind: "purchase" as const }
+        : transaction.isProjected && structuredReference
+          ? { displayDate: null, dateKind: "unknown" as const }
+          : transaction.isProjected
+            ? { displayDate: transaction.date, dateKind: "forecast" as const }
+            : { displayDate: transaction.date, dateKind: "purchase" as const };
+
+      return {
+        transaction,
+        ...dateInfo,
+        amount: transaction.allocations
+          .filter((allocation) => allocation.personId === personId)
+          .reduce((sum, allocation) => sum + allocation.amount, 0),
+      };
+    })
     .sort((a, b) => a.transaction.date.localeCompare(b.transaction.date));
 }
 
@@ -234,17 +316,21 @@ function PersonAccountCard({
           <table className="w-full min-w-[560px] text-sm">
             <thead className="bg-muted/60 text-left text-xs uppercase text-muted-foreground">
               <tr>
-                <th className="px-3 py-2">Data</th>
+                <th className="px-3 py-2">Data da compra / previsão</th>
                 <th className="px-3 py-2">Compra</th>
                 <th className="px-3 py-2">Categoria</th>
                 <th className="px-3 py-2 text-right">Valor</th>
               </tr>
             </thead>
             <tbody className="divide-y">
-              {rows.map(({ transaction, amount }) => (
+              {rows.map(({ transaction, amount, displayDate, dateKind }) => (
                 <tr key={transaction.id}>
                   <td className="num px-3 py-2 text-muted-foreground">
-                    {fmtDate(transaction.date)}
+                    {dateKind === "unknown"
+                      ? "Data original não identificada"
+                      : dateKind === "forecast"
+                        ? `Previsão ${fmtDate(displayDate!)}`
+                        : fmtDate(displayDate!)}
                   </td>
                   <td className="px-3 py-2 font-medium">
                     {transaction.description}
@@ -280,6 +366,7 @@ function WhatsAppRecipientDialog({
   open,
   onOpenChange,
   people,
+  detectedPlans,
   selectedPersonId,
   state,
   month,
@@ -288,6 +375,7 @@ function WhatsAppRecipientDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   people: Person[];
+  detectedPlans: ReturnType<typeof detectedInstallmentPlans>;
   selectedPersonId: string | null;
   state: ReturnType<typeof useFinance>["state"];
   month: string;
@@ -303,7 +391,7 @@ function WhatsAppRecipientDialog({
       });
       return;
     }
-    const rows = rowsForPerson(state, person.id, month);
+    const rows = rowsForPerson(state, person.id, month, detectedPlans);
     if (!rows.length) {
       toast.info("Nenhuma compra vinculada", {
         description: `Não há lançamentos para ${person.name} nesta competência.`,

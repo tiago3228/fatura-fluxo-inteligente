@@ -4,10 +4,17 @@ import type { Person, Transaction } from "./types";
 export type ShareAccountRow = {
   transaction: Transaction;
   amount: number;
+  displayDate: string | null;
+  dateKind: "purchase" | "forecast" | "unknown";
 };
 
-export const shareAccountRowDetails = (transaction: Transaction) => ({
-  date: fmtDate(transaction.date),
+export const shareAccountRowDetails = ({
+  transaction,
+  displayDate,
+  dateKind,
+}: ShareAccountRow) => ({
+  date: displayDate ? fmtDate(displayDate) : "Não identificada",
+  dateKind,
   description: transaction.description,
   note: transaction.note?.trim() ?? "",
   category: transaction.category?.trim() || "Sem categoria",
@@ -68,7 +75,7 @@ export async function createPersonAccountJpeg({
   ctx.fillRect(42, y - 27, width - 84, 34);
   ctx.fillStyle = "#49605b";
   loadFont(ctx, 15, 700);
-  ctx.fillText("DATA DA COMPRA", 58, y - 5);
+  ctx.fillText("DATA DA COMPRA / PREV.", 58, y - 5);
   ctx.fillText("DESCRIÇÃO DA COMPRA", 218, y - 5);
   ctx.fillText("CATEGORIA", 742, y - 5);
   ctx.textAlign = "right";
@@ -83,7 +90,13 @@ export async function createPersonAccountJpeg({
     ctx.fillStyle = "#52635f";
     loadFont(ctx, 16);
     const details = shareAccountRowDetails(transaction);
-    ctx.fillText(details.date, 58, y + 5, 145);
+    const dateLabel =
+      details.dateKind === "forecast"
+        ? `Prev. ${details.date}`
+        : details.dateKind === "unknown"
+          ? "Original não identificada"
+          : details.date;
+    ctx.fillText(dateLabel, 58, y + 5, 145);
     ctx.fillStyle = "#1c2d29";
     loadFont(ctx, 17, 600);
     const label =
