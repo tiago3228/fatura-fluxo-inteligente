@@ -12,6 +12,7 @@ export const PURCHASE_CATEGORIES = [
   "PETS",
   "Reforma/Construção",
   "Recorrência",
+  "Roupas e Calçados",
   "Saúde",
   "Salão",
   "Serviços e assinaturas",
