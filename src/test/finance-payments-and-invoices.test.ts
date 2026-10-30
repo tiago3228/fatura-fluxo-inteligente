@@ -640,6 +640,45 @@ describe("pagamentos e competências", () => {
     expect(atenaPlans.some(({ plan }) => plan.cardId === "c_7264")).toBe(true);
   });
 
+  it("arredonda rateios inferidos em centavos para percentuais precisos", () => {
+    const initial = createDemoState();
+    const invoiceTemplate = initial.invoices[0];
+    if (!invoiceTemplate) throw new Error("A fixture precisa de uma fatura");
+    const invoice = {
+      ...invoiceTemplate,
+      id: "invoice_percent_rounding",
+      month: "2026-11",
+      officialTotal: 267.02,
+    };
+    const transaction: Transaction = {
+      id: "tx_percent_rounding",
+      invoiceId: invoice.id,
+      date: "2026-11-16",
+      description: "ABC ATACADO -CT RE 2/2",
+      amount: 267.02,
+      type: "parcela",
+      installmentNumber: 2,
+      installmentTotal: 2,
+      allocations: [
+        { personId: "p_atena", amount: 133.52 },
+        { personId: "p_arlete", amount: 133.5 },
+      ],
+    };
+    const state: FinanceState = {
+      ...initial,
+      invoices: [invoice],
+      transactions: [transaction],
+      plans: [],
+    };
+    const detected = detectedInstallmentPlans(state);
+
+    expect(detected).toHaveLength(1);
+    expect(detected[0]?.plan.shares).toEqual([
+      { personId: "p_atena", pct: 50 },
+      { personId: "p_arlete", pct: 50 },
+    ]);
+  });
+
   it("atribui imediatamente as parcelas importadas por PDF à titular cadastrada do cartão", () => {
     const initial = createDemoState();
     const sourceInvoice = initial.invoices.find((invoice) => invoice.cardId === "c_7264");

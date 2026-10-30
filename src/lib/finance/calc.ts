@@ -491,7 +491,7 @@ export const detectedInstallmentPlans = (s: FinanceState): DetectedInstallmentPl
       const shares = allocatedTotal
         ? allocated.map((allocation) => ({
             personId: allocation.personId,
-            pct: (allocation.amount / allocatedTotal) * 100,
+            pct: round2((allocation.amount / allocatedTotal) * 100),
           }))
         : [];
       const lastShare = shares.at(-1);
