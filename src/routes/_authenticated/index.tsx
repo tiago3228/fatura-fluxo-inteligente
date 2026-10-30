@@ -167,10 +167,11 @@ function Overview() {
     return {
       title: `Resumo do próximo mês — ${person.name}`,
       subtitle: `${fmtMonthLong(nextMonth)} · previsto ${fmtBRL(summary.expected)} · gastos novos ${fmtBRL(summary.extra)}`,
-      headers: ["Data", "Descrição", "Parcela", "Cartão", "Valor a pagar"],
+      headers: ["Data", "Descrição", "Categoria", "Parcela", "Cartão", "Valor a pagar"],
       rows: summary.transactions.map((transaction) => [
         fmtDate(transaction.date),
         transaction.description,
+        transaction.category ?? "Sem categoria",
         transaction.installmentNumber
           ? `${transaction.installmentNumber}/${transaction.installmentTotal ?? "?"}`
           : "—",
@@ -178,7 +179,7 @@ function Overview() {
         transaction.allocations.find((allocation) => allocation.personId === person.id)?.amount ??
           0,
       ]),
-      footer: ["", "Total da pessoa", "", "", summary.actual],
+      footer: ["", "Total da pessoa", "", "", "", summary.actual],
     };
   };
   const atRisk = people.filter((p) => p.budgetStatus !== "normal");

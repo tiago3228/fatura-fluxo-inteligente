@@ -1,5 +1,14 @@
 import {
-  TX_TYPE_LABEL, addMonths, forecast, monthTxs, personMonthTotal, planAmountAt, planFutureCommitted, planNumberAt, planStatusAt, txCard,
+  TX_TYPE_LABEL,
+  addMonths,
+  forecast,
+  monthTxs,
+  personMonthTotal,
+  planAmountAt,
+  planFutureCommitted,
+  planNumberAt,
+  planStatusAt,
+  txCard,
 } from "./calc";
 import { fmtDate, fmtMonth, fmtMonthLong, round2 } from "./format";
 import type { ExportTable } from "./export";
@@ -22,7 +31,9 @@ export function personReport(s: FinanceState, personId: string, month: string) {
     });
   const total = personMonthTotal(s, personId, month);
   const plans = s.plans
-    .filter((pl) => pl.shares.some((x) => x.personId === personId) && planStatusAt(pl, month) === "ativo")
+    .filter(
+      (pl) => pl.shares.some((x) => x.personId === personId) && planStatusAt(pl, month) === "ativo",
+    )
     .map((pl) => {
       const pct = pl.shares.find((x) => x.personId === personId)!.pct;
       return {
@@ -33,9 +44,20 @@ export function personReport(s: FinanceState, personId: string, month: string) {
         future: round2((planFutureCommitted(pl, month) * pct) / 100),
       };
     });
-  const history = Array.from({ length: 6 }, (_, i) => addMonths(month, -5 + i)).map((m) => ({ month: m, total: personMonthTotal(s, personId, m) }));
+  const history = Array.from({ length: 6 }, (_, i) => addMonths(month, -5 + i)).map((m) => ({
+    month: m,
+    total: personMonthTotal(s, personId, m),
+  }));
   const fc = forecast(s, month, 6, personId);
-  return { person: p, rows, total, plans, history, forecast: fc, splitTotal: round2(rows.filter((r) => r.split).reduce((a, r) => a + r.share, 0)) };
+  return {
+    person: p,
+    rows,
+    total,
+    plans,
+    history,
+    forecast: fc,
+    splitTotal: round2(rows.filter((r) => r.split).reduce((a, r) => a + r.share, 0)),
+  };
 }
 
 export function personReportTable(s: FinanceState, personId: string, month: string): ExportTable {
@@ -43,16 +65,27 @@ export function personReportTable(s: FinanceState, personId: string, month: stri
   return {
     title: `Relatório de gastos — ${r.person.name}`,
     subtitle: `${fmtMonthLong(month)} · Limite ${r.person.limit.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} · Saldo ${(r.person.limit - r.total).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`,
-    headers: ["Data", "Descrição", "Cartão", "Tipo", "Valor original", "Parte da pessoa"],
+    headers: [
+      "Data",
+      "Descrição",
+      "Categoria",
+      "Cartão",
+      "Tipo",
+      "Valor original",
+      "Parte da pessoa",
+    ],
     rows: r.rows.map((x) => [
       fmtDate(x.tx.date),
-      x.tx.description + (x.tx.installmentNumber ? ` (${x.tx.installmentNumber}/${x.tx.installmentTotal})` : "") + (x.split ? " [dividida]" : ""),
+      x.tx.description +
+        (x.tx.installmentNumber ? ` (${x.tx.installmentNumber}/${x.tx.installmentTotal})` : "") +
+        (x.split ? " [dividida]" : ""),
+      x.tx.category ?? "Sem categoria",
       x.card,
       TX_TYPE_LABEL[x.tx.type],
       x.tx.amount,
       x.share,
     ]),
-    footer: ["", "Total do mês", "", "", "", r.total],
+    footer: ["", "Total do mês", "", "", "", "", r.total],
   };
 }
 
@@ -60,17 +93,26 @@ export function personReportTable(s: FinanceState, personId: string, month: stri
 export function personAllTransactionsTable(s: FinanceState, personId: string): ExportTable {
   const person = s.people.find((item) => item.id === personId)!;
   const rows = s.transactions
-    .filter((transaction) => transaction.type !== "pagamento" && transaction.allocations.some((allocation) => allocation.personId === personId))
-    .sort((a, b) => a.date.localeCompare(b.date) || a.description.localeCompare(b.description, "pt-BR"))
+    .filter(
+      (transaction) =>
+        transaction.type !== "pagamento" &&
+        transaction.allocations.some((allocation) => allocation.personId === personId),
+    )
+    .sort(
+      (a, b) => a.date.localeCompare(b.date) || a.description.localeCompare(b.description, "pt-BR"),
+    )
     .map((transaction) => {
       const allocation = transaction.allocations.find((item) => item.personId === personId)!;
       const card = txCard(s, transaction);
       const invoice = s.invoices.find((item) => item.id === transaction.invoiceId);
-      const installment = transaction.installmentNumber ? `${transaction.installmentNumber}/${transaction.installmentTotal ?? "?"}` : "—";
+      const installment = transaction.installmentNumber
+        ? `${transaction.installmentNumber}/${transaction.installmentTotal ?? "?"}`
+        : "—";
       return [
         fmtDate(transaction.date),
         invoice ? fmtMonth(invoice.month) : "—",
         transaction.description,
+        transaction.category ?? "Sem categoria",
         installment,
         card ? `•••• ${card.last4}` : "—",
         transaction.amount,
@@ -81,9 +123,18 @@ export function personAllTransactionsTable(s: FinanceState, personId: string): E
   return {
     title: `Todas as compras — ${person.name}`,
     subtitle: "Valores atribuídos à pessoa em todos os meses disponíveis",
-    headers: ["Data", "Mês", "Descrição", "Parcela", "Cartão", "Compra", "Valor a pagar"],
+    headers: [
+      "Data",
+      "Mês",
+      "Descrição",
+      "Categoria",
+      "Parcela",
+      "Cartão",
+      "Compra",
+      "Valor a pagar",
+    ],
     rows,
-    footer: ["", "", "Total final", "", "", "", total],
+    footer: ["", "", "Total final", "", "", "", "", total],
   };
 }
 
@@ -94,7 +145,13 @@ export function peopleSummaryTable(s: FinanceState, month: string): ExportTable 
     headers: ["Pessoa", "Limite", "Atribuído", "Saldo", "% usado"],
     rows: s.people.map((p) => {
       const t = personMonthTotal(s, p.id, month);
-      return [p.name, p.limit, t, round2(p.limit - t), `${Math.round(p.limit ? (t / p.limit) * 100 : 0)}%`];
+      return [
+        p.name,
+        p.limit,
+        t,
+        round2(p.limit - t),
+        `${Math.round(p.limit ? (t / p.limit) * 100 : 0)}%`,
+      ];
     }),
   };
 }
