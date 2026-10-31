@@ -18,6 +18,7 @@ import {
   PieChart,
   Repeat,
   RefreshCw,
+  Send,
   Smartphone,
   Split,
   Tag,
@@ -359,6 +360,27 @@ function ComoFunciona() {
           <Button asChild size="sm" className="mt-1">
             <Link to="/enviar-conta">
               Abrir Enviar conta <ArrowRight className="size-4" />
+            </Link>
+          </Button>
+        </Tutorial>
+        <Tutorial icon={<Send className="size-5" />} title="Como enviar a fatura ao CEU Finanças">
+          <p>
+            Na lista de <b>Faturas</b>, use o atalho de envio na linha da fatura ou abra os detalhes
+            e clique em <b>Enviar saída para Finanças</b>.
+          </p>
+          <p>
+            O CEU Finanças cria uma única <b>saída</b> com o total oficial da fatura selecionada,
+            categoria <b>Contas</b> e data de vencimento. O envio vai para a conta CEU associada ao
+            e-mail conectado no Fatura em Dia; cada pessoa deve usar sua própria conta.
+          </p>
+          <p>
+            Na mesma conta, a referência impede que a fatura seja lançada duas vezes. Depois do
+            envio, você pode consultar e excluir o registro normalmente em <b>Meus Registros</b> no
+            CEU Finanças.
+          </p>
+          <Button asChild size="sm" className="mt-1">
+            <Link to="/faturas">
+              Abrir Faturas <ArrowRight className="size-4" />
             </Link>
           </Button>
         </Tutorial>

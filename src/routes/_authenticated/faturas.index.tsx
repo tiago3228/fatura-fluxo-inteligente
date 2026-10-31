@@ -14,6 +14,7 @@ import { EmptyState, KpiCard, PageHeader, Panel } from "@/components/app/common"
 import { InvoiceStatusBadge, Pill } from "@/components/app/badges";
 import { PdfImportDialog } from "@/components/app/PdfImportDialog";
 import { ExcelImportDialog } from "@/components/app/ExcelImportDialog";
+import { SendInvoiceToFinancesButton } from "@/components/app/SendInvoiceToFinancesButton";
 import { FilterSelect } from "@/components/app/FilterSelect";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -192,7 +193,7 @@ function Faturas() {
                   <th className="text-right">Pendentes</th>
                   <th>Status</th>
                   <th>Pagamento</th>
-                  <th className="w-12" />
+                  <th className="w-20" />
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -246,11 +247,14 @@ function Faturas() {
                         )}
                       </td>
                       <td>
-                        <Button asChild variant="ghost" size="icon" aria-label="Ver detalhes">
-                          <Link to="/faturas/$id" params={{ id: i.id }}>
-                            <Eye className="size-4" />
-                          </Link>
-                        </Button>
+                        <div className="flex items-center justify-end gap-1">
+                          <SendInvoiceToFinancesButton invoice={i} card={c} compact />
+                          <Button asChild variant="ghost" size="icon" aria-label="Ver detalhes">
+                            <Link to="/faturas/$id" params={{ id: i.id }}>
+                              <Eye className="size-4" />
+                            </Link>
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   );
