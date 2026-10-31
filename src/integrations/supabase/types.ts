@@ -230,6 +230,45 @@ export type Database = {
           },
         ]
       }
+      minigame_scores: {
+        Row: {
+          correct_answers: number
+          created_at: string
+          display_name: string
+          duration_seconds: number
+          id: string
+          mode: string
+          score: number
+          timed_mode: boolean
+          user_id: string
+          wrong_answers: number
+        }
+        Insert: {
+          correct_answers?: number
+          created_at?: string
+          display_name: string
+          duration_seconds?: number
+          id?: string
+          mode?: string
+          score: number
+          timed_mode?: boolean
+          user_id: string
+          wrong_answers?: number
+        }
+        Update: {
+          correct_answers?: number
+          created_at?: string
+          display_name?: string
+          duration_seconds?: number
+          id?: string
+          mode?: string
+          score?: number
+          timed_mode?: boolean
+          user_id?: string
+          wrong_answers?: number
+        }
+        Relationships: []
+      }
       people: {
         Row: {
           active: boolean
@@ -565,45 +604,6 @@ export type Database = {
           id?: string
           name?: string
           updated_at?: string
-        }
-        Relationships: []
-      }
-      minigame_scores: {
-        Row: {
-          id: string
-          user_id: string
-          display_name: string
-          score: number
-          correct_answers: number
-          wrong_answers: number
-          timed_mode: boolean
-          mode: "free" | "timed" | "challenge"
-          duration_seconds: number
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          display_name: string
-          score: number
-          correct_answers?: number
-          wrong_answers?: number
-          timed_mode?: boolean
-          mode?: "free" | "timed" | "challenge"
-          duration_seconds?: number
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          display_name?: string
-          score?: number
-          correct_answers?: number
-          wrong_answers?: number
-          timed_mode?: boolean
-          mode?: "free" | "timed" | "challenge"
-          duration_seconds?: number
-          created_at?: string
         }
         Relationships: []
       }
