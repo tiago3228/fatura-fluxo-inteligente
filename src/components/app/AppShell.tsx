@@ -140,10 +140,19 @@ function CeuFinancasMenuItem() {
 
   const openCeu = async () => {
     setLoading(true);
-    const popup = window.open("about:blank", "_blank", "noopener,noreferrer");
+    const popup = window.open("about:blank", "_blank");
+    if (popup) {
+      popup.opener = null;
+      const referrerPolicy = popup.document.createElement("meta");
+      referrerPolicy.name = "referrer";
+      referrerPolicy.content = "no-referrer";
+      popup.document.head.append(referrerPolicy);
+      popup.document.title = "Abrindo CEU Finanças";
+      popup.document.body.textContent = "Conectando ao CEU Finanças…";
+    }
     try {
       const { url } = await createLink();
-      if (popup) popup.location.href = url;
+      if (popup) popup.location.replace(url);
       else window.location.assign(url);
     } catch (error) {
       popup?.close();
