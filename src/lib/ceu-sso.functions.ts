@@ -8,7 +8,7 @@ export const createCeuSsoLink = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const claims = context.claims as Record<string, unknown>;
-    const email = typeof claims.email === "string" ? claims.email.trim().toLowerCase() : "";
+    const email = typeof claims['email'] === "string" ? claims['email'].trim().toLowerCase() : "";
     if (!email) throw new Error("A sessão atual não possui um e-mail válido.");
 
     const sharedSecret = process.env["CEU_SSO_SHARED_SECRET"];

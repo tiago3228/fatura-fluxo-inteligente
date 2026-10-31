@@ -56,8 +56,8 @@ export function useAlerts(): AppAlert[] {
     });
   monthInvoices(state, m).forEach((inv) => {
     const d = invoiceDiff(state, inv);
+    const c = state.cards.find((x) => x.id === inv.cardId);
     if (d !== 0) {
-      const c = state.cards.find((x) => x.id === inv.cardId);
       out.push({
         id: `inv_${inv.id}`,
         tone: "danger",
