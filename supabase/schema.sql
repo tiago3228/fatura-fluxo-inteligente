@@ -261,6 +261,21 @@ create index if not exists idx_allocations_transaction on public.transaction_all
 create index if not exists idx_plans_workspace on public.installment_plans(workspace_id);
 create index if not exists idx_plan_shares_plan on public.installment_plan_shares(plan_id);
 
+create table if not exists public.minigame_scores (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  display_name text not null check (char_length(trim(display_name)) between 1 and 160),
+  score integer not null,
+  correct_answers integer not null default 0 check (correct_answers >= 0),
+  wrong_answers integer not null default 0 check (wrong_answers >= 0),
+  timed_mode boolean not null default false,
+  mode text not null default 'free' check (mode in ('free', 'timed', 'challenge')),
+  duration_seconds integer not null default 0 check (duration_seconds >= 0),
+  created_at timestamptz not null default now()
+);
+create index if not exists minigame_scores_ranking_idx
+  on public.minigame_scores(score desc, created_at asc);
+
 -- updated_at automático
  drop trigger if exists trg_workspaces_updated_at on public.workspaces;
  create trigger trg_workspaces_updated_at before update on public.workspaces for each row execute function app.set_updated_at();
@@ -292,6 +307,7 @@ alter table public.transactions enable row level security;
 alter table public.transaction_allocations enable row level security;
 alter table public.installment_plans enable row level security;
 alter table public.installment_plan_shares enable row level security;
+alter table public.minigame_scores enable row level security;
 
 -- O usuário só pode listar os workspaces dos quais participa.
 drop policy if exists workspaces_select_member on public.workspaces;
@@ -355,9 +371,18 @@ create policy plan_shares_member_all on public.installment_plan_shares for all t
 using (app.is_workspace_member(workspace_id))
 with check (app.is_workspace_member(workspace_id));
 
+drop policy if exists minigame_scores_select_authenticated on public.minigame_scores;
+create policy minigame_scores_select_authenticated on public.minigame_scores for select to authenticated
+using (true);
+
+drop policy if exists minigame_scores_insert_own on public.minigame_scores;
+create policy minigame_scores_insert_own on public.minigame_scores for insert to authenticated
+with check (user_id = auth.uid());
+
 -- Não exponha tabelas diretamente ao papel anon.
 revoke all on all tables in schema public from anon;
 grant select, insert, update, delete on all tables in schema public to authenticated;
+revoke update, delete on public.minigame_scores from authenticated;
 grant usage on schema app to authenticated;
 
 commit;

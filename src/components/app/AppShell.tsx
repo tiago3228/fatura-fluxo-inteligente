@@ -61,6 +61,7 @@ import { DemoTag } from "./common";
 import { TxActionsProvider } from "./tx-actions";
 import { FloatingCalculator } from "./FloatingCalculator";
 import { PersonLimitAlert } from "./PersonLimitAlert";
+import { MiniGameMenuItem } from "./MiniGameMenuItem";
 import { cn } from "@/lib/utils";
 import { createCeuSsoLink } from "@/lib/ceu-sso.functions";
 
@@ -118,6 +119,7 @@ function AppSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
+              <MiniGameMenuItem />
               <CeuFinancasMenuItem />
             </SidebarMenu>
           </SidebarGroupContent>

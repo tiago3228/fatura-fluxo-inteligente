@@ -1,0 +1,1289 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mini Game de Bandeiras</title>
+    <style>
+      :root {
+        --bg: #080b16;
+        --panel: #11182a;
+        --panel-2: #17213a;
+        --text: #f5f7ff;
+        --muted: #9ba8c6;
+        --primary: #62d8ff;
+        --secondary: #a66bff;
+        --success: #56e39f;
+        --danger: #ff6b81;
+        --warning: #ffd166;
+        --border: #283553;
+        --shadow: 0 24px 80px #0008;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        color: var(--text);
+        background: radial-gradient(circle at 20% 0%, #18234a 0, transparent 35%), var(--bg);
+        font:
+          15px/1.45 Inter,
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          Segoe UI,
+          sans-serif;
+      }
+      body[data-theme="gameboy"] {
+        --bg: #91a86d;
+        --panel: #c8d69b;
+        --panel-2: #dce8b0;
+        --text: #26351f;
+        --muted: #536640;
+        --primary: #40532d;
+        --secondary: #657d43;
+        --border: #71884c;
+        --shadow: 0 24px 80px #26351f55;
+      }
+      body[data-theme="sunset"] {
+        --bg: #150a2d;
+        --panel: #32145f;
+        --panel-2: #4b1e71;
+        --text: #fff7ef;
+        --muted: #e6b8ca;
+        --primary: #ffb347;
+        --secondary: #f26b9e;
+        --border: #8d457b;
+        --shadow: 0 24px 80px #0b0318aa;
+      }
+      button {
+        font: inherit;
+        cursor: pointer;
+      }
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.55;
+      }
+      .shell {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 48px 18px;
+        text-align: center;
+      }
+      .brand {
+        color: var(--primary);
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        font-size: 12px;
+        font-weight: 900;
+      }
+      h1 {
+        margin: 12px 0 8px;
+        font-size: clamp(30px, 6vw, 58px);
+        line-height: 1;
+      }
+      .lead {
+        max-width: 620px;
+        margin: 0 auto 28px;
+        color: var(--muted);
+      }
+      .launch {
+        border: 0;
+        border-radius: 14px;
+        padding: 14px 24px;
+        color: #06101a;
+        background: linear-gradient(135deg, var(--primary), #fff);
+        font-weight: 900;
+        box-shadow: 0 10px 30px color-mix(in srgb, var(--primary), transparent 65%);
+      }
+      .overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 20;
+        display: grid;
+        place-items: center;
+        padding: 14px;
+        background: #02040bcc;
+        backdrop-filter: blur(8px);
+      }
+      .overlay.hidden {
+        display: none;
+      }
+      .modal {
+        position: relative;
+        width: min(720px, 100%);
+        max-height: calc(100vh - 28px);
+        overflow: auto;
+        border: 1px solid var(--border);
+        border-radius: 24px;
+        background: var(--panel);
+        box-shadow: var(--shadow);
+      }
+      .panel-inner {
+        padding: 24px;
+        background: radial-gradient(circle at top, var(--primary) 2a, transparent 50%);
+      }
+      body[data-theme="gameboy"] .panel-inner {
+        background: linear-gradient(145deg, var(--panel), var(--panel-2));
+      }
+      body[data-theme="sunset"] .panel-inner {
+        background:
+          radial-gradient(circle at top, #f59e0b55, transparent 45%),
+          linear-gradient(145deg, var(--panel), var(--bg));
+      }
+      .close {
+        position: absolute;
+        right: 14px;
+        top: 14px;
+        z-index: 3;
+        width: 36px;
+        height: 36px;
+        border: 1px solid var(--border);
+        border-radius: 50%;
+        color: var(--muted);
+        background: var(--panel-2);
+        font-size: 22px;
+        line-height: 1;
+      }
+      .close:hover {
+        color: var(--text);
+        border-color: var(--primary);
+      }
+      .center {
+        text-align: center;
+      }
+      .eyebrow {
+        display: flex;
+        justify-content: center;
+        gap: 8px;
+        align-items: center;
+        color: var(--primary);
+        text-transform: uppercase;
+        letter-spacing: 0.2em;
+        font-size: 11px;
+        font-weight: 900;
+      }
+      .title {
+        margin: 10px 42px 5px;
+        font-size: clamp(24px, 5vw, 36px);
+      }
+      .desc {
+        margin: 0 auto;
+        max-width: 560px;
+        color: var(--muted);
+      }
+      .section {
+        margin-top: 22px;
+        padding: 14px;
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        background: #00000012;
+      }
+      .section-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        align-items: center;
+        margin-bottom: 10px;
+      }
+      .section-head h2 {
+        margin: 0;
+        font-size: 15px;
+      }
+      .tiny {
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .themes {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+      }
+      .theme,
+      .mode {
+        padding: 12px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        color: var(--text);
+        background: var(--panel-2);
+        text-align: left;
+        transition: 0.2s;
+      }
+      .theme:hover,
+      .mode:hover,
+      .theme.active {
+        border-color: var(--primary);
+        transform: translateY(-2px);
+      }
+      .theme.active {
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary), transparent 65%);
+      }
+      .theme b,
+      .mode b {
+        display: block;
+        font-size: 13px;
+      }
+      .theme span,
+      .mode span {
+        display: block;
+        margin-top: 4px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .modes {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+      }
+      .mode {
+        min-height: 112px;
+      }
+      .mode .icon {
+        display: block;
+        margin-bottom: 9px;
+        font-size: 23px;
+      }
+      .mode.challenge {
+        border-color: #d6a23b88;
+        background: #d6a23b18;
+      }
+      .trophies {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+      }
+      .trophy {
+        padding: 9px 5px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        text-align: center;
+        background: var(--panel-2);
+        opacity: 0.45;
+        filter: grayscale(1);
+      }
+      .trophy.unlocked {
+        opacity: 1;
+        filter: none;
+        border-color: var(--warning);
+        background: #ffd16618;
+      }
+      .trophy .emoji {
+        font-size: 22px;
+        display: block;
+      }
+      .trophy b {
+        display: block;
+        margin-top: 4px;
+        font-size: 11px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .ranking {
+        display: grid;
+        gap: 6px;
+      }
+      .rank-row {
+        display: grid;
+        grid-template-columns: 28px 1fr auto auto;
+        gap: 8px;
+        align-items: center;
+        padding: 8px 10px;
+        border-radius: 9px;
+        background: var(--panel-2);
+        text-align: left;
+        font-size: 13px;
+      }
+      .rank-row .pos {
+        color: var(--primary);
+        font-weight: 900;
+        text-align: center;
+      }
+      .rank-row .name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .rank-row .score {
+        color: var(--primary);
+        font-weight: 900;
+      }
+      .game-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 0 0 14px;
+      }
+      .stats {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        flex-wrap: wrap;
+      }
+      .badge {
+        padding: 6px 10px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        color: var(--muted);
+        background: var(--panel-2);
+        font-size: 12px;
+        font-weight: 800;
+      }
+      .badge.primary {
+        color: var(--primary);
+        border-color: var(--primary);
+      }
+      .badge.danger {
+        color: var(--danger);
+        border-color: var(--danger);
+      }
+      .scorebox {
+        text-align: right;
+      }
+      .scorebox small {
+        display: block;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.16em;
+        font-size: 9px;
+        font-weight: 800;
+      }
+      .score {
+        color: var(--primary);
+        font-size: 27px;
+        font-weight: 950;
+        line-height: 1;
+      }
+      .score.negative {
+        color: var(--danger);
+      }
+      .icon-btn {
+        width: 34px;
+        height: 34px;
+        border: 1px solid var(--border);
+        border-radius: 9px;
+        color: var(--muted);
+        background: var(--panel-2);
+      }
+      .icon-btn:hover {
+        color: var(--primary);
+        border-color: var(--primary);
+      }
+      .streak {
+        display: flex;
+        justify-content: space-between;
+        margin: 0 0 15px;
+        padding: 8px 11px;
+        border: 1px solid #ffd16677;
+        border-radius: 10px;
+        color: var(--warning);
+        background: #ffd16612;
+        font-size: 12px;
+        font-weight: 800;
+      }
+      .flag-wrap {
+        position: relative;
+        display: grid;
+        place-items: center;
+        min-height: 205px;
+        max-width: 350px;
+        margin: 16px auto;
+        border: 5px solid var(--panel-2);
+        border-radius: 16px;
+        background: var(--panel-2);
+        box-shadow: 0 16px 36px #0004;
+      }
+      .flag-wrap img {
+        display: block;
+        width: 100%;
+        max-height: 195px;
+        object-fit: contain;
+        border-radius: 9px;
+      }
+      .answers {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 9px;
+      }
+      .answer {
+        min-height: 54px;
+        padding: 10px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        color: var(--text);
+        background: var(--panel-2);
+        font-weight: 750;
+        transition: 0.18s;
+      }
+      .answer:hover:not(:disabled) {
+        border-color: var(--primary);
+        transform: translateY(-1px);
+      }
+      .answer.correct {
+        border-color: var(--success);
+        color: var(--success);
+        background: #56e39f1c;
+      }
+      .answer.wrong {
+        border-color: var(--danger);
+        color: var(--danger);
+        background: #ff6b811c;
+      }
+      .feedback {
+        margin-top: 14px;
+        padding: 11px;
+        border-radius: 10px;
+        text-align: center;
+        font-size: 13px;
+        font-weight: 800;
+      }
+      .feedback.ok {
+        color: var(--success);
+        background: #56e39f1c;
+      }
+      .feedback.bad {
+        color: var(--danger);
+        background: #ff6b811c;
+      }
+      .feedback p {
+        margin: 3px 0;
+      }
+      .feedback .sub {
+        color: var(--text);
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .actions {
+        display: flex;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 9px;
+        margin-top: 18px;
+      }
+      .btn {
+        min-height: 44px;
+        padding: 10px 17px;
+        border: 1px solid var(--border);
+        border-radius: 11px;
+        color: var(--text);
+        background: var(--panel-2);
+        font-weight: 800;
+      }
+      .btn.primary {
+        border-color: var(--primary);
+        color: #06101a;
+        background: var(--primary);
+      }
+      .btn:hover:not(:disabled) {
+        filter: brightness(1.1);
+        transform: translateY(-1px);
+      }
+      .footer-note {
+        display: flex;
+        justify-content: center;
+        gap: 5px;
+        margin-top: 14px;
+        color: var(--muted);
+        font-size: 10px;
+        text-align: center;
+      }
+      .celebration {
+        position: absolute;
+        inset: -22px 0 auto;
+        z-index: 4;
+        display: grid;
+        place-items: center;
+        pointer-events: none;
+        animation: pop 0.35s ease-out both;
+      }
+      .celebration-card {
+        padding: 10px 20px;
+        border: 1px solid var(--warning);
+        border-radius: 16px;
+        color: var(--warning);
+        background: var(--panel);
+        box-shadow: 0 8px 30px #0007;
+        text-align: center;
+      }
+      .celebration-card strong {
+        display: block;
+        font-size: 16px;
+      }
+      .confetti {
+        position: absolute;
+        width: 8px;
+        height: 8px;
+        border-radius: 2px;
+        animation: confetti 1.2s ease-out both;
+      }
+      .c1 {
+        left: 20%;
+        top: 20%;
+        background: #ff6b81;
+      }
+      .c2 {
+        left: 32%;
+        top: 0;
+        background: #56e39f;
+        animation-delay: 0.08s;
+      }
+      .c3 {
+        right: 28%;
+        top: 4%;
+        background: #62d8ff;
+        animation-delay: 0.15s;
+      }
+      .c4 {
+        right: 16%;
+        top: 20%;
+        background: #ffd166;
+        animation-delay: 0.22s;
+      }
+      .c5 {
+        left: 15%;
+        top: 55%;
+        background: #a66bff;
+        animation-delay: 0.12s;
+      }
+      .c6 {
+        right: 14%;
+        top: 60%;
+        background: #f26b9e;
+        animation-delay: 0.2s;
+      }
+      @keyframes pop {
+        from {
+          opacity: 0;
+          transform: scale(0.72);
+        }
+        to {
+          opacity: 1;
+          transform: scale(1);
+        }
+      }
+      @keyframes confetti {
+        from {
+          opacity: 0;
+          transform: translateY(0) rotate(0);
+        }
+        20% {
+          opacity: 1;
+        }
+        to {
+          opacity: 0;
+          transform: translateY(100px) rotate(250deg);
+        }
+      }
+      @media (max-width: 620px) {
+        .shell {
+          padding: 30px 12px;
+        }
+        .panel-inner {
+          padding: 18px 14px;
+        }
+        .themes,
+        .modes {
+          grid-template-columns: 1fr;
+        }
+        .trophies {
+          grid-template-columns: repeat(2, 1fr);
+        }
+        .title {
+          font-size: 25px;
+        }
+        .flag-wrap {
+          min-height: 165px;
+        }
+        .flag-wrap img {
+          max-height: 155px;
+        }
+        .rank-row {
+          grid-template-columns: 24px 1fr auto;
+        }
+        .rank-row .mode-label {
+          display: none;
+        }
+        .game-head {
+          align-items: flex-start;
+        }
+        .scorebox {
+          margin-left: auto;
+        }
+      }
+    </style>
+  </head>
+  <body data-theme="neon">
+    <main class="shell">
+      <div class="brand">Mini Game</div>
+      <h1>Adivinhe as bandeiras</h1>
+      <p class="lead">
+        Um quiz retro de geografia com skins, troféus, música, ranking e partidas infinitas.
+      </p>
+      <button class="launch" id="openGame">Abrir Mini Game</button>
+    </main>
+
+    <div
+      class="overlay hidden"
+      id="overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="gameTitle"
+    >
+      <section class="modal">
+        <button class="close" id="closeGame" aria-label="Fechar Mini Game" title="Fechar">×</button>
+        <div class="panel-inner" id="startScreen">
+          <div class="center">
+            <div class="eyebrow">⚑ <span>Mini Game</span></div>
+            <h2 class="title" id="gameTitle">Adivinhe as bandeiras</h2>
+            <p class="desc">
+              Escolha uma skin e um modo. Jogue sem limite de rodadas até decidir fechar a janela.
+            </p>
+          </div>
+          <div class="section">
+            <div class="section-head">
+              <h2>🎨 Escolha sua skin retrô</h2>
+              <span class="tiny" id="selectedTheme">Arcade Neon</span>
+            </div>
+            <div class="themes" id="themes"></div>
+          </div>
+          <div class="section">
+            <div class="section-head">
+              <h2>🎮 Escolha o modo</h2>
+              <span class="tiny">+15 acerto · −8 erro</span>
+            </div>
+            <div class="modes">
+              <button class="mode" data-mode="free">
+                <span class="icon">🚩</span><b>Modo livre</b><span>Sem cronômetro.</span>
+              </button>
+              <button class="mode" data-mode="timed">
+                <span class="icon">⏱️</span><b>Modo cronometrado</b
+                ><span>15 segundos por bandeira.</span>
+              </button>
+              <button class="mode challenge" data-mode="challenge">
+                <span class="icon">🛡️</span><b>Modo desafio</b
+                ><span>Começa em 15s e perde 1s por acerto, até 5s.</span>
+              </button>
+            </div>
+          </div>
+          <div class="section">
+            <div class="section-head">
+              <h2>🏆 Troféus</h2>
+              <span class="tiny" id="trophyCount"></span>
+            </div>
+            <div class="trophies" id="trophies"></div>
+          </div>
+          <div class="section">
+            <div class="section-head">
+              <h2>🌎 Ranking global</h2>
+              <span class="tiny" id="rankingCaption">Carregando ranking global…</span>
+            </div>
+            <div class="ranking" id="ranking"></div>
+          </div>
+        </div>
+        <div class="panel-inner" id="gameScreen" hidden></div>
+      </section>
+    </div>
+
+    <script>
+      (() => {
+        "use strict";
+        const COUNTRIES = `
+Brasil|br
+Argentina|ar
+Chile|cl
+Colômbia|co
+Peru|pe
+Uruguai|uy
+Bolívia|bo
+Paraguai|py
+Equador|ec
+Venezuela|ve
+México|mx
+Estados Unidos|us
+Canadá|ca
+Costa Rica|cr
+Panamá|pa
+Cuba|cu
+Jamaica|jm
+Haiti|ht
+República Dominicana|do
+Guatemala|gt
+Honduras|hn
+Nicarágua|ni
+El Salvador|sv
+Belize|bz
+Guiana|gy
+Suriname|sr
+Trinidad e Tobago|tt
+Bahamas|bs
+Barbados|bb
+Reino Unido|gb
+França|fr
+Alemanha|de
+Itália|it
+Espanha|es
+Portugal|pt
+Irlanda|ie
+Países Baixos|nl
+Bélgica|be
+Suíça|ch
+Áustria|at
+Polônia|pl
+Grécia|gr
+Noruega|no
+Suécia|se
+Finlândia|fi
+Dinamarca|dk
+Islândia|is
+Ucrânia|ua
+Rússia|ru
+Romênia|ro
+Bulgária|bg
+Croácia|hr
+Sérvia|rs
+Eslovênia|si
+Eslováquia|sk
+Lituânia|lt
+Letônia|lv
+Estônia|ee
+Malta|mt
+Chipre|cy
+Moldávia|md
+Bielorrússia|by
+Bósnia e Herzegovina|ba
+Montenegro|me
+Macedônia do Norte|mk
+Liechtenstein|li
+San Marino|sm
+Andorra|ad
+Vaticano|va
+Kosovo|xk
+Japão|jp
+Coreia do Sul|kr
+Coreia do Norte|kp
+China|cn
+Mongólia|mn
+Tailândia|th
+Vietnã|vn
+Laos|la
+Camboja|kh
+Indonésia|id
+Filipinas|ph
+Índia|in
+Nepal|np
+Butão|bt
+Cazaquistão|kz
+Geórgia|ge
+Armênia|am
+Azerbaijão|az
+Afeganistão|af
+Paquistão|pk
+Bangladesh|bd
+Sri Lanka|lk
+Taiwan|tw
+Mianmar|mm
+Austrália|au
+Nova Zelândia|nz
+Fiji|fj
+Samoa|ws
+Tonga|to
+Papua-Nova Guiné|pg
+Egito|eg
+Marrocos|ma
+Argélia|dz
+Tunísia|tn
+Nigéria|ng
+Quênia|ke
+Gana|gh
+Etiópia|et
+Senegal|sn
+Costa do Marfim|ci
+Camarões|cm
+Tanzânia|tz
+Uganda|ug
+Ruanda|rw
+Madagascar|mg
+Namíbia|na
+Botsuana|bw
+Zimbábue|zw
+Zâmbia|zm
+Angola|ao
+Moçambique|mz
+Maurício|mu
+Seicheles|sc
+Malawi|mw
+Libéria|lr
+Serra Leoa|sl
+Guiné|gn
+Mali|ml
+Burkina Faso|bf
+Benim|bj
+Togo|tg
+Gabão|ga
+República do Congo|cg
+República Democrática do Congo|cd
+Somália|so
+Sudão|sd
+Sudão do Sul|ss
+Israel|il
+Arábia Saudita|sa
+Emirados Árabes Unidos|ae
+Turquia|tr
+Irã|ir
+Iraque|iq
+Jordânia|jo
+Líbano|lb
+Bahrein|bh
+Catar|qa
+Omã|om
+Iêmen|ye
+Síria|sy
+África do Sul|za`
+          .trim()
+          .split("\n")
+          .map((row) => {
+            const [name, code] = row.split("|");
+            return { name, code };
+          });
+
+        const THEMES = {
+          neon: { label: "Arcade Neon", desc: "Vibrante", color: "#62d8ff" },
+          gameboy: { label: "Game Boy", desc: "Monocromático", color: "#40532d" },
+          sunset: { label: "Sunset 16-bit", desc: "Roxo e laranja", color: "#ffb347" },
+        };
+        const ACHIEVEMENTS = [
+          ["first-correct", "Primeira bandeira", "Acerte sua primeira bandeira.", "🚩"],
+          ["explorer", "Explorador", "Responda 10 bandeiras diferentes.", "🧭"],
+          ["hot-streak", "Mão quente", "Acerte 5 bandeiras seguidas.", "🔥"],
+          ["world-tour", "Volta ao mundo", "Descubra 25 países diferentes.", "🌎"],
+          ["century", "Centenário", "Alcance 100 pontos.", "💯"],
+          ["against-clock", "Contra o relógio", "Acerte 5 no modo cronometrado ou desafio.", "⏱️"],
+        ];
+        const STORAGE = { ranking: "minigame-ranking-v1", trophies: "minigame-trophies-v1" };
+        const $ = (id) => document.getElementById(id);
+        const overlay = $("overlay");
+        const state = {
+          mode: "free",
+          theme: "neon",
+          question: null,
+          previous: null,
+          used: new Set(),
+          score: 0,
+          round: 1,
+          selected: null,
+          correct: null,
+          correctAnswers: 0,
+          wrongAnswers: 0,
+          streak: 0,
+          bestStreak: 0,
+          uniqueFlags: 0,
+          timeLeft: 15,
+          timeLimit: 15,
+          startedAt: null,
+          timer: null,
+          music: null,
+          musicEnabled: true,
+          achievements: load(STORAGE.trophies, []),
+          globalRanking: null,
+        };
+
+        function load(key, fallback) {
+          try {
+            return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback));
+          } catch {
+            return fallback;
+          }
+        }
+        function save(key, value) {
+          localStorage.setItem(key, JSON.stringify(value));
+        }
+        function shuffle(list) {
+          return [...list].sort(() => Math.random() - 0.5);
+        }
+        function scoreText(value) {
+          return `${value > 0 ? "+" : ""}${value}`;
+        }
+        function escapeHtml(value) {
+          return String(value).replace(
+            /[&<>'"]/g,
+            (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[c],
+          );
+        }
+
+        function createQuestion() {
+          let available = COUNTRIES.filter(
+            (p) => !state.used.has(p.code) && p.code !== state.previous,
+          );
+          if (!available.length) {
+            state.used.clear();
+            available = COUNTRIES.filter((p) => p.code !== state.previous);
+          }
+          const answer = shuffle(available)[0];
+          state.used.add(answer.code);
+          let wrong = shuffle(
+            COUNTRIES.filter((p) => p.code !== answer.code && !state.used.has(p.code)),
+          ).slice(0, 3);
+          if (wrong.length < 3)
+            wrong = shuffle(COUNTRIES.filter((p) => p.code !== answer.code)).slice(0, 3);
+          state.uniqueFlags = state.used.size;
+          state.question = { answer, options: shuffle([answer, ...wrong]) };
+        }
+
+        function playTone(ok) {
+          try {
+            const audio = new AudioContext(),
+              osc = audio.createOscillator(),
+              gain = audio.createGain(),
+              now = audio.currentTime;
+            osc.type = "sine";
+            osc.frequency.setValueAtTime(ok ? 660 : 180, now);
+            osc.frequency.exponentialRampToValueAtTime(ok ? 990 : 110, now + 0.16);
+            gain.gain.setValueAtTime(0.0001, now);
+            gain.gain.exponentialRampToValueAtTime(0.16, now + 0.015);
+            gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.2);
+            osc.connect(gain);
+            gain.connect(audio.destination);
+            osc.start(now);
+            osc.stop(now + 0.2);
+            osc.addEventListener("ended", () => audio.close(), { once: true });
+          } catch {}
+        }
+
+        function startMusic() {
+          stopMusic();
+          if (!state.musicEnabled) return;
+          try {
+            const audio = new AudioContext(),
+              master = audio.createGain(),
+              melody = [
+                659.25, 783.99, 987.77, 783.99, 587.33, 659.25, 783.99, 523.25, 440, 523.25, 659.25,
+                783.99, 698.46, 659.25, 523.25, 440,
+              ],
+              bass = [110, 110, 146.83, 146.83, 130.81, 130.81, 98, 98];
+            let step = 0;
+            master.gain.value = 0.035;
+            master.connect(audio.destination);
+            audio.resume();
+            const tick = () => {
+              const now = audio.currentTime,
+                lead = audio.createOscillator(),
+                leadGain = audio.createGain();
+              lead.type = "square";
+              lead.frequency.value = melody[step % melody.length];
+              leadGain.gain.setValueAtTime(0.0001, now);
+              leadGain.gain.exponentialRampToValueAtTime(0.55, now + 0.015);
+              leadGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.14);
+              lead.connect(leadGain);
+              leadGain.connect(master);
+              lead.start(now);
+              lead.stop(now + 0.15);
+              if (step % 2 === 0) {
+                const b = audio.createOscillator(),
+                  bg = audio.createGain();
+                b.type = "triangle";
+                b.frequency.value = bass[(step / 2) % bass.length];
+                bg.gain.setValueAtTime(0.0001, now);
+                bg.gain.exponentialRampToValueAtTime(0.34, now + 0.02);
+                bg.gain.exponentialRampToValueAtTime(0.0001, now + 0.25);
+                b.connect(bg);
+                bg.connect(master);
+                b.start(now);
+                b.stop(now + 0.26);
+              }
+              step++;
+            };
+            tick();
+            const timer = setInterval(tick, 180);
+            state.music = () => {
+              clearInterval(timer);
+              master.gain.exponentialRampToValueAtTime(0.0001, audio.currentTime + 0.08);
+              setTimeout(() => audio.close(), 120);
+            };
+          } catch {}
+        }
+        function stopMusic() {
+          if (state.music) {
+            state.music();
+            state.music = null;
+          }
+        }
+
+        function renderThemes() {
+          $("themes").innerHTML = Object.entries(THEMES)
+            .map(
+              ([id, item]) =>
+                `<button class="theme ${state.theme === id ? "active" : ""}" data-theme="${id}"><b>${item.label}</b><span>${item.desc}</span></button>`,
+            )
+            .join("");
+          $("selectedTheme").textContent = THEMES[state.theme].label;
+          document.body.dataset.theme = state.theme;
+          document.querySelectorAll("[data-theme]").forEach(
+            (btn) =>
+              (btn.onclick = () => {
+                state.theme = btn.dataset.theme;
+                renderStart();
+              }),
+          );
+        }
+        function renderTrophies() {
+          const unlocked = state.achievements;
+          $("trophyCount").textContent = `${unlocked.length}/${ACHIEVEMENTS.length} desbloqueados`;
+          $("trophies").innerHTML = ACHIEVEMENTS.map(
+            ([id, title, desc, icon]) =>
+              `<div class="trophy ${unlocked.includes(id) ? "unlocked" : ""}" title="${desc}"><span class="emoji">${icon}</span><b>${title}</b></div>`,
+          ).join("");
+        }
+        function renderRanking() {
+          const ranking = (state.globalRanking ?? load(STORAGE.ranking, []))
+            .slice()
+            .sort((a, b) => b.score - a.score)
+            .slice(0, 10);
+          $("ranking").innerHTML = ranking.length
+            ? ranking
+                .map((r, i) => {
+                  const mode = r.mode || (r.timed_mode ? "timed" : "free");
+                  const label = mode === "challenge" ? "Desafio" : mode === "timed" ? "15s" : "Livre";
+                  const name = r.display_name || r.name || "Jogador";
+                  const correct = r.correct_answers ?? r.correct ?? 0;
+                  return `<div class="rank-row"><span class="pos">${i + 1}</span><span class="name">${escapeHtml(name)}</span><span class="mode-label tiny">${label} · ${correct} acertos</span><span class="score">${scoreText(r.score)}</span></div>`;
+                })
+                .join("")
+            : `<p class="tiny">Ainda não há pontuações. Seja o primeiro a jogar!</p>`;
+        }
+        function renderStart() {
+          $("startScreen").hidden = false;
+          $("gameScreen").hidden = true;
+          renderThemes();
+          renderTrophies();
+          renderRanking();
+        }
+        function openGame() {
+          overlay.classList.remove("hidden");
+          renderStart();
+        }
+
+        function startGame(mode) {
+          state.mode = mode;
+          state.score = 0;
+          state.round = 1;
+          state.selected = null;
+          state.correct = null;
+          state.correctAnswers = 0;
+          state.wrongAnswers = 0;
+          state.streak = 0;
+          state.bestStreak = 0;
+          state.timeLimit = 15;
+          state.timeLeft = 15;
+          state.startedAt = Date.now();
+          state.previous = null;
+          state.used.clear();
+          createQuestion();
+          $("startScreen").hidden = true;
+          $("gameScreen").hidden = false;
+          startMusic();
+          renderGame();
+          state.timer =
+            mode === "free"
+              ? null
+              : setInterval(() => {
+                  if (state.selected) return;
+                  state.timeLeft--;
+                  if (state.timeLeft <= 0) answer(null, true);
+                  renderGame();
+                }, 1000);
+        }
+        function stopTimer() {
+          if (state.timer) {
+            clearInterval(state.timer);
+            state.timer = null;
+          }
+        }
+
+        function unlockAchievements() {
+          const checks = {
+            "first-correct": state.correctAnswers >= 1,
+            explorer: state.uniqueFlags >= 10,
+            "hot-streak": state.bestStreak >= 5,
+            "world-tour": state.uniqueFlags >= 25,
+            century: state.score >= 100,
+            "against-clock": state.mode !== "free" && state.correctAnswers >= 5,
+          };
+          const newIds = ACHIEVEMENTS.filter(
+            ([id]) => checks[id] && !state.achievements.includes(id),
+          ).map(([id]) => id);
+          if (newIds.length) {
+            state.achievements.push(...newIds);
+            save(STORAGE.trophies, state.achievements);
+            newIds.forEach((id) => {
+              const a = ACHIEVEMENTS.find((x) => x[0] === id);
+              toast(`Troféu desbloqueado: ${a[1]}`);
+            });
+          }
+        }
+        function toast(message) {
+          const el = document.createElement("div");
+          el.textContent = message;
+          Object.assign(el.style, {
+            position: "fixed",
+            zIndex: 99,
+            left: "50%",
+            bottom: "24px",
+            transform: "translateX(-50%)",
+            padding: "12px 18px",
+            border: "1px solid var(--warning)",
+            borderRadius: "12px",
+            background: "var(--panel)",
+            color: "var(--warning)",
+            fontWeight: "800",
+            boxShadow: "var(--shadow)",
+          });
+          document.body.append(el);
+          setTimeout(() => el.remove(), 2600);
+        }
+
+        function answer(country, timeout = false) {
+          if (state.selected) return;
+          const ok = !timeout && country && country.code === state.question.answer.code;
+          state.selected = timeout ? "timeout" : country.code;
+          state.correct = ok;
+          if (ok) {
+            state.score += 15;
+            state.correctAnswers++;
+            state.streak++;
+            state.bestStreak = Math.max(state.bestStreak, state.streak);
+            if (state.mode === "challenge") state.timeLimit = Math.max(5, state.timeLimit - 1);
+            playTone(true);
+            if (state.streak >= 2) celebrate();
+          } else {
+            state.score -= 8;
+            state.wrongAnswers++;
+            state.streak = 0;
+            playTone(false);
+          }
+          unlockAchievements();
+          renderGame();
+        }
+        function nextQuestion() {
+          state.previous = state.question.answer.code;
+          createQuestion();
+          state.selected = null;
+          state.correct = null;
+          state.round++;
+          state.timeLeft = state.mode === "challenge" ? state.timeLimit : 15;
+          renderGame();
+        }
+        function celebrate() {
+          const holder = document.querySelector(".flag-wrap");
+          if (!holder) return;
+          const box = document.createElement("div");
+          box.className = "celebration";
+          box.innerHTML = `<i class="confetti c1"></i><i class="confetti c2"></i><i class="confetti c3"></i><i class="confetti c4"></i><i class="confetti c5"></i><i class="confetti c6"></i><div class="celebration-card">✨<strong>Sequência de ${state.streak}!</strong><small>Continue assim!</small></div>`;
+          holder.append(box);
+          setTimeout(() => box.remove(), 1800);
+        }
+
+        function renderGame() {
+          const q = state.question;
+          const timeBadge =
+            state.mode !== "free"
+              ? `<span class="badge ${state.timeLeft <= 5 ? "danger" : "primary"}">⏱️ ${state.mode === "challenge" ? "Desafio · " : ""}${state.timeLeft}s</span>`
+              : "";
+          const streakHtml = state.streak
+            ? `<div class="streak"><span>Sequência de acertos: ${state.streak}</span><span>Melhor: ${state.bestStreak}</span></div>`
+            : "";
+          let feedback = "";
+          if (state.correct !== null) {
+            if (state.correct) {
+              feedback = `<div class="feedback ok"><p>✓ Correto</p><p class="sub">Esta bandeira é de ${q.answer.name}.</p></div>`;
+            } else {
+              const selectedName = q.options.find((x) => x.code === state.selected)?.name || "";
+              feedback = `<div class="feedback bad"><p>✕ ${state.selected === "timeout" ? "Tempo esgotado" : "Incorreta"}</p><p class="sub">${state.selected !== "timeout" ? `Você escolheu: ${escapeHtml(selectedName)}<br>` : ""}Resposta correta: ${q.answer.name}</p></div>`;
+            }
+          }
+          const answers = q.options
+            .map((country) => {
+              const isAnswer = country.code === q.answer.code;
+              const isSelected = country.code === state.selected;
+              const classes = `${isSelected && state.correct ? "correct" : isSelected && !state.correct ? "wrong" : ""} ${state.selected && isAnswer ? "correct" : ""}`;
+              return `<button class="answer ${classes}" data-answer="${country.code}" ${state.selected ? "disabled" : ""}>${country.name}</button>`;
+            })
+            .join("");
+          const nextButton = state.selected
+            ? `<button class="btn primary" id="next">Próxima bandeira</button>`
+            : `<span class="tiny">Escolha uma das quatro opções</span>`;
+          $("gameScreen").innerHTML =
+            `<div class="game-head"><div class="stats"><span class="badge">Rodada ${state.round}</span>${timeBadge}</div><div class="scorebox"><small>Pontuação</small><span class="score ${state.score < 0 ? "negative" : ""}">${scoreText(state.score)}</span></div><button class="icon-btn" id="musicToggle" title="Alternar música">${state.musicEnabled ? "🔊" : "🔇"}</button></div>${streakHtml}<div class="center"><div class="eyebrow">⚑ <span>De qual país é essa bandeira?</span></div></div><div class="flag-wrap"><img src="https://flagcdn.com/w320/${q.answer.code}.png" alt="Bandeira para adivinhar" loading="eager"></div>${feedback}<div class="answers">${answers}</div><div class="actions">${nextButton}<button class="btn" id="finish">Fechar e salvar</button></div><div class="footer-note">${state.musicEnabled ? "🔊 Música retro" : "🔇 Música desligada"} · Sons de acerto/erro · ${state.correctAnswers + state.wrongAnswers} respostas</div>`;
+          $("gameScreen")
+            .querySelectorAll("[data-answer]")
+            .forEach(
+              (btn) =>
+                (btn.onclick = () => answer(q.options.find((x) => x.code === btn.dataset.answer))),
+            );
+          $("next")?.addEventListener("click", nextQuestion);
+          $("finish").onclick = closeGame;
+          $("musicToggle").onclick = () => {
+            state.musicEnabled = !state.musicEnabled;
+            startMusic();
+            renderGame();
+          };
+        }
+
+        function closeGame() {
+          stopTimer();
+          stopMusic();
+          const answered = state.correctAnswers + state.wrongAnswers;
+          if (answered) {
+            const ranking = load(STORAGE.ranking, []);
+            ranking.push({
+              name: "Jogador",
+              score: state.score,
+              correct: state.correctAnswers,
+              wrong: state.wrongAnswers,
+              mode: state.mode,
+              date: new Date().toISOString(),
+            });
+            save(STORAGE.ranking, ranking.sort((a, b) => b.score - a.score).slice(0, 50));
+            window.parent.postMessage(
+              {
+                type: "minigame:finished",
+                result: {
+                  score: state.score,
+                  correct_answers: state.correctAnswers,
+                  wrong_answers: state.wrongAnswers,
+                  timed_mode: state.mode !== "free",
+                  mode: state.mode,
+                  duration_seconds: Math.max(0, Math.floor((Date.now() - state.startedAt) / 1000)),
+                },
+              },
+              "*",
+            );
+          }
+          overlay.classList.add("hidden");
+          renderStart();
+          window.parent.postMessage({ type: "minigame:closed" }, "*");
+        }
+
+        $("openGame").onclick = openGame;
+        $("closeGame").onclick = closeGame;
+        document
+          .querySelectorAll("[data-mode]")
+          .forEach((btn) => (btn.onclick = () => startGame(btn.dataset.mode)));
+        window.addEventListener("message", (event) => {
+          const message = event.data;
+          if (message?.type === "minigame:host-close") {
+            closeGame();
+          } else if (message?.type === "minigame:ranking") {
+            state.globalRanking = message.available && Array.isArray(message.ranking) ? message.ranking : null;
+            $("rankingCaption").textContent = message.available
+              ? "Melhores resultados da comunidade"
+              : "Ranking local (offline)";
+            if (!$('startScreen').hidden) renderRanking();
+          }
+        });
+        renderStart();
+      })();
+    </script>
+  </body>
+</html>

@@ -568,6 +568,45 @@ export type Database = {
         }
         Relationships: []
       }
+      minigame_scores: {
+        Row: {
+          id: string
+          user_id: string
+          display_name: string
+          score: number
+          correct_answers: number
+          wrong_answers: number
+          timed_mode: boolean
+          mode: "free" | "timed" | "challenge"
+          duration_seconds: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          display_name: string
+          score: number
+          correct_answers?: number
+          wrong_answers?: number
+          timed_mode?: boolean
+          mode?: "free" | "timed" | "challenge"
+          duration_seconds?: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          display_name?: string
+          score?: number
+          correct_answers?: number
+          wrong_answers?: number
+          timed_mode?: boolean
+          mode?: "free" | "timed" | "challenge"
+          duration_seconds?: number
+          created_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
