@@ -1019,7 +1019,7 @@ Síria|sy
             .join("");
           $("selectedTheme").textContent = THEMES[state.theme].label;
           document.body.dataset.theme = state.theme;
-          document.querySelectorAll("[data-theme]").forEach(
+          $("themes").querySelectorAll("button[data-theme]").forEach(
             (btn) =>
               (btn.onclick = () => {
                 state.theme = btn.dataset.theme;
