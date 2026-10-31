@@ -1,7 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
-import { AlertTriangle, ArrowLeft, CalendarPlus, CheckCircle2, CircleCheckBig, CircleDollarSign } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CalendarPlus, CheckCircle2, CircleCheckBig, CircleDollarSign, Send } from "lucide-react";
 import { toast } from "sonner";
+import { createCeuSsoLink } from "@/lib/ceu-sso.functions";
 import { useFinance } from "@/lib/finance/store";
 import { allocatedSum, invoiceAllocatedTotal, invoiceDiff, invoiceLaunchesTotal, invoiceTxs, isCreditType, txStatus } from "@/lib/finance/calc";
 import { fmtBRL, fmtDate, fmtMonthLong, parseBRL, round2 } from "@/lib/finance/format";
@@ -33,8 +35,10 @@ const TABS = [
 function FaturaDetalhe() {
   const { id } = Route.useParams();
   const { state, dispatch } = useFinance();
+  const createLink = useServerFn(createCeuSsoLink);
   const [tab, setTab] = useState<(typeof TABS)[number][0]>("todas");
   const [paymentsOpen, setPaymentsOpen] = useState(false);
+  const [sendingToFinances, setSendingToFinances] = useState(false);
   const inv = state.invoices.find((i) => i.id === id);
   if (!inv) return <EmptyState title="Fatura não encontrada" action={<Button asChild variant="outline"><Link to="/faturas">Voltar para faturas</Link></Button>} />;
   const card = state.cards.find((c) => c.id === inv.cardId);
@@ -56,6 +60,52 @@ function FaturaDetalhe() {
   const unallocated = all.filter((t) => t.type !== "pagamento").reduce((s, t) => s + (t.amount - allocatedSum(t)), 0);
   const recordedPaidTotal = round2((inv.payments ?? []).reduce((sum, payment) => sum + payment.amount, 0));
   const paidTotal = inv.status === "paga" ? inv.officialTotal : recordedPaidTotal;
+  const sendToFinances = async () => {
+    if (!card || !Number.isFinite(inv.officialTotal) || inv.officialTotal <= 0) {
+      toast.error("Não foi possível enviar esta fatura", {
+        description: "Confira se o cartão e o total oficial estão preenchidos.",
+      });
+      return;
+    }
+
+    setSendingToFinances(true);
+    const popup = window.open("about:blank", "_blank");
+    if (popup) {
+      popup.opener = null;
+      const referrerPolicy = popup.document.createElement("meta");
+      referrerPolicy.name = "referrer";
+      referrerPolicy.content = "no-referrer";
+      popup.document.head.append(referrerPolicy);
+      popup.document.title = "Preparando saída no CEU Finanças";
+      popup.document.body.textContent = "Conectando ao CEU Finanças…";
+    }
+
+    try {
+      const { url } = await createLink();
+      const target = new URL(url);
+      target.hash = new URLSearchParams({
+        fatura: JSON.stringify({
+          action: "create-expense",
+          invoiceId: inv.id,
+          amount: inv.officialTotal,
+          date: inv.dueDate,
+          month: inv.month,
+          cardName: card.name,
+          description: `Fatura ${card.name} · ${fmtMonthLong(inv.month)}`,
+        }),
+      }).toString();
+
+      if (popup) popup.location.replace(target.toString());
+      else window.location.assign(target.toString());
+    } catch {
+      popup?.close();
+      toast.error("Não foi possível enviar a fatura para Finanças", {
+        description: "Verifique sua conexão e tente novamente.",
+      });
+    } finally {
+      setSendingToFinances(false);
+    }
+  };
 
   return (
     <>
@@ -66,6 +116,10 @@ function FaturaDetalhe() {
           <p className="text-sm text-muted-foreground">{card?.issuer} · {fmtMonthLong(inv.month)} · vencimento {fmtDate(inv.dueDate)}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" onClick={() => void sendToFinances()} disabled={sendingToFinances}>
+            <Send className="size-4" />
+            {sendingToFinances ? "Preparando envio…" : "Enviar saída para Finanças"}
+          </Button>
           {paidTotal > 0 && <Pill tone={paidTotal >= inv.officialTotal ? "success" : "warning"}><CircleCheckBig className="size-3" /> Pago {fmtBRL(paidTotal)}</Pill>}
           <Button variant="outline" onClick={() => setPaymentsOpen(true)}><CircleCheckBig className="size-4" /> Já pagou</Button>
           {inv.status !== "paga" && <Button onClick={() => { dispatch({ type: "markInvoicePaid", invoiceId: inv.id, paidAt: new Date().toISOString() }); toast.success("Fatura marcada como paga"); }}><CircleDollarSign className="size-4" /> Marcar fatura como paga</Button>}
