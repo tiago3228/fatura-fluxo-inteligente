@@ -83,13 +83,14 @@ export async function createPersonAccountJpeg({
   ctx.textAlign = "left";
   y += 34;
 
-  rows.forEach(({ transaction, amount }, index) => {
+  rows.forEach((row, index) => {
+    const { amount } = row;
     if (y > height - 120) return;
     ctx.fillStyle = index % 2 === 0 ? "#ffffff" : "#f0f5f3";
     ctx.fillRect(42, y - 25, width - 84, rowHeight);
     ctx.fillStyle = "#52635f";
     loadFont(ctx, 16);
-    const details = shareAccountRowDetails(transaction);
+    const details = shareAccountRowDetails(row);
     const dateLabel =
       details.dateKind === "forecast"
         ? `Prev. ${details.date}`
