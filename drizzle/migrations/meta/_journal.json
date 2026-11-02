@@ -50,6 +50,13 @@
       "when": 1793629236338,
       "tag": "0006_workspace_isolation_and_revision",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793629492747,
+      "tag": "0007_restore_family_shared_workspace",
+      "breakpoints": true
     }
   ]
 }
