@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildOtherAccountResponsibilities,
   createDefaultOtherAccountCategories,
   isValidOtherAccount,
   splitEvenlyInCents,
@@ -26,6 +27,16 @@ describe("contas domésticas", () => {
       { personId: "p1", personName: "Ana", amountCents: 1 },
       { personId: "p2", personName: "Bia", amountCents: 0 },
     ]);
+  });
+
+  it("permite associar pessoas sem rateio ou dividir já no cadastro", () => {
+    expect(buildOtherAccountResponsibilities(people.slice(0, 2), 10001, false)).toEqual([
+      { personId: "p1", personName: "Ana" },
+      { personId: "p2", personName: "Bia" },
+    ]);
+    const shares = buildOtherAccountResponsibilities(people.slice(0, 2), 10001, true);
+    expect(shares.map((item) => item.amountCents)).toEqual([5001, 5000]);
+    expect(shares.reduce((sum, item) => sum + (item.amountCents ?? 0), 0)).toBe(10001);
   });
 
   it("não divide valores inválidos nem quando não há participantes", () => {

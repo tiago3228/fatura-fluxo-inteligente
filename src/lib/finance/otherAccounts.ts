@@ -67,6 +67,27 @@ export function splitEvenlyInCents(
   }));
 }
 
+/** Cria responsáveis simples ou quotas iguais para usar no formulário de cadastro da conta. */
+export function buildOtherAccountResponsibilities(
+  people: ReadonlyArray<{ id: string; name: string }>,
+  amountCents: number,
+  divideEqually: boolean,
+): OtherAccountResponsibility[] {
+  const uniquePeople = people.filter(
+    (person, index) => people.findIndex((candidate) => candidate.id === person.id) === index,
+  );
+  if (
+    uniquePeople.length === 0 ||
+    uniquePeople.some((person) => !person.id.trim() || !person.name.trim())
+  )
+    return [];
+  if (divideEqually) return splitEvenlyInCents(amountCents, uniquePeople);
+  return uniquePeople.map((person) => ({
+    personId: person.id,
+    personName: person.name.trim(),
+  }));
+}
+
 function isValidIsoDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const date = new Date(`${value}T00:00:00.000Z`);
