@@ -26,6 +26,39 @@ export interface CreditCard {
 
 export type InvoiceStatus = "conferida" | "em_revisao" | "inconsistente" | "paga";
 
+export type InvoiceImportComparison =
+  | "possible_duplicate"
+  | "already_imported"
+  | "expected_installment"
+  | "expected_recurring"
+  | "new_purchase"
+  | "unexpected_installment"
+  | "other";
+
+export interface InvoiceImportRowAudit {
+  sourceRowId: string;
+  date: string;
+  description: string;
+  amount: number;
+  cardLast4?: string;
+  cardId?: string;
+  included: boolean;
+  comparisonStatus: InvoiceImportComparison;
+  reason?: string;
+  transactionId?: string;
+  personIds: string[];
+}
+
+export interface InvoiceImportBatch {
+  id: string;
+  fileName: string;
+  importedAt: string;
+  statementTotal?: number;
+  includedCount: number;
+  ignoredCount: number;
+  rows: InvoiceImportRowAudit[];
+}
+
 export interface PersonPayment {
   id: string;
   personId: string;
@@ -47,6 +80,8 @@ export interface Invoice {
   status: InvoiceStatus;
   payments?: InvoicePayment[];
   paidAt?: string | undefined;
+  /** Resultado imutável da revisão, incluindo linhas incluídas e ignoradas. */
+  importHistory?: InvoiceImportBatch[];
   source: "demo" | "pdf" | "pdf_demo" | "planilha";
 }
 
@@ -125,6 +160,10 @@ export interface InstallmentPlan {
   id: string;
   description: string;
   cardId: string;
+  /** Lançamento original de que o parcelamento foi inferido, quando aplicável. */
+  sourceTransactionId?: string | undefined;
+  /** Indica total/valores inferidos automaticamente a partir de uma parcela observada. */
+  estimated?: boolean | undefined;
   purchaseDate: string;
   total: number;
   /** Valores efetivos de cada parcela, preservados como informados */

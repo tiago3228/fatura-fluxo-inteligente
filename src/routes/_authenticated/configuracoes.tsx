@@ -309,26 +309,25 @@ function Configuracoes() {
                   />
                 </Row>
                 <Row
-                  title="Redefinir dados de demonstração"
+                  title="Redefinir dados locais"
                   desc={
-                    syncStatus === "local"
-                      ? "Substitui os exemplos deste navegador por dados de demonstração"
-                      : "Disponível apenas no modo local, fora do workspace sincronizado"
+                    syncStatus.phase === "local"
+                      ? "Apaga os dados deste dispositivo e cria um estado vazio; não altera a nuvem"
+                      : "Disponível apenas fora de um workspace sincronizado"
                   }
                 >
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
-                      <Button variant="outline" disabled={syncStatus !== "local"}>
-                        <RotateCcw className="size-4" /> Redefinir exemplos
+                      <Button variant="outline" disabled={syncStatus.phase !== "local"}>
+                        <RotateCcw className="size-4" /> Redefinir dados locais
                       </Button>
                     </AlertDialogTrigger>
                     <AlertDialogContent>
                       <AlertDialogHeader>
-                        <AlertDialogTitle>Redefinir para dados de demonstração?</AlertDialogTitle>
+                        <AlertDialogTitle>Apagar os dados deste dispositivo?</AlertDialogTitle>
                         <AlertDialogDescription>
-                          Esta ação substitui o estado atual deste navegador por exemplos e não
-                          recupera faturas importadas. Ela só fica disponível fora de um workspace
-                          sincronizado.
+                          Esta ação limpa os dados locais deste dispositivo e não pode ser desfeita
+                          por uma fatura remota. Ela não altera o estado salvo na nuvem.
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
@@ -337,7 +336,7 @@ function Configuracoes() {
                           onClick={() => {
                             dispatch({ type: "reset" });
                             setWarn("80");
-                            toast.success("Dados de demonstração redefinidos");
+                            toast.success("Dados locais redefinidos");
                           }}
                         >
                           Redefinir exemplos

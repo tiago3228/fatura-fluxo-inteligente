@@ -4,34 +4,23 @@ import type { LimitStatus, PlanStatus, TxStatus } from "@/lib/finance/calc";
 import { TX_TYPE_LABEL, isCreditType } from "@/lib/finance/calc";
 import type { InvoiceStatus, TxType } from "@/lib/finance/types";
 
-const pill = cva(
-  "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold whitespace-nowrap",
-  {
-    variants: {
-      tone: {
-        success: "bg-success-soft text-success",
-        warning: "bg-warning-soft text-warning",
-        danger: "bg-danger-soft text-danger",
-        info: "bg-info-soft text-info",
-        neutral: "bg-neutral-soft text-muted-foreground",
-        primary: "bg-accent text-accent-foreground",
-      },
+const pill = cva("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold whitespace-nowrap", {
+  variants: {
+    tone: {
+      success: "bg-success-soft text-success",
+      warning: "bg-warning-soft text-warning",
+      danger: "bg-danger-soft text-danger",
+      info: "bg-info-soft text-info",
+      neutral: "bg-neutral-soft text-muted-foreground",
+      primary: "bg-accent text-accent-foreground",
     },
-    defaultVariants: { tone: "neutral" },
   },
-);
+  defaultVariants: { tone: "neutral" },
+});
 
 export type Tone = NonNullable<VariantProps<typeof pill>["tone"]>;
 
-export function Pill({
-  tone,
-  className,
-  children,
-}: {
-  tone?: Tone;
-  className?: string;
-  children: React.ReactNode;
-}) {
+export function Pill({ tone, className, children }: { tone?: Tone; className?: string; children: React.ReactNode }) {
   return <span className={cn(pill({ tone }), className)}>{children}</span>;
 }
 
@@ -54,15 +43,7 @@ export function TxStatusBadge({ status }: { status: TxStatus }) {
 }
 
 export function TxTypeBadge({ type }: { type: TxType }) {
-  const tone: Tone = isCreditType(type)
-    ? "success"
-    : type === "tarifa"
-      ? "danger"
-      : type === "parcela"
-        ? "info"
-        : type === "pagamento"
-          ? "neutral"
-          : "primary";
+  const tone: Tone = isCreditType(type) ? "success" : type === "tarifa" ? "danger" : type === "parcela" ? "info" : type === "pagamento" ? "neutral" : "primary";
   return <Pill tone={tone}>{TX_TYPE_LABEL[type]}</Pill>;
 }
 
@@ -78,11 +59,7 @@ export function LimitBadge({ status }: { status: LimitStatus }) {
 }
 
 export function PaymentStatusBadge({ status }: { status: "pendente" | "parcial" | "pago" }) {
-  const map = {
-    pendente: ["warning", "Pendente"],
-    parcial: ["info", "Parcial"],
-    pago: ["success", "Pago"],
-  } as const;
+  const map = { pendente: ["warning", "Pendente"], parcial: ["info", "Parcial"], pago: ["success", "Pago"] } as const;
   const [tone, label] = map[status];
   return <Pill tone={tone}>{label}</Pill>;
 }

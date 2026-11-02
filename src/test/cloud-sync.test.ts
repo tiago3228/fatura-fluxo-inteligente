@@ -29,26 +29,26 @@ beforeEach(() => {
 describe("loadCloudState", () => {
   it("distingue um documento realmente ausente de uma falha de leitura", async () => {
     mocks.maybeSingle.mockResolvedValueOnce({ data: null, error: null });
-    await expect(loadCloudState("workspace-test")).resolves.toEqual({ kind: "missing" });
+    await expect(loadCloudState("workspace-test")).resolves.toEqual({ kind: "missing", revision: 0 });
 
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     mocks.maybeSingle.mockResolvedValueOnce({ data: null, error: { message: "network failure" } });
-    await expect(loadCloudState("workspace-test")).resolves.toEqual({ kind: "error" });
+    await expect(loadCloudState("workspace-test")).resolves.toMatchObject({ kind: "error", message: "network failure" });
     consoleError.mockRestore();
   });
 
   it("retorna o documento quando a leitura é bem-sucedida", async () => {
     const state = { settings: { persist: true } };
-    mocks.maybeSingle.mockResolvedValueOnce({ data: { data: state }, error: null });
+    mocks.maybeSingle.mockResolvedValueOnce({ data: { data: state, revision: 0 }, error: null });
 
-    await expect(loadCloudState("workspace-test")).resolves.toEqual({ kind: "loaded", state });
+    await expect(loadCloudState("workspace-test")).resolves.toEqual({ kind: "loaded", state, revision: 0 });
   });
 
   it("rejeita documento salvo em formato inválido em vez de tratá-lo como ausente", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     mocks.maybeSingle.mockResolvedValueOnce({ data: { data: null }, error: null });
 
-    await expect(loadCloudState("workspace-test")).resolves.toEqual({ kind: "error" });
+    await expect(loadCloudState("workspace-test")).resolves.toMatchObject({ kind: "error", message: "O estado salvo na nuvem tem formato inválido." });
     consoleError.mockRestore();
   });
 });

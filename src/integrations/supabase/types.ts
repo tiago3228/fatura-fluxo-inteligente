@@ -560,16 +560,19 @@ export type Database = {
       workspace_state: {
         Row: {
           data: Json
+          revision: number
           updated_at: string
           workspace_id: string
         }
         Insert: {
           data: Json
+          revision?: number
           updated_at?: string
           workspace_id: string
         }
         Update: {
           data?: Json
+          revision?: number
           updated_at?: string
           workspace_id?: string
         }
@@ -613,6 +616,7 @@ export type Database = {
     }
     Functions: {
       create_workspace: { Args: { p_name: string }; Returns: string }
+      ensure_user_workspace: { Args: never; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -621,6 +625,10 @@ export type Database = {
         Returns: boolean
       }
       join_family_workspace: { Args: never; Returns: string }
+      save_workspace_state: {
+        Args: { p_data: Json; p_expected_revision: number; p_workspace_id: string }
+        Returns: { data: Json; revision: number; saved: boolean }[]
+      }
     }
     Enums: {
       app_role: "master" | "admin" | "user"

@@ -1,16 +1,18 @@
 -- Fatura Flow Studio — schema compartilhado para Supabase
 --
--- Modelo de acesso recomendado para a primeira versão:
--- 1. Crie UMA conta no Supabase Auth.
--- 2. Você e sua irmã entram no Lovable usando o mesmo e-mail e senha.
--- 3. Após autenticar, a aplicação chama create_workspace('Fatura da família') uma vez.
--- 4. O workspace_id retornado é usado pela aplicação em todas as operações.
+-- Modelo de acesso:
+-- 1. Cada pessoa usa sua própria conta no Supabase Auth.
+-- 2. A primeira pessoa autenticada recebe um workspace privado.
+-- 3. Somente membros explicitamente associados compartilham seus dados.
+-- 4. A aplicação salva o documento financeiro em workspace_state com revisão CAS.
 --
 -- Segurança:
 -- - Nenhuma tabela fica acessível anonimamente.
 -- - Todas as tabelas têm RLS habilitado.
 -- - Um usuário só enxerga dados de workspaces dos quais é membro.
 -- - O modelo já suporta contas individuais no futuro, sem refazer as tabelas.
+-- Para bancos existentes que aplicaram a migration 0003, aplique a migration Drizzle 0005
+-- como upgrade; ela arquiva associações automáticas antigas e isola as contas sem apagar dados.
 
 begin;
 
@@ -63,6 +65,28 @@ create table if not exists public.workspace_settings (
   persist boolean not null default true,
   updated_at timestamptz not null default timezone('utc', now())
 );
+
+-- Documento financeiro sincronizado pelo cliente com revisão otimista.
+create table if not exists public.workspace_state (
+  workspace_id uuid primary key references public.workspaces(id) on delete cascade,
+  data jsonb not null,
+  revision bigint not null default 0 check (revision >= 0),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+alter table public.workspace_state replica identity full;
+do $$
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime')
+     and not exists (
+       select 1 from pg_publication_tables
+        where pubname = 'supabase_realtime'
+          and schemaname = 'public'
+          and tablename = 'workspace_state'
+     ) then
+    alter publication supabase_realtime add table public.workspace_state;
+  end if;
+end;
+$$;
 
 -- -----------------------------------------------------------------------------
 -- Pessoas e cartões
@@ -244,6 +268,83 @@ $$;
 revoke all on function public.create_workspace(text) from public;
 grant execute on function public.create_workspace(text) to authenticated;
 
+-- Retorna membership existente; contas sem vínculo recebem workspace privado.
+create or replace function public.ensure_user_workspace()
+returns uuid
+language plpgsql
+security definer
+set search_path = public, app
+as $$
+declare
+  v_workspace_id uuid;
+begin
+  if auth.uid() is null then raise exception 'Usuário não autenticado'; end if;
+  perform pg_advisory_xact_lock(hashtext(auth.uid()::text), 0);
+  select wm.workspace_id into v_workspace_id
+    from public.workspace_members wm
+   where wm.user_id = auth.uid()
+   order by wm.created_at asc
+   limit 1;
+  if v_workspace_id is not null then return v_workspace_id; end if;
+  return public.create_workspace('Fatura da família');
+end;
+$$;
+revoke all on function public.ensure_user_workspace() from public, anon;
+grant execute on function public.ensure_user_workspace() to authenticated;
+
+-- Compatibilidade com clientes antigos: nunca adiciona uma conta nova a um workspace global.
+create or replace function public.join_family_workspace()
+returns uuid
+language sql
+security definer
+set search_path = public, app
+as $$ select public.ensure_user_workspace(); $$;
+revoke all on function public.join_family_workspace() from public, anon;
+grant execute on function public.join_family_workspace() to authenticated;
+
+-- Gravação atômica: divergências de revisão retornam o estado remoto para resolução explícita.
+create or replace function public.save_workspace_state(
+  p_workspace_id uuid,
+  p_expected_revision bigint,
+  p_data jsonb
+)
+returns table(saved boolean, revision bigint, data jsonb)
+language plpgsql
+security invoker
+set search_path = public, app
+as $$
+declare
+  v_revision bigint;
+  v_data jsonb;
+begin
+  if auth.uid() is null then raise exception 'Usuário não autenticado'; end if;
+  if p_expected_revision < 0 or p_data is null then raise exception 'Revisão ou estado inválido'; end if;
+  insert into public.workspace_state (workspace_id, data, revision)
+  values (p_workspace_id, p_data, 1)
+  on conflict (workspace_id) do nothing;
+  if found then
+    if p_expected_revision <> 0 then raise exception 'Revisão inicial inválida'; end if;
+    return query select true, 1::bigint, p_data;
+    return;
+  end if;
+  select ws.revision, ws.data into v_revision, v_data
+    from public.workspace_state ws
+   where ws.workspace_id = p_workspace_id
+   for update;
+  if not found then raise exception 'Workspace inexistente ou sem permissão'; end if;
+  if v_revision <> p_expected_revision then
+    return query select false, v_revision, v_data;
+    return;
+  end if;
+  update public.workspace_state ws
+     set data = p_data, revision = v_revision + 1
+   where ws.workspace_id = p_workspace_id;
+  return query select true, v_revision + 1, p_data;
+end;
+$$;
+revoke all on function public.save_workspace_state(uuid, bigint, jsonb) from public, anon;
+grant execute on function public.save_workspace_state(uuid, bigint, jsonb) to authenticated;
+
 
 -- -----------------------------------------------------------------------------
 -- Índices para sincronização e consultas do aplicativo
@@ -291,6 +392,8 @@ create index if not exists minigame_scores_ranking_idx
  create trigger trg_transactions_updated_at before update on public.transactions for each row execute function app.set_updated_at();
  drop trigger if exists trg_installment_plans_updated_at on public.installment_plans;
  create trigger trg_installment_plans_updated_at before update on public.installment_plans for each row execute function app.set_updated_at();
+ drop trigger if exists trg_workspace_state_updated_at on public.workspace_state;
+ create trigger trg_workspace_state_updated_at before update on public.workspace_state for each row execute function app.set_updated_at();
 
 -- -----------------------------------------------------------------------------
 -- RLS e políticas
@@ -299,6 +402,7 @@ create index if not exists minigame_scores_ranking_idx
 alter table public.workspaces enable row level security;
 alter table public.workspace_members enable row level security;
 alter table public.workspace_settings enable row level security;
+alter table public.workspace_state enable row level security;
 alter table public.people enable row level security;
 alter table public.cards enable row level security;
 alter table public.person_cards enable row level security;
@@ -327,6 +431,11 @@ using (user_id = auth.uid());
 -- Settings: uma linha por workspace.
 drop policy if exists workspace_settings_member_all on public.workspace_settings;
 create policy workspace_settings_member_all on public.workspace_settings for all to authenticated
+using (app.is_workspace_member(workspace_id))
+with check (app.is_workspace_member(workspace_id));
+
+drop policy if exists workspace_state_member_all on public.workspace_state;
+create policy workspace_state_member_all on public.workspace_state for all to authenticated
 using (app.is_workspace_member(workspace_id))
 with check (app.is_workspace_member(workspace_id));
 

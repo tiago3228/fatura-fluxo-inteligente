@@ -7,6 +7,7 @@ import {
   compareInvoiceRowsAcrossCards,
   extractPdfText,
   parseInvoiceText,
+  shouldImportPdfRow,
   type ExtractedPdfRow,
   type PdfComparisonStatus,
 } from "@/lib/finance/pdf";
@@ -33,9 +34,21 @@ import {
 import { cn } from "@/lib/utils";
 
 type Step = "select" | "processing" | "review";
-type ReviewFilter = "all" | "attention" | "new" | "existing";
 const STAGES = ["Arquivo selecionado", "Leitura local", "Conferência", "Conclusão"];
-type Row = ExtractedPdfRow & { amountStr: string };
+type Row = ExtractedPdfRow & {
+  amountStr: string;
+  assignedCardId: string;
+  included: boolean;
+  personChoice: string;
+  previousPersonIds: string[];
+  ignoreReason: string;
+};
+const normalizedMatchDescription = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/\b\d{1,2}\s*\/\s*\d{1,2}\b/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
 const COMPARISON_LABELS: Record<PdfComparisonStatus, string> = {
   possible_duplicate: "Possível duplicidade — confira",
   already_imported: "Já presente nesta fatura",
@@ -62,8 +75,10 @@ export function PdfImportDialog({
   const [drag, setDrag] = useState(false);
   const [rows, setRows] = useState<Row[]>([]);
   const [official, setOfficial] = useState("");
+  const [cardOfficialTotals, setCardOfficialTotals] = useState<Record<string, number>>({});
+  const [manualCardTotals, setManualCardTotals] = useState<Record<string, string>>({});
+  const [acceptedDiscrepancySignature, setAcceptedDiscrepancySignature] = useState("");
   const [dueDate, setDueDate] = useState("");
-  const [reviewFilter, setReviewFilter] = useState<ReviewFilter>("all");
   const [cardId, setCardId] = useState(state.cards[0]?.id ?? "");
   const input = useRef<HTMLInputElement>(null);
   const close = () => {
@@ -76,8 +91,10 @@ export function PdfImportDialog({
       setStage(0);
       setRows([]);
       setOfficial("");
+      setCardOfficialTotals({});
+      setManualCardTotals({});
+      setAcceptedDiscrepancySignature("");
       setDueDate("");
-      setReviewFilter("all");
     }, 200);
   };
   const pick = (next?: File | null) => {
@@ -105,11 +122,47 @@ export function PdfImportDialog({
       const month = state.settings.month;
       const parsed = parseInvoiceText(text, month);
       const detectedCards = [...new Set(parsed.rows.map((row) => row.cardLast4).filter(Boolean))];
+      const matchingCard =
+        detectedCards.length === 1
+          ? state.cards.find((item) => item.last4 === detectedCards[0])
+          : undefined;
       if (detectedCards.length === 1) {
-        const matchingCard = state.cards.find((item) => item.last4 === detectedCards[0]);
         if (matchingCard) setCardId(matchingCard.id);
       }
-      setRows(parsed.rows.map((r) => ({ ...r, amountStr: r.amount.toFixed(2).replace(".", ",") })));
+      const defaultCardId = matchingCard?.id ?? cardId;
+      setRows(
+        parsed.rows.map((row) => {
+          const assignedCardId = row.cardLast4
+            ? (state.cards.find((item) => item.last4 === row.cardLast4)?.id ?? "")
+            : detectedCards.length <= 1
+              ? defaultCardId
+              : "";
+          const previous = assignedCardId
+            ? state.transactions.find((transaction) => {
+                const invoice = state.invoices.find((item) => item.id === transaction.invoiceId);
+                return (
+                  invoice?.cardId === assignedCardId &&
+                  invoice.month <= month &&
+                  Math.abs(transaction.amount - row.amount) < 0.01 &&
+                  normalizedMatchDescription(transaction.description) ===
+                    normalizedMatchDescription(row.description)
+                );
+              })
+            : undefined;
+          return {
+            ...row,
+            amountStr: row.amount.toFixed(2).replace(".", ","),
+            assignedCardId,
+            included: true,
+            personChoice: "auto",
+            previousPersonIds: previous?.allocations.map((item) => item.personId) ?? [],
+            ignoreReason: "Ignorada na revisão pelo usuário",
+          };
+        }),
+      );
+      setCardOfficialTotals(parsed.cardOfficialTotals ?? {});
+      setManualCardTotals({});
+      setAcceptedDiscrepancySignature("");
       setOfficial(
         parsed.officialTotal === null ? "" : parsed.officialTotal.toFixed(2).replace(".", ","),
       );
@@ -126,64 +179,211 @@ export function PdfImportDialog({
       );
     }
   };
-  const parsed = rows.map((r) => ({ ...r, value: parseBRL(r.amountStr) }));
-  const sum = round2(parsed.reduce((total, r) => total + (r.value ?? 0), 0));
+  const parsed = rows.map((row) => ({ ...row, value: parseBRL(row.amountStr) }));
+  const sum = round2(parsed.reduce((total, row) => total + (row.value ?? 0), 0));
   const officialValue = parseBRL(official);
-  const invalid = parsed.filter((r) => r.value === null || !r.description.trim());
+  const selectedRows = parsed.filter((row) => row.included);
   const month = (dueDate || state.settings.month).slice(0, 7);
-  const card = state.cards.find((c) => c.id === cardId);
   const diff = officialValue === null ? null : round2(officialValue - sum);
   const cardLast4s = [...new Set(parsed.map((row) => row.cardLast4).filter(Boolean))];
   const multiCardStatement = cardLast4s.length > 1;
-  const comparisonRows = parsed.map((row) => ({ ...row, amount: row.value ?? row.amount }));
-  const comparison = multiCardStatement
-    ? compareInvoiceRowsAcrossCards(state, month, comparisonRows)
-    : compareInvoiceRows(state, cardId, month, comparisonRows);
-  const comparisonStatus = new Map(comparison.rows.map((row) => [row.rowId, row.status]));
-  const comparisonCount = (status: PdfComparisonStatus) =>
-    comparison.rows.filter((row) => row.status === status).length;
-  const visibleRows = parsed.filter((row) => {
-    const status = comparisonStatus.get(row.id);
-    if (reviewFilter === "attention")
-      return status === "possible_duplicate" || status === "unexpected_installment";
-    if (reviewFilter === "new") return status === "new_purchase";
-    if (reviewFilter === "existing")
-      return (
-        status === "already_imported" ||
-        status === "expected_installment" ||
-        status === "expected_recurring"
-      );
-    return true;
-  });
-  const confirm = () => {
-    if (!card || !officialValue || invalid.length || multiCardStatement) return;
-    const invoiceId = uid("invoice");
-    const txs: Transaction[] = parsed.map((r) => ({
-      id: uid("tx"),
-      invoiceId,
-      date: r.date,
-      description: r.description.trim(),
-      amount: r.value!,
-      type: r.type,
-      ...(r.installmentNumber !== undefined ? { installmentNumber: r.installmentNumber } : {}),
-      ...(r.installmentTotal !== undefined ? { installmentTotal: r.installmentTotal } : {}),
-      allocations: [],
-    }));
-    dispatch({
-      type: "importInvoice",
-      invoice: {
-        id: invoiceId,
-        cardId: card.id,
+  const cardGroups = [...new Set(parsed.map((row) => row.assignedCardId).filter(Boolean))];
+  const consolidated = multiCardStatement || cardGroups.length > 1;
+  const unassignedRows = parsed.filter(
+    (row) =>
+      !row.assignedCardId || !state.cards.some((cardItem) => cardItem.id === row.assignedCardId),
+  );
+  const officialForCard = (id: string) => {
+    if (Object.hasOwn(manualCardTotals, id)) return parseBRL(manualCardTotals[id] ?? "");
+    if (!consolidated && cardGroups.length === 1 && officialValue !== null) return officialValue;
+    const cardItem = state.cards.find((item) => item.id === id);
+    const extracted = cardItem ? cardOfficialTotals[cardItem.last4] : undefined;
+    if (extracted !== undefined) return extracted;
+    return !consolidated && cardGroups.length === 1 ? officialValue : null;
+  };
+  const perCardComparisons = cardGroups.map((id) => ({
+    id,
+    result: compareInvoiceRows(
+      state,
+      id,
+      month,
+      parsed
+        .filter((row) => row.assignedCardId === id)
+        .map((row) => ({ ...row, amount: row.value ?? row.amount })),
+    ),
+  }));
+  const unassignedComparison = unassignedRows.length
+    ? compareInvoiceRowsAcrossCards(
+        state,
         month,
-        dueDate: dueDate || `${month}-${String(card.dueDay).padStart(2, "0")}`,
-        officialTotal: officialValue,
-        status: diff === 0 ? "em_revisao" : "inconsistente",
-        source: "pdf",
-      },
-      transactions: txs,
-    });
-    toast.success("Fatura lida e adicionada para conferência", {
-      description: `${txs.length} lançamento(s) extraído(s) localmente. Atribuições compatíveis da fatura anterior foram reaproveitadas automaticamente.`,
+        unassignedRows.map((row) => ({ ...row, amount: row.value ?? row.amount })),
+      )
+    : null;
+  const comparisonRows = [
+    ...perCardComparisons.flatMap((item) => item.result.rows),
+    ...(unassignedComparison?.rows ?? []),
+  ];
+  const comparisonStatus = new Map(comparisonRows.map((row) => [row.rowId, row.status]));
+  const missingInstallments = perCardComparisons.flatMap((item) =>
+    item.result.missingInstallments.map((missing) => ({ ...missing, cardId: item.id })),
+  );
+  const includedRows = parsed.filter(
+    (row) => shouldImportPdfRow(row.included, comparisonStatus.get(row.id)),
+  );
+  const invalid = includedRows.filter((row) => row.value === null || !row.description.trim());
+  const comparisonCount = (status: PdfComparisonStatus) =>
+    comparisonRows.filter((row) => row.status === status).length;
+  const missingCardTotals = cardGroups.filter((id) => officialForCard(id) === null);
+  const cardDiffs = cardGroups.map((id) => {
+    const total = officialForCard(id);
+    const included = round2(
+      parsed
+        .filter(
+          (row) =>
+            row.assignedCardId === id &&
+            (row.included || comparisonStatus.get(row.id) === "already_imported"),
+        )
+        .reduce((value, row) => value + (row.value ?? 0), 0),
+    );
+    return { id, total, included, diff: total === null ? null : round2(total - included) };
+  });
+  const hasCardDiscrepancies = cardDiffs.some((item) => item.diff !== null && item.diff !== 0);
+  const discrepancySignature = JSON.stringify({
+    rows: parsed.map((row) => [row.id, row.assignedCardId, row.included, row.value]),
+    totals: cardGroups.map((id) => [id, officialForCard(id)]),
+  });
+  const discrepancyAccepted = acceptedDiscrepancySignature === discrepancySignature;
+  const canConfirm =
+    parsed.length > 0 &&
+    invalid.length === 0 &&
+    unassignedRows.length === 0 &&
+    cardGroups.length > 0 &&
+    missingCardTotals.length === 0 &&
+    (!hasCardDiscrepancies || discrepancyAccepted);
+
+  const resolvedPersonIds = (row: Row) => {
+    if (row.personChoice === "none") return [];
+    if (row.personChoice !== "auto") return [row.personChoice];
+    if (row.previousPersonIds.length) return row.previousPersonIds;
+    const holder = state.people.find(
+      (person) => person.active && person.cardIds.includes(row.assignedCardId),
+    );
+    return holder ? [holder.id] : [];
+  };
+
+  const confirm = () => {
+    if (!canConfirm || !file) return;
+    const importBatchId = uid("import");
+    const importedAt = new Date().toISOString();
+    let includedCount = 0;
+    let ignoredCount = 0;
+    for (const groupCardId of cardGroups) {
+      const groupRows = parsed.filter((row) => row.assignedCardId === groupCardId);
+      const groupIncluded = groupRows.filter(
+        (row) => shouldImportPdfRow(row.included, comparisonStatus.get(row.id)),
+      );
+      const groupIgnored = groupRows.filter(
+        (row) => !shouldImportPdfRow(row.included, comparisonStatus.get(row.id)),
+      );
+      const cardItem = state.cards.find((item) => item.id === groupCardId);
+      if (!cardItem) continue;
+      const invoiceId = uid("invoice");
+      const personOverrides: Record<string, { personId: string; amount: number }[]> = {};
+      const sourceToTransactionId = new Map<string, string>();
+      const txs: Transaction[] = groupIncluded.map((row) => {
+        const transactionId = uid("tx");
+        const amount = row.value!;
+        sourceToTransactionId.set(row.id, transactionId);
+        if (row.personChoice !== "auto") {
+          personOverrides[transactionId] =
+            row.personChoice === "none" ? [] : [{ personId: row.personChoice, amount }];
+        }
+        return {
+          id: transactionId,
+          invoiceId,
+          date: row.date,
+          description: row.description.trim(),
+          amount,
+          type: row.type,
+          ...(row.installmentNumber !== undefined
+            ? { installmentNumber: row.installmentNumber }
+            : {}),
+          ...(row.installmentTotal !== undefined ? { installmentTotal: row.installmentTotal } : {}),
+          allocations:
+            row.personChoice !== "auto" && row.personChoice !== "none"
+              ? [{ personId: row.personChoice, amount }]
+              : [],
+        };
+      });
+      includedCount += groupIncluded.length;
+      ignoredCount += groupIgnored.length;
+      const officialForGroup = officialForCard(groupCardId)!;
+      const existingInvoice = state.invoices.find(
+        (item) => item.cardId === groupCardId && item.month === month,
+      );
+      const preservedActualTotal = round2(
+        existingInvoice
+          ? state.transactions
+              .filter((item) => item.invoiceId === existingInvoice.id && !item.isProjected)
+              .reduce((total, item) => total + item.amount, 0)
+          : 0,
+      );
+      const newIncludedTotal = round2(
+        groupIncluded
+          .filter((row) => comparisonStatus.get(row.id) !== "already_imported")
+          .reduce((total, row) => total + (row.value ?? 0), 0),
+      );
+      const resultingTotal = round2(preservedActualTotal + newIncludedTotal);
+      const rowsAudit = groupRows.map((row) => ({
+        sourceRowId: row.id,
+        date: row.date,
+        description: row.description.trim(),
+        amount: row.value ?? row.amount,
+        cardId: groupCardId,
+        ...(row.cardLast4 ? { cardLast4: row.cardLast4 } : {}),
+        included: groupIncluded.some((item) => item.id === row.id),
+        comparisonStatus: comparisonStatus.get(row.id) ?? ("other" as const),
+        ...(!groupIncluded.some((item) => item.id === row.id)
+          ? {
+              reason:
+                comparisonStatus.get(row.id) === "already_imported"
+                  ? "Já presente nesta fatura; não foi inserida novamente"
+                  : row.ignoreReason.trim() || "Ignorada na revisão",
+            }
+          : {}),
+        personIds: resolvedPersonIds(row),
+        ...(sourceToTransactionId.has(row.id)
+          ? { transactionId: sourceToTransactionId.get(row.id) }
+          : {}),
+      }));
+      dispatch({
+        type: "importInvoice",
+        invoice: {
+          id: invoiceId,
+          cardId: cardItem.id,
+          month,
+          dueDate: dueDate || `${month}-${String(cardItem.dueDay).padStart(2, "0")}`,
+          officialTotal: officialForGroup,
+          status: resultingTotal === officialForGroup ? "em_revisao" : "inconsistente",
+          source: "pdf",
+          importHistory: [
+            {
+              id: importBatchId,
+              fileName: file.name,
+              importedAt,
+              statementTotal: officialForGroup,
+              includedCount: groupIncluded.length,
+              ignoredCount: groupIgnored.length,
+              rows: rowsAudit,
+            },
+          ],
+        },
+        transactions: txs,
+        personOverrides,
+      });
+    }
+    toast.success("Faturas separadas por cartão para conferência", {
+      description: `${cardGroups.length} cartão(ões), ${includedCount} linha(s) incluída(s), ${ignoredCount} ignorada(s). Atribuições compatíveis foram reaproveitadas; histórico por linha registrado.`,
     });
     close();
   };
@@ -298,21 +498,27 @@ export function PdfImportDialog({
         {step === "review" && (
           <div className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-4">
-              <label className="text-sm">
-                Cartão
-                <Select value={cardId} onValueChange={setCardId}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {state.cards.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name} •••• {c.last4}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </label>
+              {!consolidated ? (
+                <label className="text-sm">
+                  Cartão
+                  <Select value={cardId} onValueChange={setCardId}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {state.cards.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name} •••• {c.last4}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </label>
+              ) : (
+                <p className="self-end text-sm text-muted-foreground">
+                  Atribuição do cartão é revisada em cada linha abaixo.
+                </p>
+              )}
               <label className="text-sm">
                 Mês
                 <Input
@@ -340,14 +546,88 @@ export function PdfImportDialog({
                 {w}
               </p>
             ))}
-            {multiCardStatement && (
+            {consolidated && (
               <p className="flex gap-2 rounded-lg bg-warning-soft p-3 text-sm text-warning">
                 <AlertTriangle className="size-4 shrink-0" />
-                Este PDF consolida vários cartões (
-                {cardLast4s.map((last4) => `•••• ${last4}`).join(", ")} ). A comparação abaixo é
-                somente para conferência; a importação foi bloqueada porque este fluxo aceita um
-                cartão por vez e não deve atribuir todos os lançamentos ao cartão selecionado.
+                PDF consolidado ({cardLast4s.map((last4) => `•••• ${last4}`).join(", ")}). Cada
+                linha será revisada e gravada na fatura do cartão escolhido; totais oficiais por
+                cartão precisam ser conferidos antes da confirmação.
               </p>
+            )}
+            {unassignedRows.length > 0 && (
+              <p className="flex gap-2 rounded-lg bg-warning-soft p-3 text-sm text-warning">
+                <AlertTriangle className="size-4 shrink-0" />
+                {unassignedRows.length} linha(s) ainda não têm cartão atribuído. Selecione um cartão
+                na própria linha; nenhuma delas será importada silenciosamente.
+              </p>
+            )}
+            {consolidated && (
+              <div className="grid gap-3 rounded-lg border p-3 sm:grid-cols-2 lg:grid-cols-3">
+                {cardGroups.map((groupId) => {
+                  const cardItem = state.cards.find((item) => item.id === groupId);
+                  if (!cardItem) return null;
+                  const extracted = cardOfficialTotals[cardItem.last4];
+                  const shownTotal =
+                    manualCardTotals[groupId] ??
+                    (extracted === undefined ? "" : extracted.toFixed(2).replace(".", ","));
+                  const recognized = round2(
+                    parsed
+                      .filter((row) => row.assignedCardId === groupId)
+                      .reduce((total, row) => total + (row.value ?? 0), 0),
+                  );
+                  const cardDiff = cardDiffs.find((item) => item.id === groupId)?.diff;
+                  return (
+                    <label key={groupId} className="space-y-1 text-sm">
+                      <span className="font-medium">Total oficial — {cardItem.name}</span>
+                      <Input
+                        inputMode="decimal"
+                        value={shownTotal}
+                        onChange={(event) =>
+                          setManualCardTotals((current) => ({
+                            ...current,
+                            [groupId]: event.target.value,
+                          }))
+                        }
+                        aria-label={`Total oficial do cartão ${cardItem.last4}`}
+                      />
+                      <span className="block text-xs text-muted-foreground">
+                        Reconhecido neste cartão: {fmtBRL(recognized)}
+                        {extracted === undefined
+                          ? " · informe o total do PDF"
+                          : " · extraído do resumo do cartão"}
+                      </span>
+                      <span className="block text-xs text-muted-foreground">
+                        Soma considerada para comparação (inclui linhas já cadastradas): {fmtBRL(
+                          cardDiffs.find((item) => item.id === groupId)?.included ?? 0,
+                        )}
+                      </span>
+                      {cardDiff !== null && cardDiff !== undefined && cardDiff !== 0 && (
+                        <span className="block text-xs font-medium text-danger">
+                          Diferença para a soma considerada: {fmtBRL(cardDiff)}
+                        </span>
+                      )}
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+            {hasCardDiscrepancies && (
+              <label className="flex items-start gap-2 rounded-lg border border-danger/30 bg-danger-soft p-3 text-sm text-danger">
+                <input
+                  type="checkbox"
+                  checked={discrepancyAccepted}
+                  onChange={(event) =>
+                    setAcceptedDiscrepancySignature(
+                      event.target.checked ? discrepancySignature : "",
+                    )
+                  }
+                />
+                <span>
+                  Confirmo importar apesar das diferenças entre os totais oficiais e as linhas
+                  selecionadas. As faturas afetadas ficarão marcadas como inconsistentes; nenhum
+                  valor será ajustado automaticamente.
+                </span>
+              </label>
             )}
             {diff !== null && diff !== 0 && (
               <p className="flex gap-2 rounded-lg bg-danger-soft p-3 text-sm text-danger">
@@ -357,8 +637,9 @@ export function PdfImportDialog({
               </p>
             )}
             <p className="text-sm text-muted-foreground">
-              {parsed.length} lançamento(s) reconhecido(s). Revise descrição, tipo e valores antes
-              de confirmar.
+              {parsed.length} lançamento(s) reconhecido(s); {selectedRows.length} selecionado(s),{" "}
+              {includedRows.length} novo(s) será(ão) gravado(s) e {parsed.length - includedRows.length}{" "}
+              ignorado(s) ou já presente(s). Linhas sem gravação ficam no histórico da importação.
             </p>
             <p className="rounded-lg border p-3 text-sm">
               Comparação: {comparisonCount("already_imported")} já cadastrada(s),{" "}
@@ -369,97 +650,72 @@ export function PdfImportDialog({
               {comparisonCount("unexpected_installment")} parcela(s) sem previsão. Duplicidades são
               apenas sinalizadas, nunca removidas automaticamente.
             </p>
-            <div className="grid gap-2 sm:grid-cols-3">
-              <div className="rounded-lg bg-muted/50 p-3">
-                <p className="text-xs text-muted-foreground">Linhas reconhecidas</p>
-                <p className="mt-1 text-lg font-bold">{parsed.length}</p>
-              </div>
-              <div className="rounded-lg bg-muted/50 p-3">
-                <p className="text-xs text-muted-foreground">Soma reconhecida</p>
-                <p className="num mt-1 text-lg font-bold">{fmtBRL(sum)}</p>
-              </div>
-              <div
-                className={cn(
-                  "rounded-lg p-3",
-                  diff === null || diff === 0 ? "bg-success-soft" : "bg-danger-soft",
-                )}
-              >
-                <p className="text-xs text-muted-foreground">Diferença para o oficial</p>
-                <p
-                  className={cn(
-                    "num mt-1 text-lg font-bold",
-                    diff !== null && diff !== 0 ? "text-danger" : "text-success",
-                  )}
-                >
-                  {diff === null ? "Não informado" : fmtBRL(diff)}
-                </p>
-              </div>
-            </div>
-            {comparison.missingInstallments.length > 0 && (
+            {missingInstallments.length > 0 && (
               <p className="rounded-lg bg-warning-soft p-3 text-sm text-warning">
                 Parcelas previstas não encontradas:{" "}
-                {comparison.missingInstallments
-                  .map((item) => `${item.description} (${fmtBRL(item.amount)})`)
+                {missingInstallments
+                  .map(
+                    (item) =>
+                      `${state.cards.find((cardItem) => cardItem.id === item.cardId)?.last4 ?? "cartão"}: ${item.description} (${fmtBRL(item.amount)})`,
+                  )
                   .join("; ")}
                 .
               </p>
             )}
-            <div className="flex flex-wrap items-end justify-between gap-3">
-              <label className="text-sm">
-                Mostrar linhas
-                <Select
-                  value={reviewFilter}
-                  onValueChange={(value) => setReviewFilter(value as ReviewFilter)}
-                >
-                  <SelectTrigger className="mt-1 w-56">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todas ({parsed.length})</SelectItem>
-                    <SelectItem value="attention">
-                      Conferir (
-                      {comparisonCount("possible_duplicate") +
-                        comparisonCount("unexpected_installment")}
-                      )
-                    </SelectItem>
-                    <SelectItem value="new">
-                      Compras novas ({comparisonCount("new_purchase")})
-                    </SelectItem>
-                    <SelectItem value="existing">
-                      Já reconhecidas (
-                      {comparisonCount("already_imported") +
-                        comparisonCount("expected_installment") +
-                        comparisonCount("expected_recurring")}
-                      )
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </label>
-              <p className="text-xs text-muted-foreground">
-                Exibindo {visibleRows.length} de {parsed.length} lançamento(s)
-              </p>
-            </div>
             <div className="overflow-x-auto rounded-lg border">
-              <table className="w-full min-w-[760px] text-sm">
+              <table className="w-full min-w-[1250px] text-sm">
                 <thead className="bg-muted/60 text-left text-xs uppercase text-muted-foreground">
                   <tr className="[&_th]:px-3 [&_th]:py-2">
                     <th>Data</th>
+                    <th>Cartão</th>
                     <th>Descrição</th>
+                    <th>Responsável</th>
+                    <th>Decisão</th>
                     <th>Tipo</th>
                     <th className="text-right">Valor</th>
                     <th>Conferência</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {visibleRows.map((r) => (
+                  {parsed.map((r) => (
                     <tr
                       key={r.id}
                       className={cn(
                         "[&_td]:px-3 [&_td]:py-2",
-                        r.value === null && "bg-danger-soft",
+                        r.included && r.value === null && "bg-danger-soft",
+                        !r.included && "opacity-70",
                       )}
                     >
                       <td className="num whitespace-nowrap">{fmtDate(r.date)}</td>
+                      <td>
+                        <Select
+                          value={r.assignedCardId || "unassigned"}
+                          onValueChange={(value) =>
+                            setRows((all) =>
+                              all.map((item) =>
+                                item.id === r.id
+                                  ? { ...item, assignedCardId: value === "unassigned" ? "" : value }
+                                  : item,
+                              ),
+                            )
+                          }
+                        >
+                          <SelectTrigger
+                            className="w-48"
+                            aria-label={`Cartão da linha ${r.description}`}
+                          >
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="unassigned">Selecionar cartão</SelectItem>
+                            {state.cards.map((cardItem) => (
+                              <SelectItem key={cardItem.id} value={cardItem.id}>
+                                {cardItem.name} •••• {cardItem.last4}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </td>
                       <td>
                         <Input
                           value={r.description}
@@ -471,6 +727,84 @@ export function PdfImportDialog({
                             )
                           }
                         />
+                      </td>
+                      <td>
+                        <Select
+                          value={r.personChoice}
+                          onValueChange={(value) =>
+                            setRows((all) =>
+                              all.map((item) =>
+                                item.id === r.id ? { ...item, personChoice: value } : item,
+                              ),
+                            )
+                          }
+                        >
+                          <SelectTrigger
+                            className="w-56"
+                            aria-label={`Responsável pela linha ${r.description}`}
+                          >
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="auto">
+                              {r.previousPersonIds.length
+                                ? `Preservar: ${state.people
+                                    .filter((person) => r.previousPersonIds.includes(person.id))
+                                    .map((person) => person.name)
+                                    .join(", ")}`
+                                : "Reaproveitar se houver correspondência"}
+                            </SelectItem>
+                            <SelectItem value="none">Sem responsável</SelectItem>
+                            {state.people
+                              .filter((person) => person.active)
+                              .map((person) => (
+                                <SelectItem key={person.id} value={person.id}>
+                                  {person.name}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                      </td>
+                      <td className="min-w-44">
+                        <label className="flex items-center gap-2 whitespace-nowrap">
+                          <input
+                            type="checkbox"
+                            checked={
+                              r.included && comparisonStatus.get(r.id) !== "already_imported"
+                            }
+                            disabled={comparisonStatus.get(r.id) === "already_imported"}
+                            onChange={(event) =>
+                              setRows((all) =>
+                                all.map((item) =>
+                                  item.id === r.id
+                                    ? { ...item, included: event.target.checked }
+                                    : item,
+                                ),
+                              )
+                            }
+                          />
+                          {comparisonStatus.get(r.id) === "already_imported"
+                            ? "Já cadastrada — não duplicar"
+                            : r.included
+                              ? "Incluir"
+                              : "Ignorar"}
+                        </label>
+                        {!r.included && (
+                          <Input
+                            className="mt-1"
+                            value={r.ignoreReason}
+                            aria-label={`Motivo para ignorar ${r.description}`}
+                            onChange={(event) =>
+                              setRows((all) =>
+                                all.map((item) =>
+                                  item.id === r.id
+                                    ? { ...item, ignoreReason: event.target.value }
+                                    : item,
+                                ),
+                              )
+                            }
+                          />
+                        )}
                       </td>
                       <td>
                         <Select
@@ -511,16 +845,6 @@ export function PdfImportDialog({
                       </td>
                     </tr>
                   ))}
-                  {visibleRows.length === 0 && (
-                    <tr>
-                      <td
-                        colSpan={5}
-                        className="px-3 py-8 text-center text-sm text-muted-foreground"
-                      >
-                        Nenhum lançamento corresponde a este filtro.
-                      </td>
-                    </tr>
-                  )}
                 </tbody>
               </table>
             </div>
@@ -528,16 +852,7 @@ export function PdfImportDialog({
               <Button variant="outline" onClick={() => setStep("select")}>
                 Voltar
               </Button>
-              <Button
-                onClick={confirm}
-                disabled={
-                  !card ||
-                  !officialValue ||
-                  invalid.length > 0 ||
-                  parsed.length === 0 ||
-                  multiCardStatement
-                }
-              >
+              <Button onClick={confirm} disabled={!canConfirm}>
                 Confirmar importação para revisão
               </Button>
             </DialogFooter>

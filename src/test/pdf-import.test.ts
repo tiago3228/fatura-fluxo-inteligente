@@ -4,6 +4,7 @@ import {
   compareInvoiceRows,
   compareInvoiceRowsAcrossCards,
   parseInvoiceText,
+  shouldImportPdfRow,
 } from "@/lib/finance/pdf";
 
 describe("leitura local de fatura", () => {
@@ -164,5 +165,31 @@ describe("leitura local de fatura", () => {
     const result = compareInvoiceRowsAcrossCards(state, "2026-10", rows);
 
     expect(result.rows.map((row) => row.status)).toEqual(["already_imported", "already_imported"]);
+  });
+
+  it("extrai totais oficiais separados por final de cartão", () => {
+    const parsed = parseInvoiceText(
+      [
+        "[[COL:0]] Titular 7432",
+        "[[COL:1]] Titular 4494",
+        "[[COL:0]] Lançamentos: compras e saques",
+        "[[COL:1]] Lançamentos: compras e saques",
+        "[[COL:0]] 06/10 TOTALPASS 119,90",
+        "[[COL:1]] 24/10 CENTRO ODONTOLOGIC 208,37",
+        "[[COL:0]] Lançamentos no cartão (final 7432): 119,90",
+        "[[COL:1]] Lançamentos no cartão (final 4494): 208,37",
+        "Total desta fatura 328,27",
+      ].join("\n"),
+      "2026-10",
+    );
+
+    expect(parsed.cardOfficialTotals).toEqual({ "7432": 119.9, "4494": 208.37 });
+    expect(parsed.rows.map((row) => row.cardLast4)).toEqual(["7432", "4494"]);
+  });
+
+  it("não importa novamente uma linha reconhecida como já cadastrada", () => {
+    expect(shouldImportPdfRow(true, "already_imported")).toBe(false);
+    expect(shouldImportPdfRow(false, "new_purchase")).toBe(false);
+    expect(shouldImportPdfRow(true, "possible_duplicate")).toBe(true);
   });
 });

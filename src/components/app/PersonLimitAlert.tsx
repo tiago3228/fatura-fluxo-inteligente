@@ -74,7 +74,7 @@ export function PersonLimitAlert() {
   }, []);
 
   const candidates: LimitAlertCandidate[] =
-    syncStatus === "loading"
+    syncStatus.phase === "checking"
       ? []
       : state.people
           .filter((person) => person.active && person.limit > 0)

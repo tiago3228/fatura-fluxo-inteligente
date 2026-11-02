@@ -127,7 +127,7 @@ function AppSidebar() {
       </SidebarContent>
       <SidebarFooter>
         <p className="px-2 pb-1 text-[11px] leading-snug opacity-60 group-data-[collapsible=icon]:hidden">
-          Dados salvos na sua conta e sincronizados entre dispositivos.
+          O indicador no topo mostra o estado real da sincronização.
         </p>
       </SidebarFooter>
     </Sidebar>
@@ -377,12 +377,13 @@ function ConnectionStatus() {
 function SyncStatusIndicator() {
   const { syncStatus } = useFinance();
   const status = {
-    loading: {
+    checking: {
       label: "Carregando dados",
       Icon: Loader2,
       className: "text-muted-foreground",
     },
     local: { label: "Modo local", Icon: CloudOff, className: "text-muted-foreground" },
+    offline: { label: "Offline; cache local", Icon: CloudOff, className: "text-warning" },
     saving: { label: "Salvando na nuvem", Icon: Loader2, className: "text-primary" },
     synced: { label: "Sincronizado", Icon: CheckCircle2, className: "text-success" },
     error: {
@@ -395,8 +396,8 @@ function SyncStatusIndicator() {
       Icon: AlertCircle,
       className: "text-destructive",
     },
-  }[syncStatus];
-  const isAlert = syncStatus === "error" || syncStatus === "conflict";
+  }[syncStatus.phase];
+  const isAlert = syncStatus.phase === "error" || syncStatus.phase === "conflict";
   const Icon = status.Icon;
 
   return (
@@ -404,12 +405,12 @@ function SyncStatusIndicator() {
       role={isAlert ? "alert" : "status"}
       aria-live={isAlert ? "assertive" : "polite"}
       aria-label={status.label}
-      title={status.label}
+      title={syncStatus.message ?? status.label}
       className={`flex shrink-0 items-center gap-1.5 px-1.5 text-xs font-medium sm:px-2 ${status.className}`}
     >
       <Icon
         aria-hidden="true"
-        className={`size-4 ${syncStatus === "loading" || syncStatus === "saving" ? "animate-spin" : ""}`}
+        className={`size-4 ${syncStatus.phase === "checking" || syncStatus.phase === "saving" ? "animate-spin" : ""}`}
       />
       <span className="hidden sm:inline">{status.label}</span>
     </div>
@@ -417,20 +418,26 @@ function SyncStatusIndicator() {
 }
 
 function SyncStatusBanner() {
-  const { syncStatus } = useFinance();
-  if (syncStatus !== "error" && syncStatus !== "conflict") return null;
-  const message =
-    syncStatus === "conflict"
-      ? "Outra sessão alterou os dados enquanto havia mudanças locais. O envio foi pausado para evitar sobrescrever dados; preserve esta cópia e reconcilie antes de continuar."
-      : "A sincronização não foi confirmada. Alterações após o último estado sincronizado podem existir apenas neste navegador; verifique a conexão antes de encerrar a sessão.";
+  const { syncStatus, retrySync, resolveSyncConflict, legacyMigrationAvailable, migrateLegacyData } = useFinance();
+  const show = syncStatus.phase === "error" || syncStatus.phase === "conflict" || legacyMigrationAvailable;
+  if (!show) return null;
+  const message = syncStatus.message ?? (syncStatus.phase === "conflict"
+    ? "As versões local e remota diferem. O envio foi pausado para evitar sobrescrita."
+    : "A sincronização não foi confirmada; o cache local foi preservado.");
 
   return (
     <div
       role="alert"
       aria-live="assertive"
-      className="border-b border-destructive/30 bg-destructive/5 px-4 py-2 text-center text-xs font-medium text-destructive"
+      className="flex flex-wrap items-center justify-center gap-2 border-b border-destructive/30 bg-destructive/5 px-4 py-2 text-center text-xs font-medium text-destructive"
     >
-      {message}
+      <span>{message}</span>
+      {syncStatus.phase === "error" && <Button variant="outline" size="sm" className="h-7" onClick={retrySync}>Tentar novamente</Button>}
+      {legacyMigrationAvailable && <Button variant="outline" size="sm" className="h-7" onClick={migrateLegacyData}>Confirmar migração para a nuvem</Button>}
+      {syncStatus.phase === "conflict" && <>
+        <Button variant="outline" size="sm" className="h-7" onClick={() => resolveSyncConflict("useRemote")}>Usar versão da nuvem</Button>
+        <Button variant="outline" size="sm" className="h-7" onClick={() => resolveSyncConflict("keepLocal")}>Manter versão local</Button>
+      </>}
     </div>
   );
 }

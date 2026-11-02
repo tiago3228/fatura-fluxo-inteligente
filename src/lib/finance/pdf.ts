@@ -23,6 +23,7 @@ export type ExtractedPdfRow = {
 export type ExtractedPdfInvoice = {
   rows: ExtractedPdfRow[];
   officialTotal: number | null;
+  cardOfficialTotals?: Record<string, number>;
   dueDate: string | null;
   rawText: string;
   warnings: string[];
@@ -36,6 +37,10 @@ export type PdfComparisonStatus =
   | "new_purchase"
   | "unexpected_installment"
   | "other";
+
+export function shouldImportPdfRow(userSelected: boolean, status: PdfComparisonStatus | undefined) {
+  return userSelected && status !== "already_imported";
+}
 
 export type PdfInvoiceComparison = {
   rows: { rowId: string; status: PdfComparisonStatus }[];
@@ -278,6 +283,7 @@ function normalizeDescription(line: string, date: string) {
 
 export function parseInvoiceText(rawText: string, fallbackMonth: string): ExtractedPdfInvoice {
   const warnings: string[] = [];
+  const cardOfficialTotals: Record<string, number> = {};
   const lines = rawText
     .split(/\r?\n/)
     .map((line) => line.replace(/\s+/g, " ").trim())
@@ -293,6 +299,9 @@ export function parseInvoiceText(rawText: string, fallbackMonth: string): Extrac
     const line = columnMatch?.[2] ?? rawLine;
     const cardMatch = line.match(/\bfinal\s*(\d{4})\b/i) ?? line.match(/\bTitular\s*(\d{4})\b/i);
     if (cardMatch) cardLast4ByColumn[column] = cardMatch[1];
+    const cardTotalMatch = line.match(/lançamentos no cartão\s*\(final\s*(\d{4})\)/i);
+    const cardTotal = amountAtEnd(line);
+    if (cardTotalMatch && cardTotal !== null) cardOfficialTotals[cardTotalMatch[1]!] = cardTotal;
     if (/compras parceladas\s*[-–]\s*próximas faturas/i.test(line)) {
       inTransactionSection[column] = false;
       return;
@@ -381,9 +390,19 @@ export function parseInvoiceText(rawText: string, fallbackMonth: string): Extrac
     );
   if (rows.length > 0 && rows.length < 3)
     warnings.push("Poucos lançamentos foram reconhecidos; revise o PDF completo.");
+  for (const [last4, official] of Object.entries(cardOfficialTotals)) {
+    const assigned = round2(
+      rows.filter((row) => row.cardLast4 === last4).reduce((sum, row) => sum + row.amount, 0),
+    );
+    if (Math.abs(round2(official - assigned)) >= 0.01)
+      warnings.push(
+        `O resumo do cartão final ${last4} não confere com a soma das linhas atribuídas; revise manualmente a atribuição por linha.`,
+      );
+  }
   return {
     rows,
     officialTotal: preferredTotal ?? totalCandidates.at(-1) ?? null,
+    cardOfficialTotals,
     dueDate,
     rawText,
     warnings,

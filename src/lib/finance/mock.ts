@@ -326,3 +326,26 @@ export const createDemoState = (): FinanceState => ({
   recurringCharges,
   spreadsheets,
 });
+
+export const createEmptyFinanceState = (): FinanceState => {
+  const now = new Date();
+  return {
+    settings: {
+      month: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`,
+      warnPct: 80,
+      compact: false,
+      csvSeparator: ";",
+      duplicateCheck: true,
+      persist: true,
+    },
+    people: [],
+    cards: [],
+    invoices: [],
+    transactions: [],
+    plans: [],
+    recurringCharges: [],
+    spreadsheets: [],
+    payments: [],
+    spreadsheetAssignmentVersion: 2,
+  };
+};

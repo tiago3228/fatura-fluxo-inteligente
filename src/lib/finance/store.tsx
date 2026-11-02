@@ -9,7 +9,7 @@ import {
 } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { ensureWorkspace, loadCloudState, saveCloudState } from "./cloud";
-import { createDemoState } from "./mock";
+import { createDemoState, createEmptyFinanceState } from "./mock";
 import {
   addMonths,
   allocateByPercent,
@@ -23,7 +23,7 @@ import {
   stripInstallmentReference,
 } from "./calc";
 import { fmtMonthLong, round2, uid } from "./format";
-import { stableJsonStringify } from "./sync";
+import { decideCachedState, stableSerialize } from "./syncMerge";
 import { OCTOBER_ASSIGNMENTS } from "./octoberAssignments";
 import {
   categoryForMerchant,
@@ -82,7 +82,12 @@ export type Action =
   | { type: "deletePlan"; planId: string }
   | { type: "upsertRecurringCharge"; charge: RecurringCharge }
   | { type: "cancelRecurringCharge"; chargeId: string; cancelledFromMonth: string }
-  | { type: "importInvoice"; invoice: Invoice; transactions: Transaction[] }
+  | {
+      type: "importInvoice";
+      invoice: Invoice;
+      transactions: Transaction[];
+      personOverrides?: Record<string, Allocation[]>;
+    }
   | { type: "setInvoicePayments"; invoiceId: string; payments: NonNullable<Invoice["payments"]> }
   | { type: "setInvoiceStatus"; invoiceId: string; status: Invoice["status"] }
   | { type: "addSpreadsheet"; spreadsheet: SpreadsheetArchive }
@@ -529,6 +534,12 @@ const previousInvoiceFor = (state: FinanceState, invoice: Invoice) =>
 
 /** Recupera o cartão 0548 da fatura real quando uma versão local antiga não o tinha. */
 const ensure0548 = (state: FinanceState): FinanceState => {
+  // Esta correção só é válida para a conta legada já identificada; nunca semear
+  // cartões ou lançamentos do fixture em uma conta nova/vazia.
+  if (
+    !state.people.some((person) => person.id === "p_tiago") ||
+    !state.cards.some((card) => card.id === "c_7432")
+  ) return state;
   const baseline = createDemoState();
   const baselineCard = baseline.cards.find((card) => card.id === "c_0548");
   const baselineInvoice = baseline.invoices.find((invoice) => invoice.cardId === "c_0548");
@@ -1041,9 +1052,13 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
         ? mergeCategoryRules(DEFAULT_CATEGORY_RULES, raw.categoryRules)
         : learnFromTransactions(DEFAULT_CATEGORY_RULES, raw.transactions);
       const categorizedTransactions = applyCategoryRules(raw.transactions, categoryRules);
-      const seededCharges = createDemoState().recurringCharges.filter((charge) =>
-        raw.transactions.some((transaction) => transaction.id === charge.sourceTransactionId),
-      );
+      const isLegacyFixture = raw.people.some((person) => person.id === "p_tiago") &&
+        raw.cards.some((card) => card.id === "c_7432");
+      const seededCharges = isLegacyFixture
+        ? createDemoState().recurringCharges.filter((charge) =>
+            raw.transactions.some((transaction) => transaction.id === charge.sourceTransactionId),
+          )
+        : [];
       const recurringCharges = raw.recurringCharges ?? seededCharges;
       const transactions = categorizedTransactions.map((transaction) => {
         const charge = recurringCharges.find((item) => item.sourceTransactionId === transaction.id);
@@ -1070,7 +1085,7 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
       );
     }
     case "reset":
-      return ensureInstallmentProjections(ensureRecurringProjections(createDemoState()));
+      return createEmptyFinanceState();
     case "setMonth":
       return { ...s, settings: { ...s.settings, month: a.month } };
     case "updateSettings":
@@ -1386,12 +1401,16 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
         ? {
             ...a.invoice,
             id: existing.id,
+            importHistory: [
+              ...(existing.importHistory ?? []),
+              ...(a.invoice.importHistory ?? []),
+            ],
             ...(existing.status === "paga"
               ? { status: "paga" as const, paidAt: existing.paidAt }
               : {}),
             ...(existing.payments !== undefined ? { payments: existing.payments } : {}),
           }
-        : a.invoice;
+        : { ...a.invoice, importHistory: a.invoice.importHistory ?? [] };
       const categoryRules = learnFromTransactions(
         s.categoryRules ?? DEFAULT_CATEGORY_RULES,
         a.transactions,
@@ -1413,16 +1432,27 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
             plan.cardId !== invoice.cardId || planStatusAt(plan, invoice.month) !== "finalizado",
         ),
         transactions: [
-          ...s.transactions.filter(
-            (transaction) =>
-              transaction.invoiceId !== invoice.id && transaction.invoiceId !== a.invoice.id,
-          ),
+          ...s.transactions.filter((transaction) => {
+            if (transaction.invoiceId !== invoice.id && transaction.invoiceId !== a.invoice.id)
+              return true;
+            // Substitui apenas projeções previstas; lançamentos efetivamente importados/ajustados
+            // permanecem se esta importação incluiu somente linhas novas ou ignorou duplicatas.
+            return !transaction.isProjected;
+          }),
           ...reconciled,
         ],
       };
-      return ensureInstallmentProjections(
-        ensureRecurringProjections(assignInitialCardholders(imported)),
+      const projected = assignInitialCardholders(
+        ensureInstallmentProjections(ensureRecurringProjections(imported)),
       );
+      return {
+        ...projected,
+        transactions: projected.transactions.map((transaction) =>
+          a.personOverrides && Object.hasOwn(a.personOverrides, transaction.id)
+            ? { ...transaction, allocations: a.personOverrides[transaction.id]! }
+            : transaction,
+        ),
+      };
     }
     case "setInvoiceStatus":
       return {
@@ -1588,290 +1618,456 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
   }
 }
 
-export type SyncStatus = "loading" | "local" | "saving" | "synced" | "error" | "conflict";
+export type FinanceSyncStatus = {
+  phase: "checking" | "local" | "synced" | "saving" | "offline" | "error" | "conflict";
+  message?: string;
+};
+type RemoteConflict = { state: FinanceState; revision: number };
 type FinanceCtx = {
   state: FinanceState;
   dispatch: React.Dispatch<Action>;
-  syncStatus: SyncStatus;
-  isCloudConnected: boolean;
+  syncStatus: FinanceSyncStatus;
+  retrySync: () => void;
+  resolveSyncConflict: (choice: "useRemote" | "keepLocal") => void;
+  legacyMigrationAvailable: boolean;
+  migrateLegacyData: () => void;
 } | null;
-// Contexto único mesmo quando o arquivo é recarregado durante a edição (evita "fora do FinanceProvider").
+// Contexto único mesmo quando o arquivo é recarregado durante a edição.
 const g = globalThis as unknown as { __financeCtx?: React.Context<FinanceCtx> };
 const Ctx = g.__financeCtx ?? (g.__financeCtx = createContext<FinanceCtx>(null));
+const anonymousStorageKey = `${STORAGE_KEY}:anonymous`;
+const legacyMigrationMarker = (key: string) => `${key}:legacy-migration-pending`;
+const userWorkspaceKey = (userId: string, ws: string) =>
+  `${STORAGE_KEY}:user:${userId}:workspace:${ws}`;
+const userWorkspacePointer = (userId: string) => `${STORAGE_KEY}:user:${userId}:workspace-id`;
+const syncBaselineKey = (key: string) => `${key}:last-synced`;
+
+function readLocalFinanceState(key: string): FinanceState | null {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) ?? "null") as FinanceState | null;
+    return parsed && typeof parsed === "object" && Array.isArray(parsed.people) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+function readSyncBaseline(key: string): string | null {
+  try {
+    return localStorage.getItem(syncBaselineKey(key));
+  } catch {
+    return null;
+  }
+}
+function writeSyncBaseline(key: string, value: string): void {
+  try {
+    localStorage.setItem(syncBaselineKey(key), value);
+  } catch {
+    /* cache local indisponível */
+  }
+}
+function hasFinanceContent(value: FinanceState | null): value is FinanceState {
+  return !!value && [
+    value.people, value.cards, value.invoices, value.transactions, value.plans,
+    value.recurringCharges, value.spreadsheets ?? [], value.payments ?? [],
+  ].some((items) => items.length > 0);
+}
 
 export function FinanceProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, undefined, () => {
-    const initial = createDemoState();
-    return reducer(initial, { type: "hydrate", state: initial });
-  });
+  const [state, dispatch] = useReducer(reducer, undefined, createEmptyFinanceState);
+  const [syncStatus, setSyncStatus] = useState<FinanceSyncStatus>({ phase: "checking" });
+  const [legacyMigrationAvailable, setLegacyMigrationAvailable] = useState(false);
   const hydrated = useRef(false);
   const workspaceId = useRef<string | null>(null);
-  const cloudReady = useRef(false);
-  const savingJson = useRef<string | null>(null);
-  const saveQueue = useRef<Promise<void>>(Promise.resolve());
+  const userId = useRef<string | null>(null);
+  const storageKey = useRef<string | null>(null);
+  const revision = useRef(0);
+  const saveSequence = useRef(0);
+  const lastSynced = useRef<string | null>(null);
+  const remoteConflict = useRef<RemoteConflict | null>(null);
+  const pendingLegacyMigration = useRef<FinanceState | null>(null);
   const stateRef = useRef(state);
+  const retryRef = useRef<() => void>(() => undefined);
   const actorRef = useRef<AuditActor>({ id: "anonymous", name: "Usuário" });
   stateRef.current = state;
-  const [syncStatus, setSyncStatusState] = useState<SyncStatus>("loading");
-  const syncStatusRef = useRef<SyncStatus>("loading");
-  const [isCloudConnected, setIsCloudConnected] = useState(false);
-  const [cloudReadyVersion, setCloudReadyVersion] = useState(0);
-  const setSyncStatus = (next: SyncStatus) => {
-    syncStatusRef.current = next;
-    setSyncStatusState(next);
+
+  const clearLegacyMigration = () => {
+    pendingLegacyMigration.current = null;
+    setLegacyMigrationAvailable(false);
+    if (storageKey.current) {
+      try {
+        localStorage.removeItem(legacyMigrationMarker(storageKey.current));
+      } catch {
+        /* preserva o cache original */
+      }
+    }
   };
 
-  // Cópia local (funciona offline e evita "flash" de dados demonstrativos).
-  const lastSynced = useRef<string | null>(null);
-
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) dispatch({ type: "hydrate", state: JSON.parse(raw) });
-    } catch {
-      /* dados corrompidos: mantém demonstração */
+  const migrateLegacyData = () => {
+    const ws = workspaceId.current;
+    const key = storageKey.current;
+    const candidate = pendingLegacyMigration.current;
+    if (!candidate || !ws || !key) return;
+    const local = stateRef.current;
+    if (!local.settings.persist) {
+      setSyncStatus({ phase: "local", message: "Ative a persistência local antes da migração manual." });
+      return;
     }
-    hydrated.current = true;
-  }, []);
+    const payload = stableSerialize(local) === stableSerialize(createEmptyFinanceState())
+      ? candidate
+      : local;
+    setSyncStatus({ phase: "saving", message: "Enviando o cache local após sua confirmação…" });
+    void saveCloudState(ws, payload, revision.current).then((result) => {
+      if (workspaceId.current !== ws) return;
+      if (result.kind === "saved") {
+        revision.current = result.revision;
+        lastSynced.current = stableSerialize(payload);
+        writeSyncBaseline(key, lastSynced.current);
+        clearLegacyMigration();
+        dispatch({ type: "hydrate", state: payload });
+        setSyncStatus({ phase: "synced", message: "Migração concluída; o cache anterior foi preservado neste navegador." });
+      } else if (result.kind === "conflict") {
+        remoteConflict.current = { state: result.state, revision: result.revision };
+        setSyncStatus({ phase: "conflict", message: "A nuvem mudou durante a migração. Escolha qual versão manter." });
+      } else {
+        setSyncStatus({ phase: "error", message: result.message });
+      }
+    }).catch((error: unknown) => setSyncStatus({ phase: "error", message: error instanceof Error ? error.message : "Falha ao migrar dados locais." }));
+  };
 
-  // Nuvem: carrega os dados da conta ao entrar e passa a salvar a cada alteração.
+  const resolveSyncConflict = (choice: "useRemote" | "keepLocal") => {
+    const remote = remoteConflict.current;
+    const ws = workspaceId.current;
+    const key = storageKey.current;
+    if (!remote || !ws || !key) return;
+    if (choice === "useRemote") {
+      revision.current = remote.revision;
+      lastSynced.current = stableSerialize(remote.state);
+      writeSyncBaseline(key, lastSynced.current);
+      remoteConflict.current = null;
+      clearLegacyMigration();
+      dispatch({ type: "hydrate", state: remote.state });
+      setSyncStatus({ phase: "synced", message: "Versão remota carregada." });
+      return;
+    }
+    const local = pendingLegacyMigration.current ?? stateRef.current;
+    setSyncStatus({ phase: "saving", message: "Salvando a versão deste dispositivo por CAS…" });
+    void saveCloudState(ws, local, remote.revision).then((result) => {
+      if (workspaceId.current !== ws) return;
+      if (result.kind === "saved") {
+        revision.current = result.revision;
+        lastSynced.current = stableSerialize(local);
+        writeSyncBaseline(key, lastSynced.current);
+        remoteConflict.current = null;
+        clearLegacyMigration();
+        dispatch({ type: "hydrate", state: local });
+        setSyncStatus({ phase: "synced", message: "Versão deste dispositivo sincronizada." });
+      } else if (result.kind === "conflict") {
+        remoteConflict.current = { state: result.state, revision: result.revision };
+        setSyncStatus({ phase: "conflict", message: "A nuvem mudou novamente. Compare antes de escolher." });
+      } else {
+        setSyncStatus({ phase: "error", message: result.message });
+      }
+    }).catch((error: unknown) => setSyncStatus({ phase: "error", message: error instanceof Error ? error.message : "Falha ao resolver conflito." }));
+  };
+
   useEffect(() => {
     let cancelled = false;
-    let loadGeneration = 0;
+    let generation = 0;
     let channel: ReturnType<typeof supabase.channel> | null = null;
-    let pendingRemote: FinanceState | null = null;
 
-    const applyRemote = (remote: FinanceState) => {
-      const json = stableJsonStringify(remote);
-      if (json === lastSynced.current) return;
-      if (json === savingJson.current) {
-        lastSynced.current = json;
-        return;
-      }
-      const localJson = stableJsonStringify(stateRef.current);
-      if (lastSynced.current !== null && localJson !== lastSynced.current) {
-        setSyncStatus("conflict");
-        return;
-      }
-      lastSynced.current = json;
-      stateRef.current = remote;
-      dispatch({ type: "hydrate", state: remote });
-      setSyncStatus("synced");
-    };
-
-    // Recebe na hora as alterações feitas pela outra conta.
     const subscribeRemote = (ws: string) => {
       if (channel) void supabase.removeChannel(channel);
-      channel = supabase
-        .channel(`ws-state-${ws}-${Math.random().toString(36).slice(2)}`)
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "workspace_state",
-            filter: `workspace_id=eq.${ws}`,
-          },
-          (payload) => {
-            const remote = (payload.new as { data?: unknown } | null)?.data;
-            if (!remote || typeof remote !== "object" || Array.isArray(remote)) return;
-            const parsed = remote as FinanceState;
-            if (!cloudReady.current) {
-              pendingRemote = parsed;
-              return;
-            }
-            applyRemote(parsed);
-          },
-        )
-        .subscribe();
+      channel = supabase.channel(`ws-state-${ws}-${Math.random().toString(36).slice(2)}`)
+        .on("postgres_changes", {
+          event: "*", schema: "public", table: "workspace_state", filter: `workspace_id=eq.${ws}`,
+        }, (payload) => {
+          const row = payload.new as { data?: unknown; revision?: number } | null;
+          if (!row?.data || typeof row.data !== "object" || Array.isArray(row.data) || typeof row.revision !== "number") return;
+          const remote = row.data as FinanceState;
+          const json = stableSerialize(remote);
+          const localJson = stableSerialize(stateRef.current);
+          if (json === localJson) {
+            saveSequence.current++;
+            revision.current = row.revision;
+            lastSynced.current = json;
+            if (storageKey.current) writeSyncBaseline(storageKey.current, json);
+            remoteConflict.current = null;
+            setSyncStatus({ phase: "synced" });
+          } else if (lastSynced.current !== null && localJson !== lastSynced.current) {
+            saveSequence.current++;
+            remoteConflict.current = { state: remote, revision: row.revision };
+            setSyncStatus({ phase: "conflict", message: "Outro dispositivo alterou os dados enquanto havia mudanças locais." });
+          } else {
+            saveSequence.current++;
+            revision.current = row.revision;
+            lastSynced.current = json;
+            if (storageKey.current) writeSyncBaseline(storageKey.current, json);
+            remoteConflict.current = null;
+            dispatch({ type: "hydrate", state: remote });
+            setSyncStatus({ phase: "synced", message: "Alterações de outro dispositivo recebidas." });
+          }
+        }).subscribe();
     };
 
     const loadFromCloud = async () => {
-      const generation = ++loadGeneration;
-      cloudReady.current = false;
-      workspaceId.current = null;
-      lastSynced.current = null;
-      savingJson.current = null;
-      setIsCloudConnected(false);
-      setSyncStatus("loading");
+      const currentGeneration = ++generation;
+      setSyncStatus({ phase: "checking" });
       try {
         const { data, error } = await supabase.auth.getSession();
-        if (cancelled || generation !== loadGeneration) return;
-        if (error) {
-          setSyncStatus("error");
+        if (cancelled || currentGeneration !== generation) return;
+        if (error) throw error;
+        const session = data.session;
+        if (!session) {
+          workspaceId.current = null;
+          userId.current = null;
+          storageKey.current = anonymousStorageKey;
+          revision.current = 0;
+          lastSynced.current = null;
+          const local = readLocalFinanceState(anonymousStorageKey) ?? readLocalFinanceState(STORAGE_KEY);
+          dispatch({ type: "hydrate", state: local ?? createEmptyFinanceState() });
+          hydrated.current = true;
+          setLegacyMigrationAvailable(false);
+          setSyncStatus({ phase: "local", message: local ? "Cache preservado neste navegador; sem sessão, nada é enviado à nuvem." : "Sem sessão autenticada; dados ficam somente neste navegador." });
           return;
         }
-        if (!data.session) {
-          setSyncStatus("local");
+
+        if (userId.current !== session.user.id) {
+          saveSequence.current++;
+          pendingLegacyMigration.current = null;
+          setLegacyMigrationAvailable(false);
+          remoteConflict.current = null;
+          workspaceId.current = null;
+          storageKey.current = null;
+          revision.current = 0;
+          lastSynced.current = null;
+          hydrated.current = false;
+          // Não mostrar nem persistir dados de outra sessão durante o carregamento.
+          dispatch({ type: "hydrate", state: createEmptyFinanceState() });
+        }
+        userId.current = session.user.id;
+        actorRef.current = { id: session.user.id, name: actorNameFromUser(session.user) };
+        let previousWorkspace: string | null = null;
+        try { previousWorkspace = localStorage.getItem(userWorkspacePointer(session.user.id)); } catch { /* cache indisponível */ }
+        const fallbackKey = previousWorkspace
+          ? userWorkspaceKey(session.user.id, previousWorkspace)
+          : `${STORAGE_KEY}:user:${session.user.id}:pending-workspace`;
+        const workspace = await ensureWorkspace();
+        if (cancelled || currentGeneration !== generation) return;
+        if (workspace.workspaceId === null) {
+          storageKey.current = fallbackKey;
+          const local = readLocalFinanceState(fallbackKey);
+          if (local) dispatch({ type: "hydrate", state: local });
+          hydrated.current = true;
+          setSyncStatus({ phase: "error", message: workspace.error });
           return;
         }
-        actorRef.current = {
-          id: data.session.user.id,
-          name: actorNameFromUser(data.session.user),
-        };
-        const ws = await ensureWorkspace();
-        if (cancelled || generation !== loadGeneration) return;
-        if (!ws) {
-          setSyncStatus("error");
-          return;
-        }
+
+        const ws = workspace.workspaceId;
         workspaceId.current = ws;
-        setIsCloudConnected(true);
+        const key = userWorkspaceKey(session.user.id, ws);
+        storageKey.current = key;
+        try { localStorage.setItem(userWorkspacePointer(session.user.id), ws); } catch { /* cache indisponível */ }
         subscribeRemote(ws);
+        const cloud = await loadCloudState(ws);
+        if (cancelled || currentGeneration !== generation) return;
+        const local = readLocalFinanceState(key);
+        const legacy = readLocalFinanceState(STORAGE_KEY);
+        const hasLegacy = hasFinanceContent(legacy);
+        let migrationPending = false;
+        try { migrationPending = localStorage.getItem(legacyMigrationMarker(key)) === "true"; } catch { /* ignore */ }
 
-        const result = await loadCloudState(ws);
-        if (cancelled || generation !== loadGeneration || workspaceId.current !== ws) return;
-        if (result.kind === "error") {
-          // Uma falha de leitura nunca deve ser tratada como um documento ausente.
-          setSyncStatus("error");
+        if (cloud.kind === "loaded") {
+          const cloudJson = stableSerialize(cloud.state);
+          const baseline = readSyncBaseline(key);
+          const decision = decideCachedState(local, cloud.state, baseline);
+          if (migrationPending && local && stableSerialize(local) !== cloudJson) {
+            pendingLegacyMigration.current = local;
+            setLegacyMigrationAvailable(true);
+            revision.current = cloud.revision;
+            remoteConflict.current = { state: cloud.state, revision: cloud.revision };
+            hydrated.current = true;
+            dispatch({ type: "hydrate", state: local });
+            setSyncStatus({ phase: "conflict", message: "Cache local pendente e nuvem diferem. Escolha qual versão usar." });
+            return;
+          }
+          if (migrationPending) clearLegacyMigration();
+          if (local && decision === "pushLocal") {
+            revision.current = cloud.revision;
+            lastSynced.current = cloudJson;
+            hydrated.current = true;
+            dispatch({ type: "hydrate", state: local });
+            setSyncStatus({ phase: "saving", message: "Alterações offline detectadas; tentando sincronizar sem substituir dados mais recentes." });
+            return;
+          }
+          if (local && decision === "conflict") {
+            revision.current = cloud.revision;
+            remoteConflict.current = { state: cloud.state, revision: cloud.revision };
+            hydrated.current = true;
+            dispatch({ type: "hydrate", state: local });
+            setSyncStatus({ phase: "conflict", message: "Cache local e nuvem divergem. Escolha qual versão manter." });
+            return;
+          }
+          revision.current = cloud.revision;
+          lastSynced.current = cloudJson;
+          writeSyncBaseline(key, cloudJson);
+          remoteConflict.current = null;
+          hydrated.current = true;
+          dispatch({ type: "hydrate", state: cloud.state });
+          setSyncStatus({ phase: "synced" });
+          return;
+        }
+        if (cloud.kind === "error") {
+          saveSequence.current++;
+          workspaceId.current = null;
+          if (channel) { void supabase.removeChannel(channel); channel = null; }
+          const localFallback = local ?? createEmptyFinanceState();
+          dispatch({ type: "hydrate", state: localFallback });
+          hydrated.current = true;
+          setSyncStatus({ phase: "error", message: cloud.message });
           return;
         }
 
-        const cloudState = pendingRemote ?? (result.kind === "loaded" ? result.state : null);
-        if (cloudState) {
-          lastSynced.current = stableJsonStringify(cloudState);
-          stateRef.current = cloudState;
-          cloudReady.current = true;
-          setCloudReadyVersion((version) => version + 1);
-          dispatch({ type: "hydrate", state: cloudState });
-          setSyncStatus("synced");
-          pendingRemote = null;
+        revision.current = 0;
+        lastSynced.current = null;
+        if (hasFinanceContent(local) || hasLegacy) {
+          const migrationState = hasFinanceContent(local) ? local : legacy!;
+          pendingLegacyMigration.current = migrationState;
+          setLegacyMigrationAvailable(true);
+          hydrated.current = true;
+          try { localStorage.setItem(legacyMigrationMarker(key), "true"); } catch { /* legado preservado */ }
+          dispatch({ type: "hydrate", state: migrationState });
+          setSyncStatus({ phase: "local", message: "Cache local detectado. Ele não será enviado até você confirmar a migração." });
           return;
         }
 
-        // Primeira entrada confirmada: publica o estado local; falha deixa o sync bloqueado.
-        setSyncStatus("saving");
-        const initialState = stateRef.current;
-        const saved = await saveCloudState(ws, initialState);
-        if (cancelled || generation !== loadGeneration || workspaceId.current !== ws) return;
-        if (!saved) {
-          setSyncStatus("error");
-          return;
+        const initial = local ?? createEmptyFinanceState();
+        dispatch({ type: "hydrate", state: initial });
+        const saved = await saveCloudState(ws, initial, 0);
+        if (cancelled || currentGeneration !== generation) return;
+        hydrated.current = true;
+        if (saved.kind === "saved") {
+          revision.current = saved.revision;
+          lastSynced.current = stableSerialize(initial);
+          writeSyncBaseline(key, lastSynced.current);
+          setSyncStatus({ phase: "synced", message: "Workspace privado inicializado sem dados de demonstração." });
+        } else if (saved.kind === "conflict") {
+          remoteConflict.current = { state: saved.state, revision: saved.revision };
+          setSyncStatus({ phase: "conflict", message: "Outro dispositivo inicializou o workspace. Escolha a versão a manter." });
+        } else {
+          setSyncStatus({ phase: "error", message: saved.message });
         }
-        lastSynced.current = stableJsonStringify(initialState);
-        cloudReady.current = true;
-        setCloudReadyVersion((version) => version + 1);
-        setSyncStatus("synced");
-      } catch {
-        if (!cancelled && generation === loadGeneration) setSyncStatus("error");
+      } catch (error) {
+        if (cancelled || currentGeneration !== generation) return;
+        const uid = userId.current;
+        let pointer: string | null = null;
+        try { pointer = uid ? localStorage.getItem(userWorkspacePointer(uid)) : null; } catch { /* ignore */ }
+        const fallbackKey = uid && pointer ? userWorkspaceKey(uid, pointer) : anonymousStorageKey;
+        storageKey.current = fallbackKey;
+        const local = readLocalFinanceState(fallbackKey) ?? createEmptyFinanceState();
+        dispatch({ type: "hydrate", state: local });
+        hydrated.current = true;
+        setSyncStatus({ phase: "error", message: error instanceof Error ? error.message : "Supabase indisponível; cache local preservado, nenhuma gravação remota foi simulada." });
       }
     };
 
+    retryRef.current = () => { void loadFromCloud(); };
     void loadFromCloud();
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "SIGNED_OUT") {
-        loadGeneration += 1;
-        cloudReady.current = false;
-        workspaceId.current = null;
-        lastSynced.current = null;
-        savingJson.current = null;
-        setIsCloudConnected(false);
-        setSyncStatus("local");
-        if (channel) {
-          void supabase.removeChannel(channel);
-          channel = null;
+    let subscription: { unsubscribe: () => void } | null = null;
+    try {
+      subscription = supabase.auth.onAuthStateChange((event) => {
+        if (event === "SIGNED_OUT") {
+          generation++;
+          saveSequence.current++;
+          workspaceId.current = null;
+          userId.current = null;
+          storageKey.current = anonymousStorageKey;
+          revision.current = 0;
+          lastSynced.current = null;
+          remoteConflict.current = null;
+          pendingLegacyMigration.current = null;
+          setLegacyMigrationAvailable(false);
+          if (channel) { void supabase.removeChannel(channel); channel = null; }
+          dispatch({ type: "hydrate", state: readLocalFinanceState(anonymousStorageKey) ?? createEmptyFinanceState() });
+          setSyncStatus({ phase: "local", message: "Sessão encerrada; cache da conta preservado e isolado." });
+        } else if (event === "SIGNED_IN" || event === "USER_UPDATED") {
+          void loadFromCloud();
         }
-        dispatch({ type: "hydrate", state: createDemoState() });
-        try {
-          localStorage.removeItem(STORAGE_KEY);
-        } catch {
-          /* ignore */
-        }
-      } else if (event === "SIGNED_IN" || event === "USER_UPDATED") {
-        void loadFromCloud();
-      }
-    });
-
+      }).data.subscription;
+    } catch {
+      hydrated.current = true;
+      setSyncStatus({ phase: "error", message: "Supabase não configurado. A sincronização está desativada; dados locais continuam disponíveis." });
+    }
+    const onOffline = () => setSyncStatus({ phase: "offline", message: "Sem conexão. Alterações ficam no cache separado desta conta." });
+    const onOnline = () => { void loadFromCloud(); };
+    window.addEventListener("offline", onOffline);
+    window.addEventListener("online", onOnline);
     return () => {
       cancelled = true;
-      loadGeneration += 1;
-      cloudReady.current = false;
-      subscription.unsubscribe();
+      generation++;
+      subscription?.unsubscribe();
+      window.removeEventListener("offline", onOffline);
+      window.removeEventListener("online", onOnline);
       if (channel) void supabase.removeChannel(channel);
     };
   }, []);
 
   useEffect(() => {
     if (!hydrated.current) return;
-    try {
-      if (state.settings.persist) localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-      else localStorage.removeItem(STORAGE_KEY);
-    } catch {
-      /* ignore */
+    const key = storageKey.current;
+    if (key) {
+      try {
+        if (state.settings.persist) localStorage.setItem(key, JSON.stringify(state));
+        else localStorage.removeItem(key);
+      } catch { /* cache local indisponível */ }
     }
-    if (!workspaceId.current || !cloudReady.current || syncStatusRef.current === "conflict") return;
-    // Salva na nuvem com pequena espera para agrupar alterações em sequência.
-    let cancelled = false;
-    let retryTimer: ReturnType<typeof setTimeout> | null = null;
-    const saveCurrentState = async (attempt = 0) => {
-      if (
-        cancelled ||
-        !workspaceId.current ||
-        !cloudReady.current ||
-        syncStatusRef.current === "conflict"
-      )
-        return;
-      const ws = workspaceId.current;
-      const task = saveQueue.current.then(async () => {
-        if (cancelled || ws !== workspaceId.current || !cloudReady.current) return;
-        const snapshot = stateRef.current;
-        const json = stableJsonStringify(snapshot);
-        if (json === lastSynced.current) {
-          setSyncStatus("synced");
-          return;
-        }
-        savingJson.current = json;
-        setSyncStatus("saving");
-        const saved = await saveCloudState(ws, snapshot);
-        if (ws !== workspaceId.current) return;
-        if (saved) {
+    const ws = workspaceId.current;
+    if (!ws || !state.settings.persist || remoteConflict.current !== null || pendingLegacyMigration.current !== null) return;
+    const json = stableSerialize(state);
+    if (json === lastSynced.current) return;
+    const timer = setTimeout(() => {
+      if (workspaceId.current !== ws) return;
+      const requestSequence = ++saveSequence.current;
+      setSyncStatus({ phase: "saving" });
+      void saveCloudState(ws, state, revision.current).then((result) => {
+        if (workspaceId.current !== ws || requestSequence !== saveSequence.current) return;
+        if (result.kind === "saved") {
+          revision.current = result.revision;
           lastSynced.current = json;
-          if (savingJson.current === json) savingJson.current = null;
-          if (!cancelled && syncStatusRef.current !== "conflict") {
-            setSyncStatus(stableJsonStringify(stateRef.current) === json ? "synced" : "saving");
-          }
-          return;
+          if (storageKey.current) writeSyncBaseline(storageKey.current, json);
+          setSyncStatus(
+            stableSerialize(stateRef.current) === json
+              ? { phase: "synced" }
+              : { phase: "saving", message: "A alteração mais recente ainda está aguardando sincronização." },
+          );
+        } else if (result.kind === "conflict") {
+          remoteConflict.current = { state: result.state, revision: result.revision };
+          setSyncStatus({ phase: "conflict", message: "Há alterações de outro dispositivo. Compare e escolha uma versão." });
+        } else {
+          setSyncStatus({ phase: "error", message: result.message });
         }
-        if (savingJson.current === json) savingJson.current = null;
-        if (!cancelled && syncStatusRef.current !== "conflict") setSyncStatus("error");
-        const delays = [2000, 5000, 15000, 30000];
-        if (!cancelled && attempt < delays.length) {
-          retryTimer = setTimeout(() => void saveCurrentState(attempt + 1), delays[attempt]);
-        }
+      }).catch((error: unknown) => {
+        if (workspaceId.current !== ws || requestSequence !== saveSequence.current) return;
+        setSyncStatus({ phase: "error", message: error instanceof Error ? error.message : "Falha ao sincronizar dados." });
       });
-      saveQueue.current = task.then(
-        () => undefined,
-        () => undefined,
-      );
-      await task;
-    };
-    const timer = setTimeout(() => void saveCurrentState(), 600);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-      if (retryTimer) clearTimeout(retryTimer);
-    };
-  }, [state, cloudReadyVersion]);
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [state]);
 
   const auditedDispatch: React.Dispatch<Action> = (action) => {
     const before = stateRef.current;
     const next = reducer(before, action);
     let entry = auditForAction(action, before, actorRef.current);
     if (entry?.undo && next !== before) {
-      entry = {
-        ...entry,
-        redo: undoSnapshot(next, snapshotFields(entry.undo)),
-      };
+      entry = { ...entry, redo: undoSnapshot(next, snapshotFields(entry.undo)) };
     }
     dispatch(action);
     if (entry) dispatch({ type: "appendAudit", entry });
   };
 
   return (
-    <Ctx.Provider value={{ state, dispatch: auditedDispatch, syncStatus, isCloudConnected }}>
+    <Ctx.Provider value={{
+      state, dispatch: auditedDispatch, syncStatus, retrySync: () => retryRef.current(),
+      resolveSyncConflict, legacyMigrationAvailable, migrateLegacyData,
+    }}>
       {children}
     </Ctx.Provider>
   );

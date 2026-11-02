@@ -48,7 +48,7 @@ export function PlanDialog({ plan, onClose }: { plan?: InstallmentPlan; onClose:
     if (!valid) return;
     dispatch({
       type: "upsertPlan",
-      plan: { id: plan?.id ?? uid("pl"), description: desc.trim(), cardId, purchaseDate: date, total: tot!, amounts: parsedAmts as number[], firstMonth: addMonths(ref, -(cur - 1)), shares },
+      plan: { id: plan?.id ?? uid("pl"), ...(plan?.sourceTransactionId ? { sourceTransactionId: plan.sourceTransactionId } : {}), description: desc.trim(), cardId, purchaseDate: date, total: tot!, amounts: parsedAmts as number[], firstMonth: addMonths(ref, -(cur - 1)), shares },
     });
     toast.success(plan ? "Parcelamento atualizado" : "Parcelamento registrado", { description: `${n - cur} parcela(s) restantes após ${ref.slice(5)}/${ref.slice(0, 4)}` });
     onClose();
