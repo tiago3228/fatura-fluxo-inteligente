@@ -43,6 +43,13 @@
       "when": 1792854401009,
       "tag": "0005_workspace_isolation_and_revision",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793629236338,
+      "tag": "0006_workspace_isolation_and_revision",
+      "breakpoints": true
     }
   ]
 }

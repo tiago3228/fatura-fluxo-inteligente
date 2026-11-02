@@ -626,8 +626,16 @@ export type Database = {
       }
       join_family_workspace: { Args: never; Returns: string }
       save_workspace_state: {
-        Args: { p_data: Json; p_expected_revision: number; p_workspace_id: string }
-        Returns: { data: Json; revision: number; saved: boolean }[]
+        Args: {
+          p_data: Json
+          p_expected_revision: number
+          p_workspace_id: string
+        }
+        Returns: {
+          data: Json
+          revision: number
+          saved: boolean
+        }[]
       }
     }
     Enums: {
