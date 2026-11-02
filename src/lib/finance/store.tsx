@@ -39,6 +39,9 @@ import type {
   FinanceState,
   InstallmentPlan,
   Invoice,
+  OtherAccount,
+  OtherAccountCategory,
+  OtherAccountStatus,
   Person,
   PersonPayment,
   RecurringCharge,
@@ -47,6 +50,10 @@ import type {
   Transaction,
   TxType,
 } from "./types";
+import {
+  isValidOtherAccount,
+  withDefaultOtherAccountCategories,
+} from "./otherAccounts";
 
 const STORAGE_KEY = "fatura-organizer-real-itau-v2";
 
@@ -81,6 +88,11 @@ export type Action =
   | { type: "upsertPlan"; plan: InstallmentPlan }
   | { type: "deletePlan"; planId: string }
   | { type: "upsertRecurringCharge"; charge: RecurringCharge }
+  | { type: "upsertOtherAccountCategory"; category: OtherAccountCategory }
+  | { type: "deleteOtherAccountCategory"; categoryId: string }
+  | { type: "upsertOtherAccount"; account: OtherAccount }
+  | { type: "deleteOtherAccount"; accountId: string }
+  | { type: "setOtherAccountStatus"; accountId: string; status: OtherAccountStatus; paidAt?: string }
   | { type: "cancelRecurringCharge"; chargeId: string; cancelledFromMonth: string }
   | {
       type: "importInvoice";
@@ -762,7 +774,9 @@ type UndoField =
   | "settings"
   | "payments"
   | "spreadsheets"
-  | "suppressedProjectionSources";
+  | "suppressedProjectionSources"
+  | "otherAccountCategories"
+  | "otherAccounts";
 
 const undoSnapshot = (
   before: FinanceState,
@@ -932,6 +946,70 @@ const auditForAction = (
       undo = undoSnapshot(before, ["people", "transactions", "plans", "recurringCharges"]);
       break;
     }
+    case "upsertOtherAccountCategory": {
+      const categories = withDefaultOtherAccountCategories(before.otherAccountCategories);
+      const existing = categories.find((category) => category.id === action.category.id);
+      const name = action.category.name.trim();
+      if (
+        !action.category.id.trim() ||
+        !name ||
+        existing?.builtIn ||
+        categories.some(
+          (category) =>
+            category.id !== action.category.id &&
+            category.name.trim().toLocaleLowerCase("pt-BR") === name.toLocaleLowerCase("pt-BR"),
+        )
+      )
+        return null;
+      description = `${actor.name} ${existing ? "alterou" : "adicionou"} o tipo de conta “${name}”.`;
+      entityType = "otherAccountCategory";
+      entityId = action.category.id;
+      undo = undoSnapshot(before, ["otherAccountCategories"]);
+      break;
+    }
+    case "deleteOtherAccountCategory": {
+      const categories = withDefaultOtherAccountCategories(before.otherAccountCategories);
+      const category = categories.find((item) => item.id === action.categoryId);
+      if (
+        !category ||
+        category.builtIn ||
+        (before.otherAccounts ?? []).some((account) => account.categoryId === action.categoryId)
+      )
+        return null;
+      description = `${actor.name} removeu o tipo de conta “${category.name}”.`;
+      entityType = "otherAccountCategory";
+      entityId = category.id;
+      undo = undoSnapshot(before, ["otherAccountCategories"]);
+      break;
+    }
+    case "upsertOtherAccount": {
+      const categories = withDefaultOtherAccountCategories(before.otherAccountCategories);
+      if (!isValidOtherAccount(action.account, categories)) return null;
+      const exists = (before.otherAccounts ?? []).some((account) => account.id === action.account.id);
+      description = `${actor.name} ${exists ? "alterou" : "adicionou"} a conta “${action.account.description.trim()}”.`;
+      entityType = "otherAccount";
+      entityId = action.account.id;
+      undo = undoSnapshot(before, ["otherAccounts"]);
+      break;
+    }
+    case "deleteOtherAccount": {
+      const account = before.otherAccounts?.find((item) => item.id === action.accountId);
+      if (!account) return null;
+      description = `${actor.name} removeu a conta “${account.description}”.`;
+      entityType = "otherAccount";
+      entityId = account.id;
+      undo = undoSnapshot(before, ["otherAccounts"]);
+      break;
+    }
+    case "setOtherAccountStatus": {
+      const account = before.otherAccounts?.find((item) => item.id === action.accountId);
+      if (!account || account.status === action.status) return null;
+      description = `${actor.name} marcou “${account.description}” como ${action.status === "paid" ? "paga" : "pendente"}.`;
+      entityType = "otherAccount";
+      entityId = account.id;
+      undo = undoSnapshot(before, ["otherAccounts"]);
+      break;
+    }
     case "upsertCard":
       description = `${actor.name} ${before.cards.some((card) => card.id === action.card.id) ? "alterou" : "inseriu"} o cartão “${action.card.name} •••• ${action.card.last4}”.`;
       entityType = "card";
@@ -1069,6 +1147,15 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
       const normalized = {
         ...raw,
         recurringCharges,
+        otherAccountCategories: withDefaultOtherAccountCategories(raw.otherAccountCategories),
+        otherAccounts: Array.isArray(raw.otherAccounts)
+          ? raw.otherAccounts.filter((account) =>
+              isValidOtherAccount(
+                account,
+                withDefaultOtherAccountCategories(raw.otherAccountCategories),
+              ),
+            )
+          : [],
         categoryRules,
         transactions,
         payments: raw.payments ?? [],
@@ -1279,6 +1366,66 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
       };
     case "upsertCard":
       return { ...s, cards: upsert(s.cards, a.card) };
+    case "upsertOtherAccountCategory": {
+      const categories = withDefaultOtherAccountCategories(s.otherAccountCategories);
+      const name = a.category.name.trim();
+      const existing = categories.find((category) => category.id === a.category.id);
+      if (
+        !a.category.id.trim() ||
+        !name ||
+        existing?.builtIn ||
+        categories.some(
+          (category) =>
+            category.id !== a.category.id &&
+            category.name.trim().toLocaleLowerCase("pt-BR") === name.toLocaleLowerCase("pt-BR"),
+        )
+      )
+        return s;
+      const category = { ...a.category, name, builtIn: false };
+      return { ...s, otherAccountCategories: upsert(categories, category) };
+    }
+    case "deleteOtherAccountCategory": {
+      const categories = withDefaultOtherAccountCategories(s.otherAccountCategories);
+      const category = categories.find((item) => item.id === a.categoryId);
+      if (
+        !category ||
+        category.builtIn ||
+        (s.otherAccounts ?? []).some((account) => account.categoryId === a.categoryId)
+      )
+        return s;
+      return {
+        ...s,
+        otherAccountCategories: categories.filter((item) => item.id !== a.categoryId),
+      };
+    }
+    case "upsertOtherAccount": {
+      const categories = withDefaultOtherAccountCategories(s.otherAccountCategories);
+      if (!isValidOtherAccount(a.account, categories)) return s;
+      return {
+        ...s,
+        otherAccountCategories: categories,
+        otherAccounts: upsert(s.otherAccounts ?? [], a.account),
+      };
+    }
+    case "deleteOtherAccount":
+      return {
+        ...s,
+        otherAccounts: (s.otherAccounts ?? []).filter((account) => account.id !== a.accountId),
+      };
+    case "setOtherAccountStatus": {
+      const current = (s.otherAccounts ?? []).find((account) => account.id === a.accountId);
+      if (!current || current.status === a.status) return s;
+      return {
+        ...s,
+        otherAccounts: (s.otherAccounts ?? []).map((account) => {
+          if (account.id !== a.accountId) return account;
+          const updated: OtherAccount = { ...account, status: a.status };
+          if (a.status === "paid") updated.paidAt = a.paidAt ?? new Date().toISOString().slice(0, 10);
+          else delete updated.paidAt;
+          return updated;
+        }),
+      };
+    }
     case "upsertPlan": {
       const transactions = s.transactions.filter(
         (transaction) => !(transaction.isProjected && transaction.planId === a.plan.id),
@@ -1578,6 +1725,10 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
         ...(hasSnapshot("suppressedProjectionSources")
           ? { suppressedProjectionSources: entry.undo.suppressedProjectionSources }
           : {}),
+        ...(hasSnapshot("otherAccountCategories")
+          ? { otherAccountCategories: entry.undo.otherAccountCategories }
+          : {}),
+        ...(hasSnapshot("otherAccounts") ? { otherAccounts: entry.undo.otherAccounts } : {}),
         auditLog: s.auditLog?.map((item) =>
           item.id === a.auditId ? { ...item, undoneAt: new Date().toISOString() } : item,
         ),
@@ -1605,6 +1756,10 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
         ...(hasSnapshot("suppressedProjectionSources")
           ? { suppressedProjectionSources: entry.redo.suppressedProjectionSources }
           : {}),
+        ...(hasSnapshot("otherAccountCategories")
+          ? { otherAccountCategories: entry.redo.otherAccountCategories }
+          : {}),
+        ...(hasSnapshot("otherAccounts") ? { otherAccounts: entry.redo.otherAccounts } : {}),
         auditLog: s.auditLog?.map((item) => {
           if (item.id !== a.auditId) return item;
           const active = { ...item };

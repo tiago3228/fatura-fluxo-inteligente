@@ -19,6 +19,7 @@ import { Route as AuthenticatedComprasRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedConfiguracoesRouteImport } from './routes/_authenticated/configuracoes'
 import { Route as AuthenticatedEnviarContaRouteImport } from './routes/_authenticated/enviar-conta'
 import { Route as AuthenticatedLerFaturaRouteImport } from './routes/_authenticated/ler-fatura'
+import { Route as AuthenticatedOutrasContasRouteImport } from './routes/_authenticated/outras-contas'
 import { Route as AuthenticatedParcelamentosRouteImport } from './routes/_authenticated/parcelamentos'
 import { Route as AuthenticatedPlanilhasRouteImport } from './routes/_authenticated/planilhas'
 import { Route as AuthenticatedRelatoriosRouteImport } from './routes/_authenticated/relatorios'
@@ -82,6 +83,12 @@ const AuthenticatedLerFaturaRoute = AuthenticatedLerFaturaRouteImport.update({
   path: '/ler-fatura',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedOutrasContasRoute =
+  AuthenticatedOutrasContasRouteImport.update({
+    id: '/outras-contas',
+    path: '/outras-contas',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedParcelamentosRoute =
   AuthenticatedParcelamentosRouteImport.update({
     id: '/parcelamentos',
@@ -142,6 +149,7 @@ export interface FileRoutesByFullPath {
   '/configuracoes': typeof AuthenticatedConfiguracoesRoute
   '/enviar-conta': typeof AuthenticatedEnviarContaRoute
   '/ler-fatura': typeof AuthenticatedLerFaturaRoute
+  '/outras-contas': typeof AuthenticatedOutrasContasRoute
   '/parcelamentos': typeof AuthenticatedParcelamentosRoute
   '/planilhas': typeof AuthenticatedPlanilhasRoute
   '/relatorios': typeof AuthenticatedRelatoriosRoute
@@ -161,6 +169,7 @@ export interface FileRoutesByTo {
   '/configuracoes': typeof AuthenticatedConfiguracoesRoute
   '/enviar-conta': typeof AuthenticatedEnviarContaRoute
   '/ler-fatura': typeof AuthenticatedLerFaturaRoute
+  '/outras-contas': typeof AuthenticatedOutrasContasRoute
   '/parcelamentos': typeof AuthenticatedParcelamentosRoute
   '/planilhas': typeof AuthenticatedPlanilhasRoute
   '/relatorios': typeof AuthenticatedRelatoriosRoute
@@ -183,6 +192,7 @@ export interface FileRoutesById {
   '/_authenticated/configuracoes': typeof AuthenticatedConfiguracoesRoute
   '/_authenticated/enviar-conta': typeof AuthenticatedEnviarContaRoute
   '/_authenticated/ler-fatura': typeof AuthenticatedLerFaturaRoute
+  '/_authenticated/outras-contas': typeof AuthenticatedOutrasContasRoute
   '/_authenticated/parcelamentos': typeof AuthenticatedParcelamentosRoute
   '/_authenticated/planilhas': typeof AuthenticatedPlanilhasRoute
   '/_authenticated/relatorios': typeof AuthenticatedRelatoriosRoute
@@ -206,6 +216,7 @@ export interface FileRouteTypes {
     | '/configuracoes'
     | '/enviar-conta'
     | '/ler-fatura'
+    | '/outras-contas'
     | '/parcelamentos'
     | '/planilhas'
     | '/relatorios'
@@ -225,6 +236,7 @@ export interface FileRouteTypes {
     | '/configuracoes'
     | '/enviar-conta'
     | '/ler-fatura'
+    | '/outras-contas'
     | '/parcelamentos'
     | '/planilhas'
     | '/relatorios'
@@ -246,6 +258,7 @@ export interface FileRouteTypes {
     | '/_authenticated/configuracoes'
     | '/_authenticated/enviar-conta'
     | '/_authenticated/ler-fatura'
+    | '/_authenticated/outras-contas'
     | '/_authenticated/parcelamentos'
     | '/_authenticated/planilhas'
     | '/_authenticated/relatorios'
@@ -336,6 +349,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedLerFaturaRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/outras-contas': {
+      id: '/_authenticated/outras-contas'
+      path: '/outras-contas'
+      fullPath: '/outras-contas'
+      preLoaderRoute: typeof AuthenticatedOutrasContasRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/parcelamentos': {
       id: '/_authenticated/parcelamentos'
       path: '/parcelamentos'
@@ -409,6 +429,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedConfiguracoesRoute: typeof AuthenticatedConfiguracoesRoute
   AuthenticatedEnviarContaRoute: typeof AuthenticatedEnviarContaRoute
   AuthenticatedLerFaturaRoute: typeof AuthenticatedLerFaturaRoute
+  AuthenticatedOutrasContasRoute: typeof AuthenticatedOutrasContasRoute
   AuthenticatedParcelamentosRoute: typeof AuthenticatedParcelamentosRoute
   AuthenticatedPlanilhasRoute: typeof AuthenticatedPlanilhasRoute
   AuthenticatedRelatoriosRoute: typeof AuthenticatedRelatoriosRoute
@@ -428,6 +449,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedConfiguracoesRoute: AuthenticatedConfiguracoesRoute,
   AuthenticatedEnviarContaRoute: AuthenticatedEnviarContaRoute,
   AuthenticatedLerFaturaRoute: AuthenticatedLerFaturaRoute,
+  AuthenticatedOutrasContasRoute: AuthenticatedOutrasContasRoute,
   AuthenticatedParcelamentosRoute: AuthenticatedParcelamentosRoute,
   AuthenticatedPlanilhasRoute: AuthenticatedPlanilhasRoute,
   AuthenticatedRelatoriosRoute: AuthenticatedRelatoriosRoute,

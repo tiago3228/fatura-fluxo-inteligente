@@ -16,6 +16,7 @@ import {
   FileSpreadsheet,
   FileText,
   LayoutDashboard,
+  ReceiptText,
   Loader2,
   LogOut,
   Moon,
@@ -69,6 +70,7 @@ import { createCeuSsoLink } from "@/lib/ceu-sso.functions";
 const NAV = [
   { title: "Visão geral", url: "/", icon: LayoutDashboard },
   { title: "Faturas", url: "/faturas", icon: FileText },
+  { title: "Outras contas", url: "/outras-contas", icon: ReceiptText },
   { title: "Ler fatura (IA)", url: "/ler-fatura", icon: Sparkles },
   { title: "Compras", url: "/compras", icon: ShoppingBag },
   { title: "Pessoas", url: "/pessoas", icon: Users },

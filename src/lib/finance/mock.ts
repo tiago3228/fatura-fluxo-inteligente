@@ -1,5 +1,6 @@
 import type { FinanceState, RecurringCharge, SpreadsheetArchive, Transaction } from "./types";
 import { installmentReferenceFromDescription } from "./calc";
+import { createDefaultOtherAccountCategories } from "./otherAccounts";
 
 /** Dados reais extraídos da fatura Itaú anexada pelo usuário. Mantidos localmente para conferência. */
 const people = [
@@ -325,6 +326,8 @@ export const createDemoState = (): FinanceState => ({
   plans: [],
   recurringCharges,
   spreadsheets,
+  otherAccountCategories: createDefaultOtherAccountCategories(),
+  otherAccounts: [],
 });
 
 export const createEmptyFinanceState = (): FinanceState => {
@@ -346,6 +349,8 @@ export const createEmptyFinanceState = (): FinanceState => {
     recurringCharges: [],
     spreadsheets: [],
     payments: [],
+    otherAccountCategories: createDefaultOtherAccountCategories(),
+    otherAccounts: [],
     spreadsheetAssignmentVersion: 2,
   };
 };

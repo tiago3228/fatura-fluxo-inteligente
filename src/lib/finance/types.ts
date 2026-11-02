@@ -106,6 +106,8 @@ export interface AuditSnapshot {
   payments?: PersonPayment[];
   spreadsheets?: SpreadsheetArchive[];
   suppressedProjectionSources?: string[];
+  otherAccountCategories?: OtherAccountCategory[];
+  otherAccounts?: OtherAccount[];
 }
 
 export interface AuditEntry {
@@ -114,7 +116,16 @@ export interface AuditEntry {
   actorName: string;
   description: string;
   createdAt: string;
-  entityType?: "invoice" | "transaction" | "person" | "card" | "plan" | "settings" | "system";
+  entityType?:
+    | "invoice"
+    | "transaction"
+    | "person"
+    | "card"
+    | "plan"
+    | "otherAccount"
+    | "otherAccountCategory"
+    | "settings"
+    | "system";
   entityId?: string;
   undo?: AuditSnapshot;
   redo?: AuditSnapshot;
@@ -187,6 +198,36 @@ export interface RecurringCharge {
   sourceTransactionId?: string | undefined;
 }
 
+export interface OtherAccountCategory {
+  id: string;
+  name: string;
+  builtIn?: boolean;
+}
+
+export interface OtherAccountResponsibility {
+  personId: string;
+  /** Nome preservado para histórico se a pessoa for removida do cadastro. */
+  personName: string;
+  /** Quando presente, representa a quota exata em centavos; a soma deve igualar a conta. */
+  amountCents?: number;
+}
+
+export type OtherAccountStatus = "pending" | "paid";
+
+/** Ocorrência de conta fora do domínio de faturas/cartões. Valores monetários são centavos inteiros. */
+export interface OtherAccount {
+  id: string;
+  categoryId: string;
+  description: string;
+  amountCents: number;
+  /** YYYY-MM-DD */
+  dueDate: string;
+  status: OtherAccountStatus;
+  paidAt?: string;
+  responsibilities: OtherAccountResponsibility[];
+  notes?: string;
+}
+
 export interface Settings {
   month: string;
   warnPct: number;
@@ -224,6 +265,10 @@ export interface FinanceState {
   spreadsheetAssignmentVersion?: number;
   /** Cadeias de parcelas previstas removidas explicitamente pelo usuário. */
   suppressedProjectionSources?: string[];
+  /** Tipos de contas fora do ciclo de faturas de cartão; opcionais em caches antigos. */
+  otherAccountCategories?: OtherAccountCategory[];
+  /** Ocorrências de contas domésticas, separadas do ledger de cartão e pagamentos pessoais. */
+  otherAccounts?: OtherAccount[];
   /** Histórico compartilhado das alterações feitas pelas contas autorizadas. */
   auditLog?: AuditEntry[];
   /** IDs das notificações que o usuário já leu/limpou. */
