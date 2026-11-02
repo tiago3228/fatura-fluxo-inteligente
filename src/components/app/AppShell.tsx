@@ -22,6 +22,7 @@ import {
   Redo2,
   Settings,
   Share2,
+  Sparkles,
   ShoppingBag,
   Sun,
   Undo2,
