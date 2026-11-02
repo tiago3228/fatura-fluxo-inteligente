@@ -68,6 +68,7 @@ import { createCeuSsoLink } from "@/lib/ceu-sso.functions";
 const NAV = [
   { title: "Visão geral", url: "/", icon: LayoutDashboard },
   { title: "Faturas", url: "/faturas", icon: FileText },
+  { title: "Ler fatura (IA)", url: "/ler-fatura", icon: Sparkles },
   { title: "Compras", url: "/compras", icon: ShoppingBag },
   { title: "Pessoas", url: "/pessoas", icon: Users },
   { title: "Cartões", url: "/cartoes", icon: CreditCard },
