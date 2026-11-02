@@ -44,7 +44,8 @@ export function OtherAccountCategoryDialog({
         <DialogHeader>
           <DialogTitle>Novo tipo de conta</DialogTitle>
           <DialogDescription>
-            Adicione outra categoria além de Energia, Água, Internet, Condomínio, IPTU e IPVA.
+            Adicione outra categoria além de Energia, Água, Internet, Botijão de gás, Condomínio,
+            IPTU e IPVA.
           </DialogDescription>
         </DialogHeader>
         <label className="space-y-1.5 text-sm font-medium">
@@ -54,7 +55,7 @@ export function OtherAccountCategoryDialog({
             value={name}
             onChange={(event) => setName(event.target.value)}
             maxLength={50}
-            placeholder="Ex.: Gás, escola, seguro…"
+            placeholder="Ex.: escola, seguro…"
             onKeyDown={(event) => event.key === "Enter" && save()}
           />
         </label>

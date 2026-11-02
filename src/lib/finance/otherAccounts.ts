@@ -4,6 +4,7 @@ export const DEFAULT_OTHER_ACCOUNT_CATEGORIES: ReadonlyArray<OtherAccountCategor
   { id: "energy", name: "Energia", builtIn: true },
   { id: "water", name: "Água", builtIn: true },
   { id: "internet", name: "Internet", builtIn: true },
+  { id: "gas-bottle", name: "Botijão de gás", builtIn: true },
   { id: "condominium", name: "Condomínio", builtIn: true },
   { id: "iptu", name: "IPTU", builtIn: true },
   { id: "ipva", name: "IPVA", builtIn: true },

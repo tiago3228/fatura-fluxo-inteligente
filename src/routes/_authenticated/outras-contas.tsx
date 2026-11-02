@@ -62,7 +62,7 @@ export const Route = createFileRoute("/_authenticated/outras-contas")({
       { property: "og:title", content: "Outras contas — Fatura em Dia" },
       {
         property: "og:description",
-        content: "Energia, água, internet, condomínio, IPTU, IPVA e outras contas.",
+        content: "Energia, água, internet, botijão de gás, condomínio, IPTU, IPVA e outras contas.",
       },
     ],
   }),
@@ -261,7 +261,7 @@ function OtherAccountsPage() {
             </h2>
             <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
               {accounts.length === 0
-                ? "Comece cadastrando uma conta de energia, água, internet, condomínio, IPTU, IPVA ou um tipo personalizado."
+                ? "Comece cadastrando uma conta de energia, água, internet, botijão de gás, condomínio, IPTU, IPVA ou um tipo personalizado."
                 : "Tente mudar o tipo, a situação ou o texto da busca."}
             </p>
             {accounts.length === 0 && (

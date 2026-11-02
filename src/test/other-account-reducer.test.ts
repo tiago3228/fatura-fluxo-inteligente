@@ -90,14 +90,14 @@ describe("reducer de outras contas", () => {
     );
     const withCustom = reducer(state, {
       type: "upsertOtherAccountCategory",
-      category: { id: "gas", name: "Gás" },
+      category: { id: "school", name: "Escola" },
     });
-    expect(withCustom.otherAccountCategories?.some((item) => item.id === "gas")).toBe(true);
+    expect(withCustom.otherAccountCategories?.some((item) => item.id === "school")).toBe(true);
     const afterDelete = reducer(withCustom, {
       type: "deleteOtherAccountCategory",
-      categoryId: "gas",
+      categoryId: "school",
     });
-    expect(afterDelete.otherAccountCategories?.some((item) => item.id === "gas")).toBe(false);
+    expect(afterDelete.otherAccountCategories?.some((item) => item.id === "school")).toBe(false);
   });
 
   it("migra caches antigos sem campo novo e mantém as categorias padrão", () => {
@@ -108,6 +108,7 @@ describe("reducer de outras contas", () => {
       "energy",
       "water",
       "internet",
+      "gas-bottle",
       "condominium",
       "iptu",
       "ipva",
@@ -131,18 +132,21 @@ describe("reducer de outras contas", () => {
       otherAccounts: [bill],
       otherAccountCategories: [
         ...(createEmptyFinanceState().otherAccountCategories ?? []),
-        { id: "gas", name: "Gás", builtIn: false },
+        { id: "school", name: "Escola", builtIn: false },
       ],
     };
     const restored = JSON.parse(JSON.stringify(state)) as FinanceState;
     expect(restored.otherAccounts).toEqual([bill]);
-    expect(restored.otherAccountCategories?.some((item) => item.id === "gas")).toBe(true);
+    expect(restored.otherAccountCategories?.some((item) => item.id === "school")).toBe(true);
     expect(stableSerialize(restored)).toBe(stableSerialize(state));
   });
 
   it("undo e redo restauram contas e categorias como snapshots auditáveis", () => {
     const defaultCategories = createEmptyFinanceState().otherAccountCategories ?? [];
-    const categoriesWithCustom = [...defaultCategories, { id: "gas", name: "Gás", builtIn: false }];
+    const categoriesWithCustom = [
+      ...defaultCategories,
+      { id: "school", name: "Escola", builtIn: false },
+    ];
     const entry: AuditEntry = {
       id: "audit_bill",
       actorId: "user",

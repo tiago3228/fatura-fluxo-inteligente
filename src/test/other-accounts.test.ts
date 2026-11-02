@@ -34,21 +34,25 @@ describe("contas domésticas", () => {
     expect(splitEvenlyInCents(1.5, people)).toEqual([]);
   });
 
-  it("mantém as seis categorias iniciais e preserva tipos personalizados válidos", () => {
+  it("mantém as sete categorias iniciais e preserva tipos personalizados válidos", () => {
     const categories = withDefaultOtherAccountCategories([
       { id: "internet", name: "Internet alterada", builtIn: false },
-      { id: "gas", name: "Gás" },
+      { id: "school", name: "Escola" },
     ]);
     expect(categories.map((category) => category.id)).toEqual([
       "energy",
       "water",
       "internet",
+      "gas-bottle",
       "condominium",
       "iptu",
       "ipva",
-      "gas",
+      "school",
     ]);
     expect(categories.find((category) => category.id === "internet")?.name).toBe("Internet");
+    expect(categories.find((category) => category.id === "gas-bottle")?.name).toBe(
+      "Botijão de gás",
+    );
   });
 
   it("aceita somente divisão com soma exata, participantes únicos e vencimento válido", () => {
