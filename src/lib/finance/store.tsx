@@ -1160,7 +1160,13 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
         transactions,
         payments: raw.payments ?? [],
         suppressedProjectionSources: raw.suppressedProjectionSources ?? [],
-        auditLog: raw.auditLog ?? [],
+        auditLog: (raw.auditLog ?? []).map((entry, index) => {
+          if (index < 5 || (!entry.undo && !entry.redo)) return entry;
+          const light = { ...entry };
+          delete light.undo;
+          delete light.redo;
+          return light;
+        }),
       };
       const migrated = normalizeInstallmentTransactions(
         ensureSpreadsheetArchive({
