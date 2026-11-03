@@ -1681,6 +1681,8 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
       };
     }
     case "appendAudit":
+      // Snapshots de desfazer são grandes: guardamos só nas 5 entradas mais recentes
+      // para o documento sincronizado não crescer até estourar o tempo do banco.
       return {
         ...s,
         auditLog: [
@@ -1691,7 +1693,15 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
             delete cleared.redo;
             return cleared;
           }),
-        ].slice(0, 500),
+        ]
+          .slice(0, 500)
+          .map((entry, index) => {
+            if (index < 5 || (!entry.undo && !entry.redo)) return entry;
+            const light = { ...entry };
+            delete light.undo;
+            delete light.redo;
+            return light;
+          }),
       };
     case "dismissAlert":
       return {
