@@ -1,10 +1,11 @@
-import { round2 } from "./format";
+import { round2, uid } from "./format";
 import type {
   Allocation,
   CreditCard,
   FinanceState,
   InstallmentPlan,
   Invoice,
+  PersonPayment,
   PlanShare,
   RecurringCharge,
   Transaction,
@@ -267,24 +268,89 @@ export const personMonthLimitAvailable = (
 export const sortPeopleBySpending = <T extends { total: number }>(people: T[]) =>
   [...people].sort((a, b) => b.total - a.total);
 
+const personPaymentMonths = (s: FinanceState, personId: string, throughMonth: string) =>
+  Array.from(
+    new Set([
+      ...s.invoices.map((invoice) => invoice.month),
+      ...(s.payments ?? [])
+        .filter((payment) => payment.personId === personId)
+        .map((payment) => payment.month),
+      throughMonth,
+    ]),
+  )
+    .filter((value) => value <= throughMonth)
+    .sort();
+
+const personMonthBalance = (s: FinanceState, personId: string, month: string) => {
+  let credit = 0;
+  let result = { paid: 0, remaining: 0, credit: 0 };
+  for (const currentMonth of personPaymentMonths(s, personId, month)) {
+    const due = Math.max(0, personMonthTotal(s, personId, currentMonth));
+    const directPayments = (s.payments ?? [])
+      .filter((payment) => payment.personId === personId && payment.month === currentMonth)
+      .reduce((sum, payment) => sum + payment.amount, 0);
+    const available = round2(credit + directPayments);
+    const paid = due > 0 ? Math.min(due, available) : directPayments;
+    const applied = due > 0 ? paid : 0;
+    credit = Math.max(0, round2(available - applied));
+    result = { paid, remaining: Math.max(0, round2(due - applied)), credit };
+  }
+  return result;
+};
+
 export const personMonthPaid = (s: FinanceState, personId: string, month: string) =>
-  round2(
-    (s.payments ?? [])
-      .filter((payment) => payment.personId === personId && payment.month === month)
-      .reduce((sum, payment) => sum + payment.amount, 0),
-  );
+  personMonthBalance(s, personId, month).paid;
 
 export const personMonthRemaining = (s: FinanceState, personId: string, month: string) =>
-  Math.max(0, round2(personMonthTotal(s, personId, month) - personMonthPaid(s, personId, month)));
+  personMonthBalance(s, personId, month).remaining;
+
+/** Crédito não utilizado após abater as obrigações conhecidas, carregado para compras futuras. */
+export const personCreditBalance = (s: FinanceState, personId: string) => {
+  const months = Array.from(
+    new Set([
+      ...s.invoices.map((invoice) => invoice.month),
+      ...(s.payments ?? [])
+        .filter((payment) => payment.personId === personId)
+        .map((payment) => payment.month),
+      s.settings.month,
+    ]),
+  ).sort();
+  return personMonthBalance(s, personId, months.at(-1) ?? s.settings.month).credit;
+};
+
+/** Distribui um recebimento entre débitos conhecidos, do mais antigo ao mais recente; sobra vira crédito. */
+export const buildPersonReceiptPayments = (
+  s: FinanceState,
+  personId: string,
+  amount: number,
+  paidAt: string,
+  creditMonth: string,
+): PersonPayment[] => {
+  let remaining = round2(amount);
+  const payments: PersonPayment[] = [];
+  const months = Array.from(
+    new Set([...s.invoices.map((invoice) => invoice.month), creditMonth]),
+  ).sort();
+  for (const month of months) {
+    if (remaining <= 0) break;
+    const applied = round2(Math.min(personMonthRemaining(s, personId, month), remaining));
+    if (applied <= 0) continue;
+    payments.push({ id: uid("payment"), personId, amount: applied, paidAt, month });
+    remaining = round2(remaining - applied);
+  }
+  if (remaining > 0) {
+    payments.push({ id: uid("payment"), personId, amount: remaining, paidAt, month: creditMonth });
+  }
+  return payments;
+};
 
 /** Soma o saldo mensal ainda a pagar de todas as pessoas para conferência. */
 export const peopleMonthRemainingTotal = (s: FinanceState, month: string) =>
   round2(s.people.reduce((sum, person) => sum + personMonthRemaining(s, person.id, month), 0));
 
 /**
- * Saldo total ainda devido, somando o restante de cada competência separadamente.
- * Assim, um pagamento de novembro não é reaplicado sobre dezembro nem sobre meses
- * anteriores, e cada obrigação é abatida no máximo uma vez.
+ * Saldo total ainda devido, somando as competências; excedentes de uma competência
+ * podem ser carregados adiante para abater obrigações futuras, nunca retroativamente.
  */
 export const personTotalDue = (s: FinanceState, personId: string) =>
   round2(

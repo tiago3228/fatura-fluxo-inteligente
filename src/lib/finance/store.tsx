@@ -105,6 +105,7 @@ export type Action =
   | { type: "addSpreadsheet"; spreadsheet: SpreadsheetArchive }
   | { type: "removeSpreadsheet"; spreadsheetId: string }
   | { type: "recordPersonPayment"; payment: PersonPayment }
+  | { type: "recordPersonPaymentBatch"; payments: PersonPayment[] }
   | { type: "removePersonPayment"; paymentId: string }
   | { type: "clearPersonMonthPayments"; personId: string; month: string }
   | { type: "markInvoicePaid"; invoiceId: string; paidAt: string }
@@ -1066,6 +1067,11 @@ const auditForAction = (
       entityType = "system";
       undo = undoSnapshot(before, ["payments"]);
       break;
+    case "recordPersonPaymentBatch":
+      description = `${actor.name} registrou um recebimento de pessoa.`;
+      entityType = "system";
+      undo = undoSnapshot(before, ["payments"]);
+      break;
     case "removePersonPayment":
       description = `${actor.name} removeu um pagamento de pessoa.`;
       entityType = "system";
@@ -1628,6 +1634,14 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
       };
     case "recordPersonPayment":
       return { ...s, payments: upsert(s.payments ?? [], a.payment) };
+    case "recordPersonPaymentBatch":
+      return {
+        ...s,
+        payments: a.payments.reduce(
+          (payments, payment) => upsert(payments, payment),
+          s.payments ?? [],
+        ),
+      };
     case "removePersonPayment":
       return { ...s, payments: (s.payments ?? []).filter((payment) => payment.id !== a.paymentId) };
     case "clearPersonMonthPayments":

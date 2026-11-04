@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildPersonReceiptPayments,
   cardOutstandingBalance,
   cardLimitAvailable,
   cardLimitUsed,
@@ -9,6 +10,7 @@ import {
   forecast,
   limitStatus,
   planStatusAt,
+  personCreditBalance,
   personDebtTotal,
   personMonthLimitAvailable,
   personMonthPaid,
@@ -201,6 +203,63 @@ describe("pagamentos e competências", () => {
     expect(peopleMonthRemainingTotal(state, "2026-10")).toBe(0);
     expect(personDebtTotal(state, personId)).toBe(0);
     expect(personPaymentStatus(state, personId, "2026-10")).toBe("pago");
+  });
+
+  it("mantém o excedente como crédito e abate compras atribuídas depois", () => {
+    const initial = stateWithSinglePurchase(1885);
+    const payments = buildPersonReceiptPayments(
+      initial,
+      personId,
+      2069,
+      "2026-11-04T10:00:00.000Z",
+      "2026-10",
+    );
+    let state = reducer(initial, { type: "recordPersonPaymentBatch", payments });
+
+    expect(personCreditBalance(state, personId)).toBe(184);
+    expect(personDebtTotal(state, personId)).toBe(0);
+
+    const currentInvoice = state.invoices[0];
+    const currentPurchase = state.transactions[0];
+    if (!currentInvoice || !currentPurchase) throw new Error("A fixture precisa de uma compra");
+    const sameMonthPurchase = {
+      ...currentPurchase,
+      id: "tx_linked_same_month",
+      amount: 100,
+      allocations: [{ personId, amount: 100 }],
+    };
+    const sameMonthState = {
+      ...state,
+      transactions: [...state.transactions, sameMonthPurchase],
+    };
+    expect(personMonthRemaining(sameMonthState, personId, "2026-10")).toBe(0);
+    expect(personCreditBalance(sameMonthState, personId)).toBe(84);
+
+    const nextInvoice = {
+      ...currentInvoice,
+      id: "invoice_next_month",
+      month: "2026-11",
+      officialTotal: 120,
+    };
+    state = {
+      ...state,
+      invoices: [...state.invoices, nextInvoice],
+      transactions: [
+        ...state.transactions,
+        {
+          ...currentPurchase,
+          id: "tx_linked_later",
+          invoiceId: nextInvoice.id,
+          date: "2026-11-04",
+          amount: 120,
+          allocations: [{ personId, amount: 120 }],
+        },
+      ],
+    };
+
+    expect(personMonthPaid(state, personId, "2026-11")).toBe(120);
+    expect(personMonthRemaining(state, personId, "2026-11")).toBe(0);
+    expect(personCreditBalance(state, personId)).toBe(64);
   });
 
   it("permite marcar uma pessoa como pendente removendo os pagamentos do mês", () => {

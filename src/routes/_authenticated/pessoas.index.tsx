@@ -14,8 +14,10 @@ import {
 import { toast } from "sonner";
 import { useFinance } from "@/lib/finance/store";
 import {
+  buildPersonReceiptPayments,
   limitMessage,
   limitStatus,
+  personCreditBalance,
   personDebtTotal,
   personMonthLimitAvailable,
   personMonthPaid,
@@ -85,9 +87,11 @@ function Pessoas() {
   const m = state.settings.month;
   const [edit, setEdit] = useState<Person | "new" | null>(null);
   const [del, setDel] = useState<Person | null>(null);
-  const [paymentPerson, setPaymentPerson] = useState<{ person: Person; remaining: number } | null>(
-    null,
-  );
+  const [paymentPerson, setPaymentPerson] = useState<{
+    person: Person;
+    remaining: number;
+    allowCredit?: boolean;
+  } | null>(null);
   const [expanded, setExpanded] = useState<string[]>([]);
 
   return (
@@ -116,6 +120,7 @@ function Pessoas() {
                 const paid = personMonthPaid(state, p.id, m);
                 const remaining = personMonthRemaining(state, p.id, m);
                 const debt = personDebtTotal(state, p.id);
+                const credit = personCreditBalance(state, p.id);
                 const paymentStatus = personPaymentStatus(state, p.id, m);
                 const msg = limitMessage(p.name, total, p.limit, state.settings.warnPct);
                 const budgetStatus = limitStatus(total, p.limit, state.settings.warnPct);
@@ -170,6 +175,13 @@ function Pessoas() {
                             <Link to="/compras" search={{ assignTo: p.id, status: "pendente" }}>
                               <UserCheck className="size-4" /> Atribuir compras
                             </Link>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onSelect={() =>
+                              setPaymentPerson({ person: p, remaining: debt, allowCredit: true })
+                            }
+                          >
+                            Já Pagou
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             disabled={remaining <= 0}
@@ -266,6 +278,11 @@ function Pessoas() {
                             <p className="num font-semibold text-success">{fmtBRL(paid)}</p>
                           </div>
                         </div>
+                        {credit > 0 && (
+                          <p className="text-xs font-semibold text-success">
+                            Crédito disponível: {fmtBRL(credit)}
+                          </p>
+                        )}
                         <div>
                           <p className="text-xs text-muted-foreground">Cartões</p>
                           <div className="mt-1 flex flex-wrap gap-1">
@@ -334,6 +351,7 @@ function Pessoas() {
                     const paid = personMonthPaid(state, p.id, m);
                     const remaining = personMonthRemaining(state, p.id, m);
                     const debt = personDebtTotal(state, p.id);
+                    const credit = personCreditBalance(state, p.id);
                     const paymentStatus = personPaymentStatus(state, p.id, m);
                     const msg = limitMessage(p.name, total, p.limit, state.settings.warnPct);
                     const budgetStatus = limitStatus(total, p.limit, state.settings.warnPct);
@@ -403,7 +421,14 @@ function Pessoas() {
                                 )}
                               </div>
                             </td>
-                            <td className="num text-right font-semibold">{fmtBRL(debt)}</td>
+                            <td className="num text-right font-semibold">
+                              {fmtBRL(debt)}
+                              {credit > 0 && (
+                                <div className="text-xs font-normal text-success">
+                                  Crédito: {fmtBRL(credit)}
+                                </div>
+                              )}
+                            </td>
                             <td className="num text-right">{fmtBRL(total)}</td>
                             <td className="num text-right text-success">{fmtBRL(paid)}</td>
                             <td
@@ -440,6 +465,17 @@ function Pessoas() {
                                   </DropdownMenuItem>
                                   <DropdownMenuItem onSelect={() => setEdit(p)}>
                                     <Pencil className="size-4" /> Editar
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onSelect={() =>
+                                      setPaymentPerson({
+                                        person: p,
+                                        remaining: debt,
+                                        allowCredit: true,
+                                      })
+                                    }
+                                  >
+                                    Já Pagou
                                   </DropdownMenuItem>
                                   <DropdownMenuItem
                                     disabled={remaining <= 0}
@@ -513,6 +549,13 @@ function Pessoas() {
                             </Link>
                           </ContextMenuItem>
                           <ContextMenuItem
+                            onSelect={() =>
+                              setPaymentPerson({ person: p, remaining: debt, allowCredit: true })
+                            }
+                          >
+                            Já Pagou
+                          </ContextMenuItem>
+                          <ContextMenuItem
                             onSelect={async () => {
                               await navigator.clipboard?.writeText(p.name);
                               toast.success("Nome copiado");
@@ -555,6 +598,7 @@ function Pessoas() {
         <PersonPaymentDialog
           person={paymentPerson.person}
           remaining={paymentPerson.remaining}
+          allowCredit={paymentPerson.allowCredit ?? false}
           month={m}
           onClose={() => setPaymentPerson(null)}
         />
@@ -597,34 +641,60 @@ function Pessoas() {
 function PersonPaymentDialog({
   person,
   remaining,
+  allowCredit,
   month,
   onClose,
 }: {
   person: Person;
   remaining: number;
+  allowCredit: boolean;
   month: string;
   onClose: () => void;
 }) {
-  const { dispatch } = useFinance();
-  const [amount, setAmount] = useState(remaining.toFixed(2).replace(".", ","));
+  const { state, dispatch } = useFinance();
+  const [amount, setAmount] = useState(allowCredit ? "" : remaining.toFixed(2).replace(".", ","));
   const value = parseBRL(amount);
-  const valid = value !== null && value > 0 && value <= remaining;
+  const valid = value !== null && value > 0 && (allowCredit || value <= remaining);
+  const projectedCredit =
+    allowCredit && value !== null
+      ? Math.max(
+          0,
+          round2(personCreditBalance(state, person.id) + value - personDebtTotal(state, person.id)),
+        )
+      : 0;
 
   const save = () => {
     if (!valid || value === null) return;
-    dispatch({
-      type: "recordPersonPayment",
-      payment: {
-        id: uid("payment"),
-        personId: person.id,
-        amount: round2(value),
-        paidAt: new Date().toISOString(),
+    if (allowCredit) {
+      const payments = buildPersonReceiptPayments(
+        state,
+        person.id,
+        round2(value),
+        new Date().toISOString(),
         month,
-      },
-    });
-    toast.success("Pagamento registrado", {
-      description: `${fmtBRL(value)} para ${person.name}. Saldo restante: ${fmtBRL(Math.max(0, round2(remaining - value)))}`,
-    });
+      );
+      dispatch({ type: "recordPersonPaymentBatch", payments });
+      toast.success("Recebimento registrado", {
+        description:
+          projectedCredit > 0
+            ? `${fmtBRL(value)} para ${person.name}. Crédito disponível para futuras compras: ${fmtBRL(projectedCredit)}.`
+            : `${fmtBRL(value)} para ${person.name}. Os débitos conhecidos foram abatidos.`,
+      });
+    } else {
+      dispatch({
+        type: "recordPersonPayment",
+        payment: {
+          id: uid("payment"),
+          personId: person.id,
+          amount: round2(value),
+          paidAt: new Date().toISOString(),
+          month,
+        },
+      });
+      toast.success("Pagamento registrado", {
+        description: `${fmtBRL(value)} para ${person.name}. Saldo restante: ${fmtBRL(Math.max(0, round2(remaining - value)))}`,
+      });
+    }
     onClose();
   };
 
@@ -632,14 +702,15 @@ function PersonPaymentDialog({
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Registrar pagamento</DialogTitle>
+          <DialogTitle>{allowCredit ? "Já Pagou" : "Registrar pagamento"}</DialogTitle>
           <DialogDescription>
-            Informe quanto {person.name} pagou em {fmtMonthLong(month)}. O saldo restante é{" "}
-            {fmtBRL(remaining)}.
+            {allowCredit
+              ? `Informe quanto ${person.name} já pagou. O valor quitará primeiro os débitos conhecidos; qualquer excedente ficará como crédito para abater compras atribuídas a ela depois.`
+              : `Informe quanto ${person.name} pagou em ${fmtMonthLong(month)}. O saldo restante é ${fmtBRL(remaining)}.`}
           </DialogDescription>
         </DialogHeader>
         <label className="text-sm font-medium">
-          Valor pago
+          {allowCredit ? "Valor recebido" : "Valor pago"}
           <Input
             className="mt-1"
             inputMode="decimal"
@@ -649,7 +720,12 @@ function PersonPaymentDialog({
             autoFocus
           />
         </label>
-        {value !== null && value > remaining && (
+        {allowCredit && value !== null && value > 0 && projectedCredit > 0 && (
+          <p className="text-sm text-success">
+            Crédito após quitar os débitos conhecidos: {fmtBRL(projectedCredit)}
+          </p>
+        )}
+        {!allowCredit && value !== null && value > remaining && (
           <p className="text-sm text-danger">O valor não pode ser maior que o saldo restante.</p>
         )}
         {value !== null && value <= 0 && (
@@ -660,7 +736,7 @@ function PersonPaymentDialog({
             Cancelar
           </Button>
           <Button onClick={save} disabled={!valid}>
-            Registrar pagamento
+            {allowCredit ? "Confirmar recebimento" : "Registrar pagamento"}
           </Button>
         </DialogFooter>
       </DialogContent>
