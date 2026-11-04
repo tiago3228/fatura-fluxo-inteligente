@@ -9,11 +9,14 @@ import {
   filterInstallmentPlanEntries,
   forecast,
   limitStatus,
+  personMonthApplied,
   planStatusAt,
   personCreditBalance,
   personDebtTotal,
   personMonthLimitAvailable,
   personMonthPaid,
+  personMonthReceivedTotal,
+  personMonthReceipts,
   personMonthRemaining,
   peopleMonthRemainingTotal,
   personPaymentStatus,
@@ -189,6 +192,8 @@ describe("pagamentos e competências", () => {
     state = reducer(state, { type: "recordPersonPayment", payment: secondPayment });
 
     expect(personMonthPaid(state, personId, "2026-10")).toBe(60);
+    expect(personMonthReceivedTotal(state, personId, "2026-10")).toBe(60);
+    expect(personMonthReceipts(state, personId, "2026-10")).toHaveLength(2);
     expect(personMonthRemaining(state, personId, "2026-10")).toBe(60);
     expect(peopleMonthRemainingTotal(state, "2026-10")).toBe(60);
     expect(personDebtTotal(state, personId)).toBe(60);
@@ -199,6 +204,8 @@ describe("pagamentos e competências", () => {
       payment: { id: "payment_3", personId, amount: 60, paidAt: "2026-10-22", month: "2026-10" },
     });
     expect(personMonthPaid(state, personId, "2026-10")).toBe(120);
+    expect(personMonthReceivedTotal(state, personId, "2026-10")).toBe(120);
+    expect(personMonthReceipts(state, personId, "2026-10")).toHaveLength(3);
     expect(personMonthRemaining(state, personId, "2026-10")).toBe(0);
     expect(peopleMonthRemainingTotal(state, "2026-10")).toBe(0);
     expect(personDebtTotal(state, personId)).toBe(0);
@@ -214,10 +221,56 @@ describe("pagamentos e competências", () => {
       "2026-11-04T10:00:00.000Z",
       "2026-10",
     );
+    const legacyPayments = payments.map(({ id, personId, amount, paidAt, month }) => ({
+      id,
+      personId,
+      amount,
+      paidAt,
+      month,
+    }));
+    const legacyState = reducer(initial, {
+      type: "recordPersonPaymentBatch",
+      payments: legacyPayments,
+    });
+    expect(personMonthReceivedTotal(legacyState, personId, "2026-10")).toBe(2069);
+    expect(personMonthReceipts(legacyState, personId, "2026-10")).toHaveLength(1);
+
     let state = reducer(initial, { type: "recordPersonPaymentBatch", payments });
 
     expect(personCreditBalance(state, personId)).toBe(184);
     expect(personDebtTotal(state, personId)).toBe(0);
+    expect(personMonthReceivedTotal(state, personId, "2026-10")).toBe(2069);
+    expect(personMonthApplied(state, personId, "2026-10")).toBe(1885);
+    expect(
+      personMonthReceipts(state, personId, "2026-10").map(({ amount, paidAt }) => ({
+        amount,
+        paidAt,
+      })),
+    ).toEqual([{ amount: 2069, paidAt: "2026-11-04T10:00:00.000Z" }]);
+
+    const receipt = personMonthReceipts(state, personId, "2026-10")[0];
+    if (!receipt) throw new Error("O recebimento precisa estar no histórico");
+    const stateWithoutReceipt = {
+      ...state,
+      payments: (state.payments ?? []).filter(
+        (payment) => !receipt.paymentIds.includes(payment.id),
+      ),
+    };
+    const editedPayments = buildPersonReceiptPayments(
+      stateWithoutReceipt,
+      personId,
+      2100,
+      "2026-11-05",
+      "2026-10",
+    );
+    const editedState = reducer(state, {
+      type: "replacePersonPaymentBatch",
+      paymentIds: receipt.paymentIds,
+      payments: editedPayments,
+    });
+    expect(personMonthReceivedTotal(editedState, personId, "2026-10")).toBe(2100);
+    expect(personCreditBalance(editedState, personId)).toBe(215);
+    expect(personMonthReceipts(editedState, personId, "2026-10")[0]?.paidAt).toBe("2026-11-05");
 
     const currentInvoice = state.invoices[0];
     const currentPurchase = state.transactions[0];

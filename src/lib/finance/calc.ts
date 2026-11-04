@@ -301,6 +301,55 @@ const personMonthBalance = (s: FinanceState, personId: string, month: string) =>
 export const personMonthPaid = (s: FinanceState, personId: string, month: string) =>
   personMonthBalance(s, personId, month).paid;
 
+export const personMonthApplied = (s: FinanceState, personId: string, month: string) =>
+  round2(
+    Math.min(
+      Math.max(0, personMonthTotal(s, personId, month)),
+      personMonthPaid(s, personId, month),
+    ),
+  );
+
+export interface PersonReceiptSummary {
+  id: string;
+  amount: number;
+  paidAt: string;
+  month: string;
+  paymentIds: string[];
+}
+
+/** Agrupa os registros internos que representam um único recebimento da pessoa. */
+export const personReceipts = (s: FinanceState, personId: string): PersonReceiptSummary[] => {
+  const receipts = new Map<string, PersonReceiptSummary>();
+  for (const payment of s.payments ?? []) {
+    if (payment.personId !== personId) continue;
+    const id = payment.receiptId ?? `legacy:${payment.paidAt}`;
+    const month = payment.receiptMonth ?? payment.month;
+    const existing = receipts.get(id);
+    if (existing) {
+      existing.amount = round2(existing.amount + payment.amount);
+      existing.paymentIds.push(payment.id);
+      existing.month =
+        payment.receiptMonth ?? (payment.month > existing.month ? payment.month : existing.month);
+      if (payment.paidAt > existing.paidAt) existing.paidAt = payment.paidAt;
+    } else {
+      receipts.set(id, {
+        id,
+        amount: payment.amount,
+        paidAt: payment.paidAt,
+        month,
+        paymentIds: [payment.id],
+      });
+    }
+  }
+  return [...receipts.values()].sort((a, b) => b.paidAt.localeCompare(a.paidAt));
+};
+
+export const personMonthReceipts = (s: FinanceState, personId: string, month: string) =>
+  personReceipts(s, personId).filter((receipt) => receipt.month === month);
+
+export const personMonthReceivedTotal = (s: FinanceState, personId: string, month: string) =>
+  round2(personMonthReceipts(s, personId, month).reduce((sum, receipt) => sum + receipt.amount, 0));
+
 export const personMonthRemaining = (s: FinanceState, personId: string, month: string) =>
   personMonthBalance(s, personId, month).remaining;
 
@@ -328,6 +377,7 @@ export const buildPersonReceiptPayments = (
 ): PersonPayment[] => {
   let remaining = round2(amount);
   const payments: PersonPayment[] = [];
+  const receiptId = uid("receipt");
   const months = Array.from(
     new Set([...s.invoices.map((invoice) => invoice.month), creditMonth]),
   ).sort();
@@ -335,11 +385,27 @@ export const buildPersonReceiptPayments = (
     if (remaining <= 0) break;
     const applied = round2(Math.min(personMonthRemaining(s, personId, month), remaining));
     if (applied <= 0) continue;
-    payments.push({ id: uid("payment"), personId, amount: applied, paidAt, month });
+    payments.push({
+      id: uid("payment"),
+      personId,
+      amount: applied,
+      paidAt,
+      month,
+      receiptId,
+      receiptMonth: creditMonth,
+    });
     remaining = round2(remaining - applied);
   }
   if (remaining > 0) {
-    payments.push({ id: uid("payment"), personId, amount: remaining, paidAt, month: creditMonth });
+    payments.push({
+      id: uid("payment"),
+      personId,
+      amount: remaining,
+      paidAt,
+      month: creditMonth,
+      receiptId,
+      receiptMonth: creditMonth,
+    });
   }
   return payments;
 };

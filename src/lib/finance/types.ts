@@ -65,6 +65,10 @@ export interface PersonPayment {
   amount: number;
   paidAt: string;
   month: string;
+  /** Agrupa as parcelas contábeis originadas de um único recebimento. */
+  receiptId?: string;
+  /** Competência em que o recebimento foi lançado, mesmo quando quita meses anteriores. */
+  receiptMonth?: string;
   transactionId?: string;
 }
 

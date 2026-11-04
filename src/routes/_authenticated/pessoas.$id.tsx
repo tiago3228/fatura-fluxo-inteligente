@@ -9,10 +9,13 @@ import {
   limitMessage,
   limitStatus,
   monthTxs,
+  personCreditBalance,
   personDebtTotal,
-  personMonthPaid,
+  personMonthApplied,
+  personMonthReceivedTotal,
   personMonthRemaining,
   personMonthTotal,
+  personReceipts,
   planRemainingCount,
   totalFutureCommitted,
 } from "@/lib/finance/calc";
@@ -69,6 +72,7 @@ function PessoaDetalhe() {
         }
       />
     );
+  const receipts = personReceipts(state, p.id);
   const r = personReport(state, p.id, m);
   const st = limitStatus(r.total, p.limit, state.settings.warnPct);
   const msg = limitMessage(p.name, r.total, p.limit, state.settings.warnPct);
@@ -172,12 +176,24 @@ function PessoaDetalhe() {
         <KpiCard
           label="Valor Total Devido"
           value={fmtBRL(personDebtTotal(state, p.id))}
-          hint="Todas as competências pendentes"
+          hint={
+            personCreditBalance(state, p.id) > 0
+              ? `Crédito disponível: ${fmtBRL(personCreditBalance(state, p.id))}`
+              : "Todas as competências pendentes"
+          }
         />
         <KpiCard
           label="Fatura do mês"
           value={fmtBRL(personMonthTotal(state, p.id, m))}
-          hint={`Pago ${fmtBRL(personMonthPaid(state, p.id, m))}`}
+          hint={
+            <div className="space-y-0.5">
+              <div>Recebido: {fmtBRL(personMonthReceivedTotal(state, p.id, m))}</div>
+              <div>Aplicado à fatura: {fmtBRL(personMonthApplied(state, p.id, m))}</div>
+              {personCreditBalance(state, p.id) > 0 && (
+                <div>Crédito: {fmtBRL(personCreditBalance(state, p.id))}</div>
+              )}
+            </div>
+          }
         />
         <KpiCard
           label="Restante da fatura"
@@ -373,23 +389,20 @@ function PessoaDetalhe() {
       <Panel
         className="mt-6"
         title="Histórico de pagamentos"
-        description="Cada pagamento fica vinculado à competência."
+        description="Cada recebimento mostra o total recebido e a data; pagamentos distribuídos entre débitos aparecem agrupados."
       >
-        {(state.payments ?? []).filter((payment) => payment.personId === p.id).length === 0 ? (
+        {receipts.length === 0 ? (
           <p className="p-4 text-sm text-muted-foreground">Nenhum pagamento registrado.</p>
         ) : (
           <div className="divide-y text-sm">
-            {(state.payments ?? [])
-              .filter((payment) => payment.personId === p.id)
-              .sort((a, b) => b.paidAt.localeCompare(a.paidAt))
-              .map((payment) => (
-                <div key={payment.id} className="flex justify-between gap-2 px-4 py-3">
-                  <span>
-                    {fmtMonthLong(payment.month)} · {fmtDate(payment.paidAt.slice(0, 10))}
-                  </span>
-                  <span className="num font-semibold text-success">{fmtBRL(payment.amount)}</span>
-                </div>
-              ))}
+            {receipts.map((receipt) => (
+              <div key={receipt.id} className="flex justify-between gap-2 px-4 py-3">
+                <span>
+                  {fmtMonthLong(receipt.month)} · {fmtDate(receipt.paidAt.slice(0, 10))}
+                </span>
+                <span className="num font-semibold text-success">{fmtBRL(receipt.amount)}</span>
+              </div>
+            ))}
           </div>
         )}
       </Panel>
