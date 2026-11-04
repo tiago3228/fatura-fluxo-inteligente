@@ -1,14 +1,25 @@
 import { createServerFn } from "@tanstack/react-start";
 import { createHmac, randomUUID } from "node:crypto";
+import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const CEU_SSO_URL = "https://ceu-financas.lovable.app/api/public/sso/link";
 
-export const createCeuSsoLink = createServerFn({ method: "GET" })
+const billSchema = z.object({
+  id: z.string().min(1).max(200),
+  description: z.string().min(1).max(300),
+  amount: z.number().finite().positive(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+
+const inputSchema = z.object({ bill: billSchema.optional() }).optional();
+
+export const createCeuSsoLink = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
+  .inputValidator((input: unknown) => inputSchema.parse(input))
+  .handler(async ({ context, data }) => {
     const claims = context.claims as Record<string, unknown>;
-    const email = typeof claims['email'] === "string" ? claims['email'].trim().toLowerCase() : "";
+    const email = typeof claims["email"] === "string" ? claims["email"].trim().toLowerCase() : "";
     if (!email) throw new Error("A sessão atual não possui um e-mail válido.");
 
     const sharedSecret = process.env["CEU_SSO_SHARED_SECRET"];
@@ -16,7 +27,11 @@ export const createCeuSsoLink = createServerFn({ method: "GET" })
       throw new Error("O SSO do CEU Finanças ainda não foi configurado no ambiente.");
     }
 
-    const body = JSON.stringify({ email });
+    const bill = data?.bill;
+    const payload = bill
+      ? { email, bill: { ...bill, amount: Math.round(bill.amount * 100) / 100 } }
+      : { email };
+    const body = JSON.stringify(payload);
     const timestamp = Math.floor(Date.now() / 1000).toString();
     const nonce = randomUUID().replaceAll("-", "");
     const signature = createHmac("sha256", sharedSecret)
@@ -43,12 +58,14 @@ export const createCeuSsoLink = createServerFn({ method: "GET" })
       throw new Error("Não foi possível preparar o acesso ao CEU Finanças.");
     }
 
-    const result = (await response.json()) as { url?: unknown };
+    const result = (await response.json()) as { url?: unknown; bill?: unknown };
     if (
       typeof result.url !== "string" ||
       !result.url.startsWith("https://ceu-financas.lovable.app/")
     ) {
       throw new Error("O CEU Finanças retornou um link de acesso inválido.");
     }
-    return { url: result.url };
+    const billStatus =
+      result.bill === "created" || result.bill === "duplicate" ? result.bill : null;
+    return { url: result.url, bill: billStatus };
   });
