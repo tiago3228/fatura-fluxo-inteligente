@@ -5,7 +5,6 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { createCeuSsoLink } from "@/lib/ceu-sso.functions";
-import { fmtMonthLong } from "@/lib/finance/format";
 import type { CreditCard, Invoice } from "@/lib/finance/types";
 
 interface SendInvoiceToFinancesButtonProps {
@@ -41,19 +40,19 @@ export function SendInvoiceToFinancesButton({
     }
 
     try {
-      const { url } = await createLink();
+      const { url, bill } = await createLink({
+        data: {
+          bill: {
+            id: `fatura-em-dia:${invoice.id}`,
+            description: `Fatura ${card.name} ${invoice.month.slice(5, 7)}/${invoice.month.slice(0, 4)}`,
+            amount: invoice.officialTotal,
+            date: invoice.dueDate.slice(0, 10),
+          },
+        },
+      });
+      if (bill === "duplicate") toast.info("Essa fatura já estava em Finanças.");
+      else if (bill === "created") toast.success("Fatura enviada para Finanças.");
       const target = new URL(url);
-      target.hash = new URLSearchParams({
-        fatura: JSON.stringify({
-          action: "create-expense",
-          invoiceId: invoice.id,
-          amount: invoice.officialTotal,
-          date: invoice.dueDate,
-          month: invoice.month,
-          cardName: card.name,
-          description: `Fatura ${card.name} · ${fmtMonthLong(invoice.month)}`,
-        }),
-      }).toString();
 
       if (popup) popup.location.replace(target.toString());
       else window.location.assign(target.toString());
