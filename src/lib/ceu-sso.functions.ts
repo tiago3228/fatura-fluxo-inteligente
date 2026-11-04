@@ -1,12 +1,12 @@
 import { createServerFn } from "@tanstack/react-start";
-import { createHmac, randomUUID } from "node:crypto";
+import { createHash, createHmac, randomUUID } from "node:crypto";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const CEU_SSO_URL = "https://ceu-financas.lovable.app/api/public/sso/link";
 
 const billSchema = z.object({
-  id: z.string().min(1).max(200),
+  id: z.string().min(1).max(2000),
   description: z.string().min(1).max(300),
   amount: z.number().finite().positive(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -29,7 +29,7 @@ export const createCeuSsoLink = createServerFn({ method: "POST" })
 
     const bill = data?.bill;
     const payload = bill
-      ? { email, bill: { ...bill, amount: Math.round(bill.amount * 100) / 100 } }
+      ? { email, bill: { ...bill, id: `fatura-em-dia:${createHash("sha256").update(bill.id).digest("hex").slice(0, 40)}`, amount: Math.round(bill.amount * 100) / 100 } }
       : { email };
     const body = JSON.stringify(payload);
     const timestamp = Math.floor(Date.now() / 1000).toString();

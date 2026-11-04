@@ -56,10 +56,11 @@ export function SendInvoiceToFinancesButton({
 
       if (popup) popup.location.replace(target.toString());
       else window.location.assign(target.toString());
-    } catch {
+    } catch (error) {
       popup?.close();
+      const message = error instanceof Error && !error.message.startsWith("[") ? error.message : "";
       toast.error("Não foi possível enviar a fatura para Finanças", {
-        description: "Verifique sua conexão e tente novamente.",
+        description: message || "Verifique sua conexão e tente novamente.",
       });
     } finally {
       setLoading(false);
