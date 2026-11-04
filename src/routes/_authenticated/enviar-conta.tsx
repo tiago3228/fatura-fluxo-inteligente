@@ -1,9 +1,18 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { Check, ChevronDown, ChevronUp, Download, MessageCircle } from "lucide-react";
+import {
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Download,
+  Loader2,
+  MessageCircle,
+  Send,
+} from "lucide-react";
 import { toast } from "sonner";
 import { useFinance } from "@/lib/finance/store";
 import { PurchaseContextMenu } from "@/components/app/PurchaseContextMenu";
+import { useSendToFinances } from "@/components/app/useSendToFinances";
 import {
   addMonths,
   availableMonths,
@@ -20,6 +29,12 @@ import { createPersonAccountJpeg, type ShareAccountRow } from "@/lib/finance/sha
 import type { Person } from "@/lib/finance/types";
 import { PageHeader, Panel, EmptyState } from "@/components/app/common";
 import { Button } from "@/components/ui/button";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import {
   Dialog,
   DialogContent,
@@ -103,6 +118,7 @@ function EnviarConta() {
                 <PersonAccountCard
                   key={person.id}
                   person={person}
+                  state={state}
                   month={month}
                   rows={rows}
                   total={total}
@@ -236,6 +252,7 @@ function rowsForPerson(
 
 function PersonAccountCard({
   person,
+  state,
   month,
   rows,
   total,
@@ -245,6 +262,7 @@ function PersonAccountCard({
   onShare,
 }: {
   person: Person;
+  state: ReturnType<typeof useFinance>["state"];
   month: string;
   rows: ShareAccountRow[];
   total: number;
@@ -254,7 +272,17 @@ function PersonAccountCard({
   onShare: () => void;
 }) {
   const [busy, setBusy] = useState<"download" | "share" | null>(null);
+  const { loading: sending, sendToFinances } = useSendToFinances();
   const remaining = Math.max(0, total - paid);
+  const dueDate =
+    state.invoices
+      .filter(
+        (invoice) =>
+          invoice.month === month && rows.some((row) => row.transaction.invoiceId === invoice.id),
+      )
+      .map((invoice) => invoice.dueDate.slice(0, 10))
+      .sort()
+      .at(-1) ?? `${month}-01`;
 
   const createImage = async () => createPersonAccountJpeg({ person, month, rows, total, paid });
   const filename = `conta-${person.name.toLowerCase().replace(/[^a-z0-9]+/gi, "-")}-${month}.jpg`;
@@ -283,27 +311,54 @@ function PersonAccountCard({
   return (
     <article className={cn("p-4", expanded && "bg-muted/20")}>
       <div className="flex flex-wrap items-center gap-3">
-        <button
-          type="button"
-          onClick={onToggle}
-          className="flex min-w-0 flex-1 items-center gap-3 text-left"
-          aria-expanded={expanded}
-        >
-          <span className="grid size-10 shrink-0 place-items-center rounded-full bg-primary/10 font-bold text-primary">
-            {person.name.charAt(0).toUpperCase()}
-          </span>
-          <span className="min-w-0">
-            <span className="block truncate font-semibold">{person.name}</span>
-            <span className="text-xs text-muted-foreground">
-              {rows.length} compra(s) · {fmtMonthLong(month)}
-            </span>
-          </span>
-          {expanded ? (
-            <ChevronUp className="ml-auto size-4 text-muted-foreground" />
-          ) : (
-            <ChevronDown className="ml-auto size-4 text-muted-foreground" />
-          )}
-        </button>
+        <ContextMenu>
+          <ContextMenuTrigger asChild>
+            <button
+              type="button"
+              onClick={onToggle}
+              className="flex min-w-0 flex-1 cursor-context-menu items-center gap-3 text-left"
+              aria-expanded={expanded}
+            >
+              <span className="grid size-10 shrink-0 place-items-center rounded-full bg-primary/10 font-bold text-primary">
+                {person.name.charAt(0).toUpperCase()}
+              </span>
+              <span className="min-w-0">
+                <span className="block truncate font-semibold">{person.name}</span>
+                <span className="text-xs text-muted-foreground">
+                  {rows.length} compra(s) · {fmtMonthLong(month)}
+                </span>
+              </span>
+              {expanded ? (
+                <ChevronUp className="ml-auto size-4 text-muted-foreground" />
+              ) : (
+                <ChevronDown className="ml-auto size-4 text-muted-foreground" />
+              )}
+            </button>
+          </ContextMenuTrigger>
+          <ContextMenuContent className="w-64">
+            <ContextMenuItem
+              disabled={!rows.length || remaining <= 0 || sending}
+              onSelect={() =>
+                void sendToFinances(
+                  {
+                    id: `conta-pessoa:${person.id}:${month}`,
+                    description: `Conta de ${person.name} - ${fmtMonthLong(month)}`,
+                    amount: remaining,
+                    date: dueDate,
+                  },
+                  "Conta",
+                )
+              }
+            >
+              {sending ? (
+                <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <Send className="size-4" aria-hidden="true" />
+              )}
+              Enviar fatura para Finanças
+            </ContextMenuItem>
+          </ContextMenuContent>
+        </ContextMenu>
         <div className="text-right">
           <p className="text-xs text-muted-foreground">Valor a pagar</p>
           <p className="num text-lg font-bold text-primary">{fmtBRL(remaining)}</p>
