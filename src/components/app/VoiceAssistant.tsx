@@ -6,7 +6,7 @@ import { useFinance } from "@/lib/finance/store";
 import { splitEqually } from "@/lib/finance/calc";
 import { fmtBRL, fmtMonthLong, uid } from "@/lib/finance/format";
 import { interpretVoice } from "@/lib/voice-ai.functions";
-import type { VoiceAction } from "@/lib/voice-ai.server";
+import type { VoiceAction } from "@/lib/voice-ai.functions";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";

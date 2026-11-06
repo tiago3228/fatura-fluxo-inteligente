@@ -18,3 +18,4 @@ export const interpretVoice = createServerFn({ method: "POST" })
   .handler(async ({ data }) =>
     interpretVoiceCommand(data.text, { people: data.people, cards: data.cards }),
   );
+export type { VoiceAction } from "./voice-ai.server";

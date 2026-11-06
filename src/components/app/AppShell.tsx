@@ -62,6 +62,7 @@ import { toast } from "sonner";
 import { DemoTag } from "./common";
 import { TxActionsProvider } from "./tx-actions";
 import { FloatingCalculator } from "./FloatingCalculator";
+import { VoiceAssistant } from "./VoiceAssistant";
 import { PersonLimitAlert } from "./PersonLimitAlert";
 import { MiniGameMenuItem } from "./MiniGameMenuItem";
 import { cn } from "@/lib/utils";
@@ -569,6 +570,17 @@ export function AppShell({ children }: { children: ReactNode }) {
               open={quickCalculatorOpen}
               onClose={() => setQuickCalculatorOpen(false)}
             />
+            <VoiceAssistant open={voiceOpen} onClose={() => setVoiceOpen(false)} />
+            <Button
+              type="button"
+              size="icon"
+              aria-label="Falar com o assistente"
+              title="Falar com o assistente"
+              className="fixed bottom-20 right-4 z-[70] size-12 rounded-full shadow-lg"
+              onClick={() => setVoiceOpen(true)}
+            >
+              <Mic className="size-5" />
+            </Button>
             {!quickCalculatorOpen && (
               <Button
                 type="button"
