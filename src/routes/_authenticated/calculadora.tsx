@@ -65,7 +65,7 @@ function Calculadora() {
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.85fr)]">
         <Panel title="Dados da simulação" description="Informe o valor total e a quantidade de parcelas.">
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 p-4 sm:grid-cols-2">
             <label className="text-sm font-medium sm:col-span-2">
               Valor total da compra (R$)
               <Input className="num mt-1.5 text-lg" inputMode="decimal" placeholder="1.000,00" value={totalText} onChange={(event) => setTotalText(event.target.value)} />
@@ -96,7 +96,7 @@ function Calculadora() {
             </p>
           )}
 
-          <div className="mt-6 border-t pt-5">
+          <div className="mt-6 border-t px-4 pb-4 pt-5">
             <h3 className="font-semibold">Dividir entre pessoas</h3>
             <p className="mt-1 text-sm text-muted-foreground">Selecione quem participará da compra. A divisão será igualitária.</p>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -113,16 +113,16 @@ function Calculadora() {
         </Panel>
 
         <Panel title="Resultado" description="Previsão das parcelas da compra simulada.">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2">
             <div className="rounded-lg bg-muted p-3"><p className="text-xs text-muted-foreground">Total</p><p className="num mt-1 text-xl font-bold">{fmtBRL(total)}</p></div>
             <div className="rounded-lg bg-muted p-3"><p className="text-xs text-muted-foreground">Cada parcela</p><p className="num mt-1 text-xl font-bold">{parts.length ? fmtBRL(parts[0] ?? 0) : "—"}</p></div>
           </div>
 
-          <div className="mt-5 space-y-2">
+          <div className="mt-5 space-y-2 px-4 pb-4">
             {parts.length === 0 && <div className="flex flex-col items-center gap-2 py-10 text-center text-muted-foreground"><Calculator className="size-8" /><p>Informe um valor para começar a simulação.</p></div>}
             {parts.map((amount, index) => {
               const month = addMonths(firstMonth, index);
-              return <div key={`${month}-${index}`} className="flex items-center justify-between rounded-lg border px-3 py-2.5 text-sm"><span className="flex items-center gap-2"><CalendarDays className="size-4 text-muted-foreground" /> {index + 1}ª parcela <span className="text-muted-foreground">· {fmtMonthLong(month)}</span></span><span className="num font-semibold">{fmtBRL(amount)}</span></div>;
+              return <div key={`${month}-${index}`} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg border px-3 py-2.5 text-sm"><span className="flex min-w-0 items-center gap-2"><CalendarDays className="size-4 shrink-0 text-muted-foreground" /><span className="min-w-0">{index + 1}ª parcela <span className="block text-xs text-muted-foreground">{fmtMonthLong(month)}</span></span></span><span className="num font-semibold">{fmtBRL(amount)}</span></div>;
             })}
           </div>
 
