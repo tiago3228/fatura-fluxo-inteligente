@@ -24,12 +24,12 @@ export function PageHeader({
   showMonth?: boolean;
 }) {
   return (
-    <div className="mb-6 flex flex-col gap-4 sm:mb-7 md:flex-row md:items-end md:justify-between">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{title}</h1>
+    <div className="mb-6 grid min-w-0 gap-4 sm:mb-7 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+      <div className="min-w-0">
+        <h1 className="break-words text-2xl font-bold sm:text-3xl">{title}</h1>
         {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
       </div>
-      <div className="flex w-full flex-wrap items-center gap-2 md:w-auto md:justify-end">
+      <div className="page-actions grid min-w-0 grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-center md:justify-end">
         {showMonth && <MonthSelect />}
         {actions}
       </div>
@@ -94,7 +94,7 @@ export function KpiCard({
       {wrapValue ? (
         <div className="mt-2 break-words text-2xl font-bold">{value}</div>
       ) : (
-        <p className="num mt-2 text-2xl font-bold">{value}</p>
+        <p className="num mt-2 overflow-x-auto text-xl font-bold sm:text-2xl">{value}</p>
       )}
       {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
     </div>
@@ -117,7 +117,7 @@ export function Panel({
   return (
     <section className={cn("min-w-0 rounded-2xl border bg-card shadow-sm", className)}>
       {(title || actions) && (
-        <header className="flex flex-wrap items-center justify-between gap-3 border-b bg-muted/20 px-4 py-3.5 sm:px-5">
+        <header className="grid min-w-0 gap-3 border-b bg-muted/20 px-4 py-3.5 sm:flex sm:flex-wrap sm:items-center sm:justify-between sm:px-5">
           <div className="min-w-0">
             {title && <h2 className="text-sm font-bold">{title}</h2>}
             {description && <p className="text-xs text-muted-foreground">{description}</p>}

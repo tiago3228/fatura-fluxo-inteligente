@@ -81,6 +81,8 @@ export const Route = createFileRoute("/_authenticated/pessoas/")({
       },
       { property: "og:title", content: "Pessoas — Fatura em Dia" },
       { property: "og:description", content: "Limites e gastos por pessoa." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: Pessoas,

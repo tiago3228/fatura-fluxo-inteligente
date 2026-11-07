@@ -59,6 +59,10 @@ export const Route = createFileRoute("/_authenticated/enviar-conta")({
         name: "description",
         content: "Gere uma imagem da conta de cada pessoa para salvar ou enviar pelo WhatsApp.",
       },
+      { property: "og:title", content: "Enviar conta — Fatura em Dia" },
+      { property: "og:description", content: "Gere uma imagem da conta de cada pessoa para salvar ou enviar pelo WhatsApp." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: EnviarConta,
@@ -88,7 +92,7 @@ function EnviarConta() {
         description="Gere uma imagem pronta para salvar ou enviar para cada pessoa."
         actions={
           <Select value={month} onValueChange={setMonth}>
-            <SelectTrigger className="w-48" aria-label="Mês da conta">
+            <SelectTrigger className="w-full sm:w-48" aria-label="Mês da conta">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -310,30 +314,31 @@ function PersonAccountCard({
 
   return (
     <article className={cn("p-4", expanded && "bg-muted/20")}>
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 sm:flex sm:flex-wrap">
         <ContextMenu>
           <ContextMenuTrigger asChild>
-            <button
+            <Button
               type="button"
+              variant="ghost"
               onClick={onToggle}
-              className="flex min-w-0 flex-1 cursor-context-menu items-center gap-3 text-left"
+              className="h-auto min-w-0 flex-1 cursor-context-menu justify-start gap-3 p-0 text-left hover:bg-transparent"
               aria-expanded={expanded}
             >
               <span className="grid size-10 shrink-0 place-items-center rounded-full bg-primary/10 font-bold text-primary">
                 {person.name.charAt(0).toUpperCase()}
               </span>
-              <span className="min-w-0">
+              <span className="min-w-0 flex-1 whitespace-normal">
                 <span className="block truncate font-semibold">{person.name}</span>
-                <span className="text-xs text-muted-foreground">
+                <span className="block text-xs text-muted-foreground">
                   {rows.length} compra(s) · {fmtMonthLong(month)}
                 </span>
               </span>
               {expanded ? (
-                <ChevronUp className="ml-auto size-4 text-muted-foreground" />
+                <ChevronUp className="ml-auto size-4 shrink-0 text-muted-foreground" />
               ) : (
-                <ChevronDown className="ml-auto size-4 text-muted-foreground" />
+                <ChevronDown className="ml-auto size-4 shrink-0 text-muted-foreground" />
               )}
-            </button>
+            </Button>
           </ContextMenuTrigger>
           <ContextMenuContent className="w-64">
             <ContextMenuItem
@@ -364,7 +369,7 @@ function PersonAccountCard({
           <p className="num text-lg font-bold text-primary">{fmtBRL(remaining)}</p>
           {paid > 0 && <p className="text-xs text-success">{fmtBRL(paid)} pago</p>}
         </div>
-        <div className="flex w-full gap-2 sm:w-auto">
+        <div className="col-span-2 grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
           <Button
             size="sm"
             variant="outline"
@@ -385,7 +390,24 @@ function PersonAccountCard({
         </div>
       </div>
       {expanded && (
-        <div className="mt-4 overflow-x-auto rounded-lg border bg-background">
+        <>
+        <div className="mt-4 divide-y border-t sm:hidden">
+          {rows.map(({ transaction, amount, displayDate, dateKind }) => (
+            <PurchaseContextMenu key={transaction.id} transaction={transaction}>
+              <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 py-3 text-sm">
+                <div className="min-w-0">
+                  <p className="break-words font-medium">{transaction.description}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{dateKind === "unknown" || !displayDate ? "Data original não identificada" : `${dateKind === "forecast" ? "Previsão " : ""}${fmtDate(displayDate)}`}</p>
+                  <p className="text-xs text-muted-foreground">{transaction.category ?? "Sem categoria"}</p>
+                  {transaction.note?.trim() && <p className="mt-1 break-words text-xs text-muted-foreground">{transaction.note.trim()}</p>}
+                </div>
+                <span className="num font-semibold">{fmtBRL(amount)}</span>
+              </div>
+            </PurchaseContextMenu>
+          ))}
+          <div className="flex justify-between gap-3 py-3 text-sm font-bold"><span>Total</span><span className="num">{fmtBRL(total)}</span></div>
+        </div>
+        <div className="mt-4 hidden overflow-x-auto rounded-lg border bg-background sm:block">
           <table className="w-full min-w-[560px] text-sm">
             <thead className="bg-muted/60 text-left text-xs uppercase text-muted-foreground">
               <tr>
@@ -432,6 +454,7 @@ function PersonAccountCard({
             </tfoot>
           </table>
         </div>
+        </>
       )}
     </article>
   );

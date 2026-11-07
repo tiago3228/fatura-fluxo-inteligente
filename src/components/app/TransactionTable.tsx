@@ -172,8 +172,11 @@ export function TransactionTable({
 
   return (
     <div className="overflow-x-auto">
+      <div className="flex flex-wrap gap-3 border-b px-3 py-2 sm:hidden"><SortBtn k="date">Data</SortBtn><SortBtn k="amount">Valor</SortBtn><SortBtn k="description">Descrição</SortBtn>
+        {selectable && <label className="flex min-h-11 items-center gap-2 text-xs"><Checkbox aria-label="Selecionar todos" checked={allSel} onCheckedChange={(v) => onSelectedChange?.(v ? selectableIds : [])} />Selecionar todos</label>}
+      </div>
       <table
-        className={cn("w-full min-w-[860px] text-sm", state.settings.compact && "[&_td]:py-1.5")}
+        className={cn("mobile-record-table w-full sm:min-w-[860px] text-sm", state.settings.compact && "[&_td]:py-1.5")}
       >
         <thead className="border-b bg-muted/60 text-left text-xs uppercase tracking-wide text-muted-foreground">
           <tr className="[&_th]:px-3 [&_th]:py-2.5">
@@ -429,7 +432,7 @@ function Row({
             )}
           >
             {selectable && (
-              <td>
+              <td data-label="Selecionar">
                 <Checkbox
                   aria-label={`Selecionar ${tx.description}`}
                   disabled={isPay}
@@ -438,8 +441,8 @@ function Row({
                 />
               </td>
             )}
-            <td className="num text-muted-foreground">{fmtDate(tx.date)}</td>
-            <td>
+            <td data-label="Data" className="num text-muted-foreground">{fmtDate(tx.date)}</td>
+            <td data-label="Descrição" className="mobile-record-title">
               <div className="font-medium">{tx.description}</div>
               <div
                 className={cn("text-xs", tx.category ? "text-primary" : "text-muted-foreground")}
@@ -469,7 +472,7 @@ function Row({
               )}
             </td>
             {showCard && (
-              <td className="whitespace-nowrap text-muted-foreground">
+              <td data-label="Cartão" className="text-muted-foreground sm:whitespace-nowrap">
                 {cardLabel ? (
                   <>
                     {cardLabel.name} <span className="num">•••• {cardLabel.last4}</span>
@@ -480,11 +483,12 @@ function Row({
               </td>
             )}
             {showType && (
-              <td>
+              <td data-label="Tipo">
                 <TxTypeBadge type={tx.type} />
               </td>
             )}
             <td
+              data-label="Valor"
               className={cn(
                 "num text-right font-semibold",
                 isCreditType(tx.type) && "text-success",
@@ -493,7 +497,7 @@ function Row({
             >
               {fmtBRL(tx.amount)}
             </td>
-            <td>
+            <td data-label="Responsável">
               {shown.length === 0 ? (
                 <span className="text-muted-foreground">{isPay ? "—" : "Sem responsável"}</span>
               ) : shown.length === 1 && !personFilter && people.length === 1 ? (
@@ -522,10 +526,10 @@ function Row({
                 <div className="text-xs text-warning">Distribuído {fmtBRL(allocatedSum(tx))}</div>
               )}
             </td>
-            <td>
+            <td data-label="Status">
               <TxStatusBadge status={status} />
             </td>
-            <td>
+            <td data-label="Ações" className="mobile-record-actions">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button

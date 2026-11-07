@@ -181,6 +181,12 @@
 }
 
 @layer components {
+  .voice-launcher {
+    bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+  }
+  .calculator-launcher {
+    bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  }
   [data-slot="card"],
   [data-chart] {
     min-width: 0;
@@ -191,12 +197,79 @@
   }
 
   @media (max-width: 640px) {
+    .app-content {
+      padding-bottom: calc(9rem + env(safe-area-inset-bottom, 0px));
+    }
+    .app-toolbar {
+      padding-top: env(safe-area-inset-top, 0px);
+    }
+    [data-app-button],
+    [data-sidebar="menu-button"],
+    [role="combobox"] {
+      min-height: 44px;
+    }
+    .app-toolbar [data-app-button] {
+      min-width: 44px;
+      flex-shrink: 0;
+    }
+    .page-actions > * {
+      width: 100%;
+      min-width: 0;
+      max-width: 100%;
+    }
+    [data-app-button] {
+      white-space: normal;
+      height: auto;
+      padding-top: 8px;
+      padding-bottom: 8px;
+    }
+    .app-dialog {
+      padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+    }
+    .mobile-record-table,
+    .mobile-record-table tbody {
+      display: block;
+      width: 100%;
+      min-width: 0;
+    }
+    .mobile-record-table thead { display: none; }
+    .mobile-record-table tbody > tr {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      padding: 16px;
+    }
+    .mobile-record-table tbody > tr > td {
+      display: block;
+      min-width: 0;
+      padding: 0;
+      text-align: left;
+      overflow-wrap: anywhere;
+      white-space: normal;
+    }
+    .mobile-record-table td::before {
+      content: attr(data-label);
+      display: block;
+      margin-bottom: 3px;
+      color: var(--muted-foreground);
+      font-size: 11px;
+      font-weight: 500;
+    }
+    .mobile-record-table .mobile-record-title,
+    .mobile-record-table .mobile-record-actions { grid-column: 1 / -1; }
+    .mobile-record-table .mobile-record-title { grid-row: 1; }
+    .mobile-record-table .mobile-record-title::before,
+    .mobile-record-table .mobile-record-actions::before { display: none; }
     input,
     select,
     textarea {
-      font-size: 16px;
+      font-size: 16px !important;
     }
   }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fade-in-up { animation: none; }
 }
 
 @utility num {

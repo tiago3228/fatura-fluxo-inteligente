@@ -43,6 +43,8 @@ export const Route = createFileRoute("/_authenticated/relatorios")({
       },
       { property: "og:title", content: "Relatórios — Fatura em Dia" },
       { property: "og:description", content: "Relatórios de gastos de cartão por pessoa." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: Relatorios,

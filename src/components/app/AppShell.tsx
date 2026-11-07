@@ -45,6 +45,7 @@ import {
   SidebarMenuItem,
   SidebarProvider,
   SidebarTrigger,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
@@ -90,6 +91,8 @@ const THEME_STORAGE_KEY = "fatura-em-dia-theme";
 
 function AppSidebar() {
   const path = useRouterState({ select: (r) => r.location.pathname });
+  const { setOpenMobile } = useSidebar();
+  useEffect(() => { setOpenMobile(false); }, [path, setOpenMobile]);
   const isActive = (u: string) => (u === "/" ? path === "/" : path.startsWith(u));
   return (
     <Sidebar collapsible="icon">
@@ -535,8 +538,8 @@ export function AppShell({ children }: { children: ReactNode }) {
       <TxActionsProvider>
         <SidebarProvider>
           <AppSidebar />
-          <SidebarInset className="min-w-0">
-            <header className="sticky top-0 z-20 flex h-14 items-center gap-1.5 border-b bg-card/90 px-2 shadow-xs backdrop-blur-xl sm:gap-2 sm:px-4 lg:px-6">
+          <SidebarInset className="min-w-0 md:w-0">
+            <header className="app-toolbar sticky top-0 z-20 grid min-h-14 grid-cols-[minmax(0,1fr)_auto] items-center gap-1 border-b bg-card/90 px-2 shadow-xs backdrop-blur-xl sm:flex sm:gap-2 sm:px-4 lg:px-6">
               <SidebarTrigger
                 aria-label="Abrir ou recolher menu lateral"
                 title="Abrir ou recolher menu lateral"
@@ -546,8 +549,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <DemoTag />
               </div>
               <div className="ml-auto flex min-w-0 items-center gap-0.5 sm:gap-1">
-                <UndoButton />
-                <RedoButton />
+                <div className="hidden items-center gap-1 sm:flex"><UndoButton /><RedoButton /></div>
                 <ThemeToggle darkMode={darkMode} onToggle={toggleTheme} />
                 <SyncStatusIndicator />
                 <Notifications />
@@ -556,7 +558,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </header>
             <ConnectionStatus />
             <SyncStatusBanner />
-            <main className="mx-auto w-full max-w-[1520px] min-w-0 flex-1 p-3 sm:p-4 lg:p-6">
+            <main className="app-content mx-auto w-full max-w-[1520px] min-w-0 flex-1 p-3 sm:p-4 lg:p-6">
               {children}
             </main>
             <footer
@@ -578,7 +580,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               size="icon"
               aria-label="Falar com o assistente"
               title="Falar com o assistente"
-              className="fixed bottom-20 right-4 z-[70] size-12 rounded-full shadow-lg"
+              className="voice-launcher fixed right-4 z-40 size-12 rounded-full shadow-lg"
               onClick={() => setVoiceOpen(true)}
             >
               <Mic className="size-5" />
@@ -589,7 +591,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 size="icon"
                 aria-label="Abrir calculadora rápida"
                 title="Abrir calculadora rápida"
-                className="fixed bottom-4 right-4 z-[70] size-12 rounded-full shadow-lg"
+                className="calculator-launcher fixed right-4 z-40 size-12 rounded-full shadow-lg"
                 onClick={() => setQuickCalculatorOpen(true)}
               >
                 <Calculator className="size-5" />

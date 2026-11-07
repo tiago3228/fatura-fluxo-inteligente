@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Otimizar navegação, controles, telas de conta e assistente para celular; verificar com sessão real em telas pequenas e desktop.
+
 - [x] Conectar Lovable Cloud e validar supabase/schema.sql no banco
 - [x] Login simples (e-mail/senha): telas de entrada, recuperação de senha e portão nas rotas
 - [x] Sincronizar dados do app com o banco (workspace por conta) — verificado ponta a ponta

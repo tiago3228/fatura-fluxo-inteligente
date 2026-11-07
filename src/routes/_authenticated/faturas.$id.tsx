@@ -22,6 +22,8 @@ export const Route = createFileRoute("/_authenticated/faturas/$id")({
       { name: "description", content: "Lançamentos da fatura, conciliação com o total oficial e distribuição por pessoa." },
       { property: "og:title", content: "Detalhes da fatura — Fatura em Dia" },
       { property: "og:description", content: "Confira os lançamentos e a conciliação da fatura." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: FaturaDetalhe,
@@ -62,8 +64,8 @@ function FaturaDetalhe() {
     <>
       <Button asChild variant="ghost" size="sm" className="-ml-2 mb-2"><Link to="/faturas"><ArrowLeft className="size-4" /> Faturas</Link></Button>
       <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-        <div>
-          <div className="flex items-center gap-2"><h1 className="text-2xl font-bold">{card?.name} •••• {card?.last4}</h1><InvoiceStatusBadge status={inv.status} /></div>
+        <div className="min-w-0">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2"><h1 className="min-w-0 break-words text-2xl font-bold">{card?.name} •••• {card?.last4}</h1><InvoiceStatusBadge status={inv.status} /></div>
           <p className="text-sm text-muted-foreground">{card?.issuer} · {fmtMonthLong(inv.month)} · vencimento {fmtDate(inv.dueDate)}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

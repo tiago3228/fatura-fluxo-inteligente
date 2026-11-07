@@ -29,6 +29,8 @@ export const Route = createFileRoute("/_authenticated/faturas/")({
       },
       { property: "og:title", content: "Faturas — Fatura em Dia" },
       { property: "og:description", content: "Importe e confira faturas de cartão de crédito." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: Faturas,
@@ -180,7 +182,7 @@ function Faturas() {
           />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[960px] text-sm">
+            <table className="mobile-record-table w-full text-sm sm:min-w-[960px]">
               <thead className="border-b bg-muted/60 text-left text-xs uppercase tracking-wide text-muted-foreground">
                 <tr className="[&_th]:px-3 [&_th]:py-2.5">
                   <th>Cartão</th>
@@ -206,7 +208,7 @@ function Faturas() {
                   const paid = i.status === "paga" ? i.officialTotal : recordedPaid;
                   return (
                     <tr key={i.id} className="hover:bg-muted/40 [&_td]:px-3 [&_td]:py-3">
-                      <td className="font-semibold">
+                      <td data-label="Cartão" className="mobile-record-title font-semibold">
                         <Link to="/faturas/$id" params={{ id: i.id }} className="hover:underline">
                           {c?.name}
                         </Link>
@@ -220,24 +222,24 @@ function Faturas() {
                           </span>
                         )}
                       </td>
-                      <td className="num">•••• {c?.last4}</td>
-                      <td className="text-muted-foreground">{c?.issuer}</td>
-                      <td>{fmtMonth(i.month)}</td>
-                      <td className="num">{fmtDate(i.dueDate)}</td>
-                      <td className="num text-right font-semibold">
+                      <td data-label="Final" className="num">•••• {c?.last4}</td>
+                      <td data-label="Emissor" className="text-muted-foreground">{c?.issuer}</td>
+                      <td data-label="Mês">{fmtMonth(i.month)}</td>
+                      <td data-label="Vencimento" className="num">{fmtDate(i.dueDate)}</td>
+                      <td data-label="Total oficial" className="num text-right font-semibold">
                         {fmtBRL(i.officialTotal)}
                         {diff !== 0 && (
                           <div className="text-xs font-medium text-danger">dif. {fmtBRL(diff)}</div>
                         )}
                       </td>
-                      <td className="num text-right">{invoiceTxs(state, i.id).length}</td>
-                      <td className={cn("num text-right", pend > 0 && "font-bold text-warning")}>
+                      <td data-label="Compras" className="num text-right">{invoiceTxs(state, i.id).length}</td>
+                      <td data-label="Pendentes" className={cn("num text-right", pend > 0 && "font-bold text-warning")}>
                         {pend}
                       </td>
-                      <td>
+                      <td data-label="Status">
                         <InvoiceStatusBadge status={i.status} />
                       </td>
-                      <td>
+                      <td data-label="Pagamento">
                         {paid > 0 ? (
                           <Pill tone={paid >= i.officialTotal ? "success" : "warning"}>
                             Pago {fmtBRL(paid)}
@@ -246,7 +248,7 @@ function Faturas() {
                           <Pill tone="warning">Em aberto</Pill>
                         )}
                       </td>
-                      <td>
+                      <td data-label="Ações" className="mobile-record-actions">
                         <div className="flex items-center justify-end gap-1">
                           <SendInvoiceToFinancesButton invoice={i} card={c} compact />
                           <Button asChild variant="ghost" size="icon" aria-label="Ver detalhes">

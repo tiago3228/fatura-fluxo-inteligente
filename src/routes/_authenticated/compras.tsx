@@ -65,6 +65,8 @@ export const Route = createFileRoute("/_authenticated/compras")({
       },
       { property: "og:title", content: "Compras — Fatura em Dia" },
       { property: "og:description", content: "Classifique compras por pessoa em poucos cliques." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: Compras,

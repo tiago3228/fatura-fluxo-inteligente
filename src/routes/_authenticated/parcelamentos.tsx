@@ -42,6 +42,8 @@ export const Route = createFileRoute("/_authenticated/parcelamentos")({
       },
       { property: "og:title", content: "Parcelamentos — Fatura em Dia" },
       { property: "og:description", content: "Controle de compras parceladas no cartão." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: Parcelamentos,
