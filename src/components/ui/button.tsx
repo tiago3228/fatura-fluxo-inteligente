@@ -55,7 +55,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     return (
       <Comp
         data-app-button="true"
-        className={cn(buttonVariants({ variant, size, className }))}
+        className={cn("relative", buttonVariants({ variant, size, className }))}
         ref={ref}
         title={tooltip ?? title ?? (typeof ariaLabel === "string" ? ariaLabel : undefined)}
         aria-label={ariaLabel}
