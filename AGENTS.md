@@ -11,6 +11,8 @@
 
 # Decisions d'architecture
 
+- Mobile layout uses shared PageHeader, Button touch targets and viewport-bounded DialogContent; mobile navigation closes on route changes. Why: keep every screen usable without duplicating per-page behavior.
+
 - Authentification : e-mail/mot de passe via Cloud Auth, confirmation e-mail désactivée (auto-confirm à l'inscription) ; toutes les routes applicatives sont sous `src/routes/_authenticated/` (portail `ssr: false` → `/auth`), seules `/auth` et `/reset-password` sont publiques. Pourquoi : usage familial privé, entrée immédiate après inscription.
 - Données : toutes les comptes rejoignent un seul espace familial partagé (`join_family_workspace`, le plus ancien workspace) et les changements arrivent en temps réel ; l'état complet (FinanceState) est un document JSONB dans `public.workspace_state` (RLS via `app.is_workspace_member`) ; le store local écrit avec un délai groupé (~600 ms) et lit au login. Pourquoi : les identifiants de l'app sont des chaînes (ex. `c_0548`), la synchronisation documentaire évite un mapping complet vers les tables normalisées du schema.sql.
 - Rôles : `public.user_roles` + `public.has_role` (jamais de rôle dans un profil) ; le rôle `master` est attribué automatiquement à l'inscription des e-mails listés dans `app.assign_master_on_signup` par le trigger `trg_assign_master_on_signup`. Pourquoi : base saine pour de futures fonctions d'administration.
