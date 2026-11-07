@@ -45,6 +45,8 @@ export const Route = createFileRoute("/_authenticated/configuracoes")({
       },
       { property: "og:title", content: "Configurações — Fatura em Dia" },
       { property: "og:description", content: "Ajuste o organizador de faturas." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: Configuracoes,

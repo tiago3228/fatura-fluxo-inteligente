@@ -29,6 +29,8 @@ export const Route = createFileRoute("/_authenticated/faturas/")({
       },
       { property: "og:title", content: "Faturas — Fatura em Dia" },
       { property: "og:description", content: "Importe e confira faturas de cartão de crédito." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: Faturas,

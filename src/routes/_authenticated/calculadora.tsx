@@ -15,6 +15,10 @@ export const Route = createFileRoute("/_authenticated/calculadora")({
     meta: [
       { title: "Calculadora — Fatura em Dia" },
       { name: "description", content: "Simule compras parceladas e divida os valores entre pessoas sem alterar suas faturas." },
+      { property: "og:title", content: "Calculadora — Fatura em Dia" },
+      { property: "og:description", content: "Simule compras parceladas e divida os valores entre pessoas sem alterar suas faturas." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: Calculadora,

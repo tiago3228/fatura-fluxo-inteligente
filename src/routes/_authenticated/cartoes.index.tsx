@@ -30,6 +30,8 @@ export const Route = createFileRoute("/_authenticated/cartoes/")({
       },
       { property: "og:title", content: "Cartões — Fatura em Dia" },
       { property: "og:description", content: "Seus cartões de crédito organizados." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: Cartoes,

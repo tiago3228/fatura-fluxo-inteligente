@@ -16,6 +16,8 @@ export const Route = createFileRoute("/_authenticated/cartoes/$id")({
       { name: "description", content: "Fatura atual, faturas anteriores, pessoas e próximas datas estimadas do cartão." },
       { property: "og:title", content: "Detalhes do cartão — Fatura em Dia" },
       { property: "og:description", content: "Resumo do cartão de crédito." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: CartaoDetalhe,

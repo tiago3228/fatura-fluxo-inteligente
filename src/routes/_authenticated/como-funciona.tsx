@@ -42,6 +42,8 @@ export const Route = createFileRoute("/_authenticated/como-funciona")({
         property: "og:description",
         content: "Aprenda a organizar suas faturas e dividir compras entre pessoas.",
       },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: ComoFunciona,

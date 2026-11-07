@@ -64,6 +64,8 @@ export const Route = createFileRoute("/_authenticated/outras-contas")({
         property: "og:description",
         content: "Energia, água, internet, botijão de gás, condomínio, IPTU, IPVA e outras contas.",
       },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: OtherAccountsPage,

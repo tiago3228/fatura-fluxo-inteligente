@@ -50,6 +50,8 @@ export const Route = createFileRoute("/_authenticated/pessoas/$id")({
       },
       { property: "og:title", content: "Detalhes da pessoa — Fatura em Dia" },
       { property: "og:description", content: "Gastos e limite individual." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: PessoaDetalhe,

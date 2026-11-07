@@ -22,6 +22,8 @@ export const Route = createFileRoute("/_authenticated/faturas/$id")({
       { name: "description", content: "Lançamentos da fatura, conciliação com o total oficial e distribuição por pessoa." },
       { property: "og:title", content: "Detalhes da fatura — Fatura em Dia" },
       { property: "og:description", content: "Confira os lançamentos e a conciliação da fatura." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: FaturaDetalhe,
