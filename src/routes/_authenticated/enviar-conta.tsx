@@ -92,7 +92,7 @@ function EnviarConta() {
         description="Gere uma imagem pronta para salvar ou enviar para cada pessoa."
         actions={
           <Select value={month} onValueChange={setMonth}>
-            <SelectTrigger className="w-48" aria-label="Mês da conta">
+            <SelectTrigger className="w-full sm:w-48" aria-label="Mês da conta">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -327,7 +327,7 @@ function PersonAccountCard({
               <span className="grid size-10 shrink-0 place-items-center rounded-full bg-primary/10 font-bold text-primary">
                 {person.name.charAt(0).toUpperCase()}
               </span>
-              <span className="min-w-0 flex-1">
+              <span className="min-w-0 flex-1 whitespace-normal">
                 <span className="block truncate font-semibold">{person.name}</span>
                 <span className="block text-xs text-muted-foreground">
                   {rows.length} compra(s) · {fmtMonthLong(month)}
