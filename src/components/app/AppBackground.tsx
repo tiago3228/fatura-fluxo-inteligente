@@ -60,11 +60,15 @@ async function shrink(file: File): Promise<string> {
 
 export function AppBackgroundLayer() {
   const bg = useBackgroundImage();
+  useEffect(() => {
+    document.documentElement.classList.toggle("has-photo-bg", Boolean(bg));
+    return () => document.documentElement.classList.remove("has-photo-bg");
+  }, [bg]);
   if (!bg) return null;
   return (
     <div aria-hidden className="pointer-events-none fixed inset-0 -z-10">
       <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url("${bg}")` }} />
-      <div className="absolute inset-0 bg-background/75" />
+      <div className="absolute inset-0 bg-background/55" />
     </div>
   );
 }

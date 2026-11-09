@@ -147,6 +147,25 @@
   --sidebar-ring: oklch(0.72 0.11 168);
 }
 
+/* Foto de fundo ativa: superfícies ficam translúcidas, textos continuam opacos */
+:root.has-photo-bg {
+  --card: color-mix(in oklab, oklch(1 0 0) 78%, transparent);
+  --popover: color-mix(in oklab, oklch(1 0 0) 90%, transparent);
+  --sidebar: color-mix(in oklab, oklch(0.97 0.012 168) 80%, transparent);
+  --secondary: color-mix(in oklab, oklch(0.955 0.01 170) 70%, transparent);
+  --muted: color-mix(in oklab, oklch(0.962 0.008 170) 65%, transparent);
+  --accent: color-mix(in oklab, oklch(0.94 0.025 168) 70%, transparent);
+}
+
+.dark.has-photo-bg {
+  --card: color-mix(in oklab, oklch(0.205 0.022 190) 78%, transparent);
+  --popover: color-mix(in oklab, oklch(0.22 0.024 190) 90%, transparent);
+  --sidebar: color-mix(in oklab, oklch(0.115 0.018 190) 80%, transparent);
+  --secondary: color-mix(in oklab, oklch(0.27 0.025 185) 70%, transparent);
+  --muted: color-mix(in oklab, oklch(0.245 0.02 190) 65%, transparent);
+  --accent: color-mix(in oklab, oklch(0.28 0.045 175) 70%, transparent);
+}
+
 @layer base {
   * {
     border-color: var(--color-border);
