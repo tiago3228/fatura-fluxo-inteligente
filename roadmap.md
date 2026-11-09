@@ -1,6 +1,7 @@
 # Roadmap
 
-- [ ] Otimizar navegação, controles, telas de conta e assistente para celular; verificar com sessão real em telas pequenas e desktop.
+- [x] Otimizar navegação, controles, telas de conta e assistente para celular; verificados em 320 e 390 px com sessão real; 8 testes passaram.
+- [ ] Revalidar a última correção de rolagem lateral no computador — sessão de teste expirou; aguarda novo login na prévia.
 
 - [x] Conectar Lovable Cloud e validar supabase/schema.sql no banco
 - [x] Login simples (e-mail/senha): telas de entrada, recuperação de senha e portão nas rotas
