@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { useFinance } from "@/lib/finance/store";
 import { DemoTag, Field, MonthSelect, PageHeader, Panel } from "@/components/app/common";
 import { ExcelImportDialog } from "@/components/app/ExcelImportDialog";
+import { BackgroundPicker } from "@/components/app/AppBackground";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -210,6 +211,11 @@ function Configuracoes() {
                     aria-label="Tabelas compactas"
                   />
                 </Row>
+                <div className="py-3">
+                  <p className="text-sm font-medium">Foto de fundo</p>
+                  <p className="text-xs text-muted-foreground">Fica só neste aparelho</p>
+                  <BackgroundPicker />
+                </div>
                 <Row title="Mês de referência" desc="Usado na visão geral, pessoas e parcelamentos">
                   <MonthSelect />
                 </Row>

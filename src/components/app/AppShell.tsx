@@ -537,8 +537,9 @@ export function AppShell({ children }: { children: ReactNode }) {
     <TooltipProvider delayDuration={200}>
       <TxActionsProvider>
         <SidebarProvider>
+          <AppBackgroundLayer />
           <AppSidebar />
-          <SidebarInset className="min-w-0 md:w-0">
+          <SidebarInset className="min-w-0 md:w-0 bg-transparent">
             <header className="app-toolbar sticky top-0 z-20 grid min-h-14 grid-cols-[minmax(0,1fr)_auto] items-center gap-1 border-b bg-card/90 px-2 shadow-xs backdrop-blur-xl sm:flex sm:gap-2 sm:px-4 lg:px-6">
               <SidebarTrigger
                 aria-label="Abrir ou recolher menu lateral"
