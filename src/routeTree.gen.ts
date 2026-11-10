@@ -13,6 +13,7 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
+import { Route as AuthenticatedCachorrosRouteImport } from './routes/_authenticated/cachorros'
 import { Route as AuthenticatedCalculadoraRouteImport } from './routes/_authenticated/calculadora'
 import { Route as AuthenticatedComoFuncionaRouteImport } from './routes/_authenticated/como-funciona'
 import { Route as AuthenticatedComprasRouteImport } from './routes/_authenticated/compras'
@@ -47,6 +48,11 @@ const ResetPasswordRoute = ResetPasswordRouteImport.update({
 const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedCachorrosRoute = AuthenticatedCachorrosRouteImport.update({
+  id: '/cachorros',
+  path: '/cachorros',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedCalculadoraRoute =
@@ -143,6 +149,7 @@ export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
   '/auth': typeof AuthRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/cachorros': typeof AuthenticatedCachorrosRoute
   '/calculadora': typeof AuthenticatedCalculadoraRoute
   '/como-funciona': typeof AuthenticatedComoFuncionaRoute
   '/compras': typeof AuthenticatedComprasRoute
@@ -163,6 +170,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/cachorros': typeof AuthenticatedCachorrosRoute
   '/calculadora': typeof AuthenticatedCalculadoraRoute
   '/como-funciona': typeof AuthenticatedComoFuncionaRoute
   '/compras': typeof AuthenticatedComprasRoute
@@ -186,6 +194,7 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/_authenticated/cachorros': typeof AuthenticatedCachorrosRoute
   '/_authenticated/calculadora': typeof AuthenticatedCalculadoraRoute
   '/_authenticated/como-funciona': typeof AuthenticatedComoFuncionaRoute
   '/_authenticated/compras': typeof AuthenticatedComprasRoute
@@ -210,6 +219,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/reset-password'
+    | '/cachorros'
     | '/calculadora'
     | '/como-funciona'
     | '/compras'
@@ -230,6 +240,7 @@ export interface FileRouteTypes {
   to:
     | '/auth'
     | '/reset-password'
+    | '/cachorros'
     | '/calculadora'
     | '/como-funciona'
     | '/compras'
@@ -252,6 +263,7 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/auth'
     | '/reset-password'
+    | '/_authenticated/cachorros'
     | '/_authenticated/calculadora'
     | '/_authenticated/como-funciona'
     | '/_authenticated/compras'
@@ -305,6 +317,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof AuthenticatedIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/cachorros': {
+      id: '/_authenticated/cachorros'
+      path: '/cachorros'
+      fullPath: '/cachorros'
+      preLoaderRoute: typeof AuthenticatedCachorrosRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/calculadora': {
@@ -423,6 +442,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedCachorrosRoute: typeof AuthenticatedCachorrosRoute
   AuthenticatedCalculadoraRoute: typeof AuthenticatedCalculadoraRoute
   AuthenticatedComoFuncionaRoute: typeof AuthenticatedComoFuncionaRoute
   AuthenticatedComprasRoute: typeof AuthenticatedComprasRoute
@@ -443,6 +463,7 @@ interface AuthenticatedRouteRouteChildren {
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedCachorrosRoute: AuthenticatedCachorrosRoute,
   AuthenticatedCalculadoraRoute: AuthenticatedCalculadoraRoute,
   AuthenticatedComoFuncionaRoute: AuthenticatedComoFuncionaRoute,
   AuthenticatedComprasRoute: AuthenticatedComprasRoute,
