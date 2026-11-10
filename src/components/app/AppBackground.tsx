@@ -16,7 +16,7 @@ function read(): string | null {
   }
 }
 
-let wsId: Promise<string | null> | null = null;
+let wsId: PromiseLike<string | null> | null = null;
 function workspaceId() {
   wsId ??= supabase.rpc("join_family_workspace").then(({ data }) => (data as string | null) ?? null);
   return wsId;
