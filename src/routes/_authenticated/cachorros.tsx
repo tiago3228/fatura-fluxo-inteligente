@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ImagePlus, Loader2, Trash2, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, ImagePlus, Loader2, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -145,6 +145,14 @@ function DogsPage() {
     void load();
   };
 
+  const navigatePhoto = (direction: -1 | 1) => {
+    if (!open || photos.length < 2) return;
+    const currentIndex = photos.findIndex((photo) => photo.id === open.id);
+    if (currentIndex < 0) return;
+    const nextIndex = (currentIndex + direction + photos.length) % photos.length;
+    setOpen(photos[nextIndex] ?? null);
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -203,6 +211,36 @@ function DogsPage() {
             alt="Foto de cachorro"
             className="max-h-[85dvh] max-w-full rounded-lg"
           />
+          {photos.length > 1 && (
+            <>
+              <Button
+                variant="secondary"
+                size="icon"
+                className="absolute left-4 top-1/2 z-10 -translate-y-1/2 rounded-full shadow-lg"
+                aria-label="Foto anterior"
+                title="Foto anterior"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  navigatePhoto(-1);
+                }}
+              >
+                <ChevronLeft className="size-5" />
+              </Button>
+              <Button
+                variant="secondary"
+                size="icon"
+                className="absolute right-4 top-1/2 z-10 -translate-y-1/2 rounded-full shadow-lg"
+                aria-label="Próxima foto"
+                title="Próxima foto"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  navigatePhoto(1);
+                }}
+              >
+                <ChevronRight className="size-5" />
+              </Button>
+            </>
+          )}
           <div className="absolute right-4 top-4 flex gap-2" onClick={(e) => e.stopPropagation()}>
             <Button
               variant="destructive"
