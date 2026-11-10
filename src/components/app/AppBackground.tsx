@@ -3,6 +3,7 @@ import { ImagePlus, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import diana from "@/assets/diana.jpeg.asset.json";
+import { supabase } from "@/integrations/supabase/client";
 
 const KEY = "fatura-bg-image";
 const EVT = "fatura-bg-change";
@@ -15,15 +16,47 @@ function read(): string | null {
   }
 }
 
-function write(v: string | null) {
+let wsId: Promise<string | null> | null = null;
+function workspaceId() {
+  wsId ??= supabase.rpc("join_family_workspace").then(({ data }) => (data as string | null) ?? null);
+  return wsId;
+}
+
+function cache(v: string | null) {
   try {
     if (v) localStorage.setItem(KEY, v);
     else localStorage.removeItem(KEY);
   } catch {
-    toast.error("Não foi possível salvar a foto neste aparelho");
-    return;
+    /* sem espaço local: segue só com o banco */
   }
   window.dispatchEvent(new Event(EVT));
+}
+
+async function pull() {
+  const id = await workspaceId();
+  if (!id) return;
+  const { data, error } = await supabase
+    .from("workspace_settings")
+    .select("background_image")
+    .eq("workspace_id", id)
+    .maybeSingle();
+  if (!error && (data?.background_image ?? null) !== read()) cache(data?.background_image ?? null);
+}
+
+async function write(v: string | null) {
+  const id = await workspaceId();
+  if (!id) {
+    toast.error("Não foi possível salvar a foto");
+    return;
+  }
+  const { error } = await supabase
+    .from("workspace_settings")
+    .upsert({ workspace_id: id, background_image: v }, { onConflict: "workspace_id" });
+  if (error) {
+    toast.error("Não foi possível salvar a foto para a família");
+    return;
+  }
+  cache(v);
 }
 
 export function useBackgroundImage() {
@@ -31,9 +64,15 @@ export function useBackgroundImage() {
   useEffect(() => {
     const sync = () => setBg(read());
     sync();
+    void pull();
+    const onFocus = () => void pull();
+    const t = window.setInterval(onFocus, 60000);
+    window.addEventListener("focus", onFocus);
     window.addEventListener(EVT, sync);
     window.addEventListener("storage", sync);
     return () => {
+      window.clearInterval(t);
+      window.removeEventListener("focus", onFocus);
       window.removeEventListener(EVT, sync);
       window.removeEventListener("storage", sync);
     };
@@ -81,7 +120,7 @@ export function BackgroundPicker() {
   const onFile = async (f?: File) => {
     if (!f) return;
     try {
-      write(await shrink(f));
+      await write(await shrink(f));
       toast.success("Foto de fundo aplicada");
     } catch {
       toast.error("Não foi possível usar essa foto");
@@ -93,7 +132,7 @@ export function BackgroundPicker() {
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
-          onClick={() => write(null)}
+          onClick={() => void write(null)}
           className={`h-16 w-24 rounded-md border-2 bg-background text-xs ${!bg ? "border-primary" : "border-border"}`}
         >
           Fundo padrão
@@ -102,7 +141,7 @@ export function BackgroundPicker() {
           <button
             key={p.url}
             type="button"
-            onClick={() => write(p.url)}
+            onClick={() => void write(p.url)}
             aria-label={`Usar foto ${p.label}`}
             className={`h-16 w-24 rounded-md border-2 bg-cover bg-center ${bg === p.url ? "border-primary" : "border-border"}`}
             style={{ backgroundImage: `url("${p.url}")` }}
@@ -120,7 +159,7 @@ export function BackgroundPicker() {
           <ImagePlus className="size-4" /> Escolher foto
         </Button>
         {bg && (
-          <Button variant="ghost" onClick={() => write(null)}>
+          <Button variant="ghost" onClick={() => void write(null)}>
             <RotateCcw className="size-4" /> Voltar ao fundo padrão
           </Button>
         )}
