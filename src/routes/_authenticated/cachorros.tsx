@@ -67,9 +67,10 @@ function DogsPage() {
   useEffect(() => {
     void load();
   }, [load]);
-
   const upload = async (files: FileList | null) => {
-    if (!files?.length) return;
+    // Copiar antes do primeiro await: o handler limpa o input para permitir escolher o mesmo arquivo novamente.
+    const selectedFiles = Array.from(files ?? []);
+    if (!selectedFiles.length) return;
     setBusy(true);
     let added = 0;
     const failures: string[] = [];
@@ -81,7 +82,7 @@ function DogsPage() {
       const wsId = ws as string | null;
       if (!wsId) throw new Error("Não foi possível localizar o espaço compartilhado da família.");
 
-      for (const file of Array.from(files)) {
+      for (const file of selectedFiles) {
         const extension = PHOTO_EXTENSIONS[file.type];
         if (!extension) {
           failures.push(
