@@ -18,7 +18,9 @@ function read(): string | null {
 
 let wsId: PromiseLike<string | null> | null = null;
 function workspaceId() {
-  wsId ??= supabase.rpc("join_family_workspace").then(({ data }) => (data as string | null) ?? null);
+  wsId ??= supabase
+    .rpc("join_family_workspace")
+    .then(({ data }) => (data as string | null) ?? null);
   return wsId;
 }
 
@@ -43,22 +45,24 @@ async function pull() {
   if (!error && (data?.background_image ?? null) !== read()) cache(data?.background_image ?? null);
 }
 
-async function write(v: string | null) {
+async function write(v: string | null): Promise<boolean> {
   const id = await workspaceId();
   if (!id) {
     toast.error("Não foi possível salvar a foto");
-    return;
+    return false;
   }
   const { error } = await supabase
     .from("workspace_settings")
     .upsert({ workspace_id: id, background_image: v }, { onConflict: "workspace_id" });
   if (error) {
     toast.error("Não foi possível salvar a foto para a família");
-    return;
+    return false;
   }
   cache(v);
+  return true;
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useBackgroundImage() {
   const [bg, setBg] = useState<string | null>(null);
   useEffect(() => {
@@ -97,6 +101,24 @@ async function shrink(file: File): Promise<string> {
   }
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
+export async function setBackgroundFromImageUrl(url: string) {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error("Não foi possível acessar a foto selecionada.");
+    const blob = await response.blob();
+    const file = new File([blob], "foto-da-galeria.jpg", {
+      type: blob.type.startsWith("image/") ? blob.type : "image/jpeg",
+    });
+    const saved = await write(await shrink(file));
+    if (saved) toast.success("Foto de fundo aplicada para a família");
+  } catch (error) {
+    toast.error("Não foi possível aplicar a foto como fundo", {
+      description: error instanceof Error ? error.message : "Erro inesperado.",
+    });
+  }
+}
+
 export function AppBackgroundLayer() {
   const bg = useBackgroundImage();
   useEffect(() => {
@@ -106,7 +128,10 @@ export function AppBackgroundLayer() {
   if (!bg) return null;
   return (
     <div aria-hidden className="pointer-events-none fixed inset-0 -z-10">
-      <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url("${bg}")` }} />
+      <div
+        className="absolute inset-0 bg-cover bg-center"
+        style={{ backgroundImage: `url("${bg}")` }}
+      />
       <div className="absolute inset-0 bg-background/55" />
     </div>
   );
@@ -120,8 +145,8 @@ export function BackgroundPicker() {
   const onFile = async (f?: File) => {
     if (!f) return;
     try {
-      await write(await shrink(f));
-      toast.success("Foto de fundo aplicada");
+      const saved = await write(await shrink(f));
+      if (saved) toast.success("Foto de fundo aplicada");
     } catch {
       toast.error("Não foi possível usar essa foto");
     }

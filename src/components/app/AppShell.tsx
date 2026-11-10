@@ -74,6 +74,7 @@ import { createCeuSsoLink } from "@/lib/ceu-sso.functions";
 
 const NAV = [
   { title: "Visão geral", url: "/", icon: LayoutDashboard },
+  { title: "Cachorros", url: "/cachorros", icon: Dog },
   { title: "Faturas", url: "/faturas", icon: FileText },
   { title: "Outras contas", url: "/outras-contas", icon: ReceiptText },
   { title: "Ler fatura (IA)", url: "/ler-fatura", icon: Sparkles },
@@ -82,7 +83,6 @@ const NAV = [
   { title: "Cartões", url: "/cartoes", icon: CreditCard },
   { title: "Parcelamentos", url: "/parcelamentos", icon: CalendarClock },
   { title: "Calculadora", url: "/calculadora", icon: Calculator },
-  { title: "Cachorros", url: "/cachorros", icon: Dog },
   { title: "Relatórios", url: "/relatorios", icon: FileSpreadsheet },
   { title: "Enviar conta", url: "/enviar-conta", icon: Share2 },
   { title: "Planilhas", url: "/planilhas", icon: FileSpreadsheet },

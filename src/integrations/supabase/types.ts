@@ -67,8 +67,39 @@ export type Database = {
           },
         ]
       }
+      dog_albums: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dog_albums_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       dog_photos: {
         Row: {
+          album_id: string
+          caption: string
           created_at: string
           created_by: string
           id: string
@@ -76,6 +107,8 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          album_id: string
+          caption?: string
           created_at?: string
           created_by?: string
           id?: string
@@ -83,6 +116,8 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          album_id?: string
+          caption?: string
           created_at?: string
           created_by?: string
           id?: string
@@ -90,6 +125,13 @@ export type Database = {
           workspace_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "dog_photos_album_id_fkey"
+            columns: ["album_id"]
+            isOneToOne: false
+            referencedRelation: "dog_albums"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "dog_photos_workspace_id_fkey"
             columns: ["workspace_id"]
