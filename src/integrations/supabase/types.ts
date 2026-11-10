@@ -67,6 +67,38 @@ export type Database = {
           },
         ]
       }
+      dog_photos: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          path: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          path: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          path?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dog_photos_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       installment_plan_shares: {
         Row: {
           id: string
@@ -518,6 +550,7 @@ export type Database = {
       }
       workspace_settings: {
         Row: {
+          background_image: string | null
           compact: boolean
           csv_separator: string
           duplicate_check: boolean
@@ -528,6 +561,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          background_image?: string | null
           compact?: boolean
           csv_separator?: string
           duplicate_check?: boolean
@@ -538,6 +572,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          background_image?: string | null
           compact?: boolean
           csv_separator?: string
           duplicate_check?: boolean

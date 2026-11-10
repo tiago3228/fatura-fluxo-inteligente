@@ -14,3 +14,4 @@
 - [x] Papel « administrateur master » pour tiago3228@yahoo.com.br (trigger à l'inscription) — aplicado
 - [x] Publicar a versão com o atalho "Enviar saída para Finanças" e o guia (commits 5457f42, f2d1d1f)
 - [ ] Decidir e aplicar a regra de leitura de minigame_scores (hoje qualquer conta conectada vê todas as pontuações)
+- [x] Galeria Cachorros (várias fotos, compartilhada)
