@@ -518,6 +518,7 @@ export type Database = {
       }
       workspace_settings: {
         Row: {
+          background_image: string | null
           compact: boolean
           csv_separator: string
           duplicate_check: boolean
@@ -528,6 +529,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          background_image?: string | null
           compact?: boolean
           csv_separator?: string
           duplicate_check?: boolean
@@ -538,6 +540,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          background_image?: string | null
           compact?: boolean
           csv_separator?: string
           duplicate_check?: boolean
