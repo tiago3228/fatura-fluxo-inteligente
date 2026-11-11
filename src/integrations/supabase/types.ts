@@ -104,6 +104,7 @@ export type Database = {
           created_by: string
           id: string
           path: string
+          sort_order: number
           workspace_id: string
         }
         Insert: {
@@ -113,6 +114,7 @@ export type Database = {
           created_by?: string
           id?: string
           path: string
+          sort_order?: number
           workspace_id: string
         }
         Update: {
@@ -122,6 +124,7 @@ export type Database = {
           created_by?: string
           id?: string
           path?: string
+          sort_order?: number
           workspace_id?: string
         }
         Relationships: [
@@ -702,6 +705,10 @@ export type Database = {
         Returns: boolean
       }
       join_family_workspace: { Args: never; Returns: string }
+      reorder_dog_album_photos: {
+        Args: { p_album_id: string; p_photo_ids: string[]; p_workspace_id: string }
+        Returns: undefined
+      }
       save_workspace_state: {
         Args: {
           p_data: Json

@@ -7,6 +7,7 @@ import {
   Dog,
   Folder,
   FolderPlus,
+  GripVertical,
   Image,
   ImagePlus,
   Loader2,
@@ -50,7 +51,14 @@ export const Route = createFileRoute("/_authenticated/cachorros")({
   component: DogsPage,
 });
 
-type Photo = { id: string; path: string; album_id: string; caption: string; url: string };
+type Photo = {
+  id: string;
+  path: string;
+  album_id: string;
+  caption: string;
+  sort_order: number;
+  url: string;
+};
 type Album = { id: string; name: string; coverUrl: string | null; photoCount: number };
 type GallerySize = "large" | "medium" | "small";
 
@@ -90,9 +98,14 @@ function DogsPage() {
   const [creatingAlbum, setCreatingAlbum] = useState(false);
   const [albumName, setAlbumName] = useState("");
   const [savingAlbum, setSavingAlbum] = useState(false);
+  const [editingAlbum, setEditingAlbum] = useState<Album | null>(null);
+  const [albumNameDraft, setAlbumNameDraft] = useState("");
+  const [savingAlbumName, setSavingAlbumName] = useState(false);
   const [editingPhoto, setEditingPhoto] = useState<Photo | null>(null);
   const [captionDraft, setCaptionDraft] = useState("");
   const [savingCaption, setSavingCaption] = useState(false);
+  const [draggingPhotoId, setDraggingPhotoId] = useState<string | null>(null);
+  const [dragOverPhotoId, setDragOverPhotoId] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const viewerImageAreaRef = useRef<HTMLDivElement>(null);
 
@@ -123,8 +136,9 @@ function DogsPage() {
           .order("name", { ascending: true }),
         supabase
           .from("dog_photos")
-          .select("id, path, caption, album_id")
+          .select("id, path, caption, album_id, sort_order")
           .eq("workspace_id", workspaceId)
+          .order("sort_order", { ascending: true })
           .order("created_at", { ascending: false }),
       ]);
       if (albumResult.error) throw albumResult.error;
@@ -233,6 +247,8 @@ function DogsPage() {
     setBusy(true);
     let added = 0;
     let workspaceId: string | null = null;
+    let nextSortOrder =
+      albumPhotos.reduce((highest, photo) => Math.max(highest, photo.sort_order), -1) + 1;
     const failures: string[] = [];
 
     try {
@@ -270,6 +286,7 @@ function DogsPage() {
           path,
           album_id: activeAlbumId,
           caption: file.name.replace(/\.[^.]+$/, ""),
+          sort_order: nextSortOrder,
         });
         if (insertError) {
           const { error: cleanupError } = await supabase.storage.from("dog-photos").remove([path]);
@@ -279,6 +296,7 @@ function DogsPage() {
           continue;
         }
         added++;
+        nextSortOrder++;
       }
     } catch (error) {
       failures.push(errorMessage(error));
@@ -298,6 +316,40 @@ function DogsPage() {
       );
     }
     if (added && workspaceId) void load(workspaceId);
+  };
+
+  const reorderPhoto = async (targetPhotoId: string) => {
+    const sourcePhotoId = draggingPhotoId;
+    setDraggingPhotoId(null);
+    setDragOverPhotoId(null);
+    if (!sourcePhotoId || sourcePhotoId === targetPhotoId || !activeAlbumId || !workspaceId) return;
+
+    const reordered = [...albumPhotos];
+    const sourceIndex = reordered.findIndex((photo) => photo.id === sourcePhotoId);
+    const targetIndex = reordered.findIndex((photo) => photo.id === targetPhotoId);
+    if (sourceIndex < 0 || targetIndex < 0) return;
+    const [movedPhoto] = reordered.splice(sourceIndex, 1);
+    if (!movedPhoto) return;
+    reordered.splice(targetIndex, 0, movedPhoto);
+
+    const orderedPhotos = reordered.map((photo, index) => ({ ...photo, sort_order: index }));
+    setPhotos((current) => [
+      ...current.filter((photo) => photo.album_id !== activeAlbumId),
+      ...orderedPhotos,
+    ]);
+
+    try {
+      const { error } = await supabase.rpc("reorder_dog_album_photos", {
+        p_workspace_id: workspaceId,
+        p_album_id: activeAlbumId,
+        p_photo_ids: orderedPhotos.map((photo) => photo.id),
+      });
+      if (error) throw error;
+      toast.success("Ordem das fotos atualizada");
+    } catch (error) {
+      toast.error("Não foi possível salvar a nova ordem", { description: errorMessage(error) });
+      await load(workspaceId);
+    }
   };
 
   const createAlbum = async () => {
@@ -320,6 +372,36 @@ function DogsPage() {
       toast.error("Não foi possível criar a pasta", { description: errorMessage(error) });
     } finally {
       setSavingAlbum(false);
+    }
+  };
+
+  const renameAlbum = async () => {
+    if (!editingAlbum || !workspaceId) return;
+    const name = albumNameDraft.trim();
+    if (!name) return;
+    setSavingAlbumName(true);
+    try {
+      const { error } = await supabase
+        .from("dog_albums")
+        .update({ name })
+        .eq("id", editingAlbum.id)
+        .eq("workspace_id", workspaceId);
+      if (error) throw error;
+      setAlbums((current) =>
+        current.map((album) => (album.id === editingAlbum.id ? { ...album, name } : album)),
+      );
+      setEditingAlbum(null);
+      toast.success(`Pasta renomeada para “${name}”`);
+    } catch (error) {
+      const message = errorMessage(error);
+      toast.error(
+        message.toLowerCase().includes("unique")
+          ? "Já existe uma pasta com esse nome"
+          : "Não foi possível renomear a pasta",
+        { description: message },
+      );
+    } finally {
+      setSavingAlbumName(false);
     }
   };
 
@@ -429,7 +511,7 @@ function DogsPage() {
         title={activeAlbum?.name ?? "Cachorros"}
         description={
           activeAlbum
-            ? `Fotos de ${activeAlbum.name}, compartilhadas com toda a família.`
+            ? `Fotos de ${activeAlbum.name}, compartilhadas com toda a família. Arraste as fotos para mudar a ordem.`
             : "Crie uma pasta para cada cachorro e organize as fotos da família."
         }
         actions={
@@ -477,35 +559,48 @@ function DogsPage() {
         ) : (
           <div className={gridClassName}>
             {albums.map((album) => (
-              <button
-                key={album.id}
-                type="button"
-                onClick={() => setActiveAlbumId(album.id)}
-                className="overflow-hidden rounded-lg border bg-card text-left transition-colors hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                aria-label={`Abrir pasta ${album.name}, ${album.photoCount} fotos`}
-              >
-                <div className="relative aspect-square overflow-hidden bg-muted">
-                  {album.coverUrl ? (
-                    <img
-                      src={album.coverUrl}
-                      alt={`Capa da pasta ${album.name}`}
-                      loading="lazy"
-                      className="size-full object-cover"
-                    />
-                  ) : (
-                    <div className="grid size-full place-items-center text-muted-foreground">
-                      <Dog className="size-14" />
+              <ContextMenu key={album.id}>
+                <ContextMenuTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => setActiveAlbumId(album.id)}
+                    className="overflow-hidden rounded-lg border bg-card text-left transition-colors hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    aria-label={`Abrir pasta ${album.name}, ${album.photoCount} fotos`}
+                  >
+                    <div className="relative aspect-square overflow-hidden bg-muted">
+                      {album.coverUrl ? (
+                        <img
+                          src={album.coverUrl}
+                          alt={`Capa da pasta ${album.name}`}
+                          loading="lazy"
+                          className="size-full object-cover"
+                        />
+                      ) : (
+                        <div className="grid size-full place-items-center text-muted-foreground">
+                          <Dog className="size-14" />
+                        </div>
+                      )}
+                      <span className="absolute bottom-2 right-2 rounded-full bg-background/90 px-2 py-1 text-xs font-medium">
+                        {album.photoCount} {album.photoCount === 1 ? "foto" : "fotos"}
+                      </span>
                     </div>
-                  )}
-                  <span className="absolute bottom-2 right-2 rounded-full bg-background/90 px-2 py-1 text-xs font-medium">
-                    {album.photoCount} {album.photoCount === 1 ? "foto" : "fotos"}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 p-3">
-                  <Folder className="size-4 shrink-0 text-primary" />
-                  <span className="truncate text-sm font-semibold">{album.name}</span>
-                </div>
-              </button>
+                    <div className="flex items-center gap-2 p-3">
+                      <Folder className="size-4 shrink-0 text-primary" />
+                      <span className="truncate text-sm font-semibold">{album.name}</span>
+                    </div>
+                  </button>
+                </ContextMenuTrigger>
+                <ContextMenuContent className="w-48">
+                  <ContextMenuItem
+                    onSelect={() => {
+                      setEditingAlbum(album);
+                      setAlbumNameDraft(album.name);
+                    }}
+                  >
+                    <Pencil className="mr-2 size-4" /> Renomear pasta
+                  </ContextMenuItem>
+                </ContextMenuContent>
+              </ContextMenu>
             ))}
           </div>
         )
@@ -518,7 +613,32 @@ function DogsPage() {
           {albumPhotos.map((p) => (
             <ContextMenu key={p.id}>
               <ContextMenuTrigger asChild>
-                <article className="overflow-hidden rounded-lg border bg-card">
+                <article
+                  draggable
+                  onDragStart={(event) => {
+                    event.dataTransfer.effectAllowed = "move";
+                    event.dataTransfer.setData("text/plain", p.id);
+                    setDraggingPhotoId(p.id);
+                  }}
+                  onDragEnd={() => {
+                    setDraggingPhotoId(null);
+                    setDragOverPhotoId(null);
+                  }}
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = "move";
+                    setDragOverPhotoId(p.id);
+                  }}
+                  onDragLeave={() =>
+                    setDragOverPhotoId((current) => (current === p.id ? null : current))
+                  }
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    void reorderPhoto(p.id);
+                  }}
+                  className={`overflow-hidden rounded-lg border bg-card transition-all ${dragOverPhotoId === p.id && draggingPhotoId !== p.id ? "border-primary ring-2 ring-primary/40" : ""} ${draggingPhotoId === p.id ? "opacity-50" : "cursor-grab active:cursor-grabbing"}`}
+                  title="Arraste para mudar a posição"
+                >
                   <button
                     type="button"
                     onClick={() => setOpen(p)}
@@ -533,9 +653,15 @@ function DogsPage() {
                     />
                   </button>
                   <div className="flex min-h-12 items-center justify-between gap-2 px-3 py-2">
-                    <p className="min-w-0 truncate text-sm font-medium" title={p.caption}>
-                      {p.caption || <span className="text-muted-foreground">Sem nome</span>}
-                    </p>
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      <GripVertical
+                        className="size-4 shrink-0 text-muted-foreground"
+                        aria-hidden="true"
+                      />
+                      <p className="truncate text-sm font-medium" title={p.caption}>
+                        {p.caption || <span className="text-muted-foreground">Sem nome</span>}
+                      </p>
+                    </div>
                     <Button
                       type="button"
                       variant="ghost"
@@ -716,6 +842,43 @@ function DogsPage() {
             </Button>
             <Button onClick={() => void createAlbum()} disabled={!albumName.trim() || savingAlbum}>
               {savingAlbum ? <Loader2 className="size-4 animate-spin" /> : "Criar pasta"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={!!editingAlbum} onOpenChange={(isOpen) => !isOpen && setEditingAlbum(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Renomear pasta</DialogTitle>
+            <DialogDescription>
+              O novo nome será compartilhado com todas as contas da família.
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            autoFocus
+            maxLength={80}
+            value={albumNameDraft}
+            onChange={(event) => setAlbumNameDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") void renameAlbum();
+            }}
+            placeholder="Nome do cachorro"
+            aria-label="Novo nome da pasta"
+            disabled={savingAlbumName}
+          />
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setEditingAlbum(null)}
+              disabled={savingAlbumName}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => void renameAlbum()}
+              disabled={!albumNameDraft.trim() || savingAlbumName}
+            >
+              {savingAlbumName ? <Loader2 className="size-4 animate-spin" /> : "Salvar nome"}
             </Button>
           </DialogFooter>
         </DialogContent>
