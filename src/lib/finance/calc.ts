@@ -429,6 +429,10 @@ export const personTotalDue = (s: FinanceState, personId: string) =>
 /** Compatibilidade com relatórios e integrações que ainda usam o nome anterior. */
 export const personDebtTotal = personTotalDue;
 
+/** Saldo líquido da conta: positivo é crédito futuro disponível; negativo é valor ainda devido. */
+export const personAccountBalance = (s: FinanceState, personId: string) =>
+  round2(personCreditBalance(s, personId) - personDebtTotal(s, personId));
+
 export type PersonPaymentStatus = "pendente" | "parcial" | "pago";
 export const personPaymentStatus = (
   s: FinanceState,

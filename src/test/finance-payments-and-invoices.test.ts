@@ -9,6 +9,7 @@ import {
   filterInstallmentPlanEntries,
   forecast,
   limitStatus,
+  personAccountBalance,
   personMonthApplied,
   planStatusAt,
   personCreditBalance,
@@ -197,6 +198,7 @@ describe("pagamentos e competências", () => {
     expect(personMonthRemaining(state, personId, "2026-10")).toBe(60);
     expect(peopleMonthRemainingTotal(state, "2026-10")).toBe(60);
     expect(personDebtTotal(state, personId)).toBe(60);
+    expect(personAccountBalance(state, personId)).toBe(-60);
     expect(personPaymentStatus(state, personId, "2026-10")).toBe("parcial");
 
     state = reducer(state, {
@@ -209,6 +211,7 @@ describe("pagamentos e competências", () => {
     expect(personMonthRemaining(state, personId, "2026-10")).toBe(0);
     expect(peopleMonthRemainingTotal(state, "2026-10")).toBe(0);
     expect(personDebtTotal(state, personId)).toBe(0);
+    expect(personAccountBalance(state, personId)).toBe(0);
     expect(personPaymentStatus(state, personId, "2026-10")).toBe("pago");
   });
 
@@ -238,6 +241,7 @@ describe("pagamentos e competências", () => {
     let state = reducer(initial, { type: "recordPersonPaymentBatch", payments });
 
     expect(personCreditBalance(state, personId)).toBe(184);
+    expect(personAccountBalance(state, personId)).toBe(184);
     expect(personDebtTotal(state, personId)).toBe(0);
     expect(personMonthReceivedTotal(state, personId, "2026-10")).toBe(2069);
     expect(personMonthApplied(state, personId, "2026-10")).toBe(1885);
@@ -313,6 +317,7 @@ describe("pagamentos e competências", () => {
     expect(personMonthPaid(state, personId, "2026-11")).toBe(120);
     expect(personMonthRemaining(state, personId, "2026-11")).toBe(0);
     expect(personCreditBalance(state, personId)).toBe(64);
+    expect(personAccountBalance(state, personId)).toBe(64);
   });
 
   it("permite marcar uma pessoa como pendente removendo os pagamentos do mês", () => {
