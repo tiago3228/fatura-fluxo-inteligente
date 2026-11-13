@@ -26,6 +26,7 @@ import {
   personMonthReceivedTotal,
   personMonthReceipts,
   personMonthRemaining,
+  personMonthSurplus,
   personMonthTotal,
   personPaymentStatus,
 } from "@/lib/finance/calc";
@@ -134,6 +135,7 @@ function Pessoas() {
                 const paid = personMonthPaid(state, p.id, m);
                 const applied = personMonthApplied(state, p.id, m);
                 const received = personMonthReceivedTotal(state, p.id, m);
+                const monthSurplus = personMonthSurplus(state, p.id, m);
                 const receipts = personMonthReceipts(state, p.id, m);
                 const remaining = personMonthRemaining(state, p.id, m);
                 const debt = personDebtTotal(state, p.id);
@@ -310,6 +312,12 @@ function Pessoas() {
                         {applied > 0 && (
                           <p className="font-medium">Aplicado à fatura: {fmtBRL(applied)}</p>
                         )}
+                        {monthSurplus > 0 && (
+                          <p className="break-words font-semibold text-success">
+                            Sobra do mês: {fmtBRL(received)} − {fmtBRL(applied)} = +
+                            {fmtBRL(monthSurplus)}
+                          </p>
+                        )}
                         {credit > 0 && (
                           <p className="font-semibold text-success">
                             Crédito disponível: {fmtBRL(credit)}
@@ -420,6 +428,7 @@ function Pessoas() {
                     const paid = personMonthPaid(state, p.id, m);
                     const applied = personMonthApplied(state, p.id, m);
                     const received = personMonthReceivedTotal(state, p.id, m);
+                    const monthSurplus = personMonthSurplus(state, p.id, m);
                     const receipts = personMonthReceipts(state, p.id, m);
                     const remaining = personMonthRemaining(state, p.id, m);
                     const debt = personDebtTotal(state, p.id);
@@ -534,6 +543,12 @@ function Pessoas() {
                               {applied > 0 && (
                                 <div className="text-xs font-normal text-muted-foreground">
                                   Aplicado à fatura: {fmtBRL(applied)}
+                                </div>
+                              )}
+                              {monthSurplus > 0 && (
+                                <div className="text-xs font-semibold text-success">
+                                  Sobra: {fmtBRL(received)} − {fmtBRL(applied)} = +
+                                  {fmtBRL(monthSurplus)}
                                 </div>
                               )}
                             </td>

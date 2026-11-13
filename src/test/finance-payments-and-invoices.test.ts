@@ -19,6 +19,7 @@ import {
   personMonthReceivedTotal,
   personMonthReceipts,
   personMonthRemaining,
+  personMonthSurplus,
   peopleMonthRemainingTotal,
   personPaymentStatus,
   personMonthTotal,
@@ -245,6 +246,7 @@ describe("pagamentos e competências", () => {
     expect(personDebtTotal(state, personId)).toBe(0);
     expect(personMonthReceivedTotal(state, personId, "2026-10")).toBe(2069);
     expect(personMonthApplied(state, personId, "2026-10")).toBe(1885);
+    expect(personMonthSurplus(state, personId, "2026-10")).toBe(184);
     expect(
       personMonthReceipts(state, personId, "2026-10").map(({ amount, paidAt }) => ({
         amount,

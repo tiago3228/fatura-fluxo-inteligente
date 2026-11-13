@@ -350,6 +350,15 @@ export const personMonthReceipts = (s: FinanceState, personId: string, month: st
 export const personMonthReceivedTotal = (s: FinanceState, personId: string, month: string) =>
   round2(personMonthReceipts(s, personId, month).reduce((sum, receipt) => sum + receipt.amount, 0));
 
+/** Sobra positiva dos recebimentos feitos no mês após o valor aplicado à fatura. */
+export const personMonthSurplus = (s: FinanceState, personId: string, month: string) =>
+  round2(
+    Math.max(
+      0,
+      personMonthReceivedTotal(s, personId, month) - personMonthApplied(s, personId, month),
+    ),
+  );
+
 export const personMonthRemaining = (s: FinanceState, personId: string, month: string) =>
   personMonthBalance(s, personId, month).remaining;
 
