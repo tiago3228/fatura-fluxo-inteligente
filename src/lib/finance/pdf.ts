@@ -8,6 +8,8 @@ import {
   recurringChargeAppliesAt,
 } from "./calc";
 
+import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
+
 export type ExtractedPdfRow = {
   id: string;
   date: string;
@@ -411,6 +413,7 @@ export function parseInvoiceText(rawText: string, fallbackMonth: string): Extrac
 
 export async function extractPdfText(file: File) {
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
   const data = new Uint8Array(await file.arrayBuffer());
   const pdf = await pdfjs.getDocument({ data, useWorkerFetch: false }).promise;
   const pages: string[] = [];
