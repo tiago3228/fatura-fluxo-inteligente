@@ -50,6 +50,12 @@ const FIELDS: { key: FieldKey; label: string; required: boolean; guess: RegExp }
   { key: "category", label: "Categoria", required: false, guess: /categ|categoria|category/i },
 ];
 const NONE = "__none";
+type DuplicateSpreadsheetPrompt = {
+  rows: unknown[][];
+  fileName: string;
+  sha256: string;
+  previousImportedAt: string;
+};
 
 const SAMPLE: unknown[][] = [
   ["Data", "Estabelecimento", "Valor (R$)", "Quem", "Final"],
@@ -88,6 +94,8 @@ export function ExcelImportDialog({
 }) {
   const { state, dispatch } = useFinance();
   const [fileName, setFileName] = useState<string | null>(null);
+  const [fileHash, setFileHash] = useState<string | null>(null);
+  const [duplicatePrompt, setDuplicatePrompt] = useState<DuplicateSpreadsheetPrompt | null>(null);
   const [rows, setRows] = useState<unknown[][] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [map, setMap] = useState<Record<FieldKey, number | null>>({
@@ -107,6 +115,8 @@ export function ExcelImportDialog({
 
   const reset = () => {
     setFileName(null);
+    setFileHash(null);
+    setDuplicatePrompt(null);
     setRows(null);
     setError(null);
     setStep(1);
@@ -116,7 +126,7 @@ export function ExcelImportDialog({
     setTimeout(reset, 200);
   };
 
-  const load = (data: unknown[][], name: string) => {
+  const load = (data: unknown[][], name: string, sha256: string | null = null) => {
     const clean = data.filter((r) => r.some((c) => String(c ?? "").trim() !== ""));
     if (clean.length < 2 || !clean[0]) {
       setError("A planilha não tem linhas de dados.");
@@ -131,6 +141,7 @@ export function ExcelImportDialog({
     setMap(guess);
     setRows(clean);
     setFileName(name);
+    setFileHash(sha256);
     setError(null);
     setStep(2);
   };
@@ -143,21 +154,43 @@ export function ExcelImportDialog({
     }
     try {
       const XLSX = await import("xlsx");
-      const wb = XLSX.read(await f.arrayBuffer(), { type: "array" });
+      const fileData = await f.arrayBuffer();
+      if (!globalThis.crypto?.subtle) {
+        throw new Error("Este navegador não permite verificar se a planilha já foi importada.");
+      }
+      const digest = await globalThis.crypto.subtle.digest("SHA-256", fileData);
+      const sha256 = Array.from(new Uint8Array(digest), (byte) =>
+        byte.toString(16).padStart(2, "0"),
+      ).join("");
+      const wb = XLSX.read(fileData, { type: "array" });
       const firstSheet = wb.SheetNames[0];
       if (!firstSheet) throw new Error("planilha vazia");
       const ws = wb.Sheets[firstSheet];
       if (!ws) throw new Error("planilha vazia");
-      load(
-        XLSX.utils.sheet_to_json<unknown[]>(ws, {
-          header: 1,
-          raw: true,
-          defval: "",
-        }) as unknown[][],
-        f.name,
+      const data = XLSX.utils.sheet_to_json<unknown[]>(ws, {
+        header: 1,
+        raw: true,
+        defval: "",
+      }) as unknown[][];
+      const previousImport = state.invoices
+        .flatMap((invoice) => invoice.spreadsheetImportHistory ?? [])
+        .find((record) => record.sha256 === sha256);
+      if (previousImport) {
+        setDuplicatePrompt({
+          rows: data,
+          fileName: f.name,
+          sha256,
+          previousImportedAt: previousImport.importedAt,
+        });
+        return;
+      }
+      load(data, f.name, sha256);
+    } catch (cause) {
+      setError(
+        cause instanceof Error && cause.message.includes("não permite verificar")
+          ? cause.message
+          : "Não foi possível ler o arquivo. Verifique se ele não está corrompido.",
       );
-    } catch {
-      setError("Não foi possível ler o arquivo. Verifique se ele não está corrompido.");
     }
   };
 
@@ -231,6 +264,7 @@ export function ExcelImportDialog({
   const confirm = () => {
     if (!card) return;
     const invoiceId = uid("inv_pl");
+    const importedAt = new Date().toISOString();
     const txs: Transaction[] = importable.map((a) => {
       const installment = installmentReferenceFromDescription(a.description);
       return {
@@ -260,6 +294,11 @@ export function ExcelImportDialog({
         officialTotal: total,
         status: "em_revisao",
         source: "planilha",
+        ...(fileHash && fileName
+          ? {
+              spreadsheetImportHistory: [{ sha256: fileHash, fileName, importedAt }],
+            }
+          : {}),
       },
       transactions: txs,
     });
@@ -308,7 +347,11 @@ export function ExcelImportDialog({
                 type="file"
                 accept=".xlsx,.csv"
                 className="hidden"
-                onChange={(e) => pick(e.target.files?.[0])}
+                onChange={(e) => {
+                  const selected = e.target.files?.[0];
+                  e.currentTarget.value = "";
+                  void pick(selected);
+                }}
                 aria-label="Arquivo da planilha"
               />
             </div>
@@ -534,6 +577,42 @@ export function ExcelImportDialog({
             )}
           </div>
         )}
+        <Dialog
+          open={duplicatePrompt !== null}
+          onOpenChange={(isOpen) => {
+            if (!isOpen) setDuplicatePrompt(null);
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Esta planilha já foi importada</DialogTitle>
+              <DialogDescription>
+                {duplicatePrompt && (
+                  <>
+                    O arquivo “{duplicatePrompt.fileName}” já foi importado em{" "}
+                    {new Date(duplicatePrompt.previousImportedAt).toLocaleString("pt-BR")}. Deseja
+                    importar novamente? Se continuar, os lançamentos poderão ficar duplicados.
+                  </>
+                )}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDuplicatePrompt(null)}>
+                Cancelar
+              </Button>
+              <Button
+                onClick={() => {
+                  if (duplicatePrompt) {
+                    load(duplicatePrompt.rows, duplicatePrompt.fileName, duplicatePrompt.sha256);
+                  }
+                  setDuplicatePrompt(null);
+                }}
+              >
+                Sim, importar novamente
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </DialogContent>
     </Dialog>
   );

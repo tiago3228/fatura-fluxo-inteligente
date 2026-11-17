@@ -1570,12 +1570,20 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
               ...(existing.importHistory ?? []),
               ...(a.invoice.importHistory ?? []),
             ],
+            spreadsheetImportHistory: [
+              ...(existing.spreadsheetImportHistory ?? []),
+              ...(a.invoice.spreadsheetImportHistory ?? []),
+            ],
             ...(existing.status === "paga"
               ? { status: "paga" as const, paidAt: existing.paidAt }
               : {}),
             ...(existing.payments !== undefined ? { payments: existing.payments } : {}),
           }
-        : { ...a.invoice, importHistory: a.invoice.importHistory ?? [] };
+        : {
+            ...a.invoice,
+            importHistory: a.invoice.importHistory ?? [],
+            spreadsheetImportHistory: a.invoice.spreadsheetImportHistory ?? [],
+          };
       const categoryRules = learnFromTransactions(
         s.categoryRules ?? DEFAULT_CATEGORY_RULES,
         a.transactions,

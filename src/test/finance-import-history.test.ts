@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createDemoState, createEmptyFinanceState } from "@/lib/finance/mock";
 import { reducer } from "@/lib/finance/store";
-import type { InvoiceImportBatch, Transaction } from "@/lib/finance/types";
+import type { InvoiceImportBatch, SpreadsheetImportRecord, Transaction } from "@/lib/finance/types";
 
 const hasContent = (state: ReturnType<typeof createEmptyFinanceState>) =>
   state.people.length + state.cards.length + state.invoices.length + state.transactions.length;
@@ -85,11 +85,52 @@ describe("privacidade inicial e auditoria de importação PDF", () => {
 
     const invoice = result.invoices.find((item) => item.id === existingInvoice.id)!;
     const imported = result.transactions.find((item) => item.id === newTransaction.id)!;
-    expect(result.transactions.filter((item) => item.invoiceId === existingInvoice.id)).toHaveLength(
-      previousTransactions.length + 1,
-    );
+    expect(
+      result.transactions.filter((item) => item.invoiceId === existingInvoice.id),
+    ).toHaveLength(previousTransactions.length + 1);
     expect(imported.allocations).toEqual([{ personId: "p_atena", amount: 25 }]);
     expect(invoice.importHistory?.at(-1)).toEqual(batch);
     expect(invoice.status).toBe(existingInvoice.status);
+  });
+
+  it("preserva os hashes de arquivos Excel importados ao atualizar a mesma fatura", () => {
+    const original = createDemoState();
+    const existingInvoice = original.invoices[0]!;
+    const firstImport: SpreadsheetImportRecord = {
+      sha256: "hash-da-primeira-planilha",
+      fileName: "fatura.xlsx",
+      importedAt: "2026-11-01T10:00:00.000Z",
+    };
+    const secondImport: SpreadsheetImportRecord = {
+      sha256: "hash-da-segunda-planilha",
+      fileName: "complemento.xlsx",
+      importedAt: "2026-11-02T10:00:00.000Z",
+    };
+    const first = reducer(original, {
+      type: "importInvoice",
+      invoice: {
+        ...existingInvoice,
+        source: "planilha",
+        spreadsheetImportHistory: [firstImport],
+      },
+      transactions: [],
+    });
+    const second = reducer(first, {
+      type: "importInvoice",
+      invoice: {
+        ...existingInvoice,
+        id: "outro-id-de-importacao",
+        source: "planilha",
+        spreadsheetImportHistory: [secondImport],
+      },
+      transactions: [],
+    });
+
+    expect(
+      second.invoices.find(
+        (invoice) =>
+          invoice.cardId === existingInvoice.cardId && invoice.month === existingInvoice.month,
+      )?.spreadsheetImportHistory,
+    ).toEqual([firstImport, secondImport]);
   });
 });

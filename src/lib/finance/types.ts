@@ -59,6 +59,12 @@ export interface InvoiceImportBatch {
   rows: InvoiceImportRowAudit[];
 }
 
+export interface SpreadsheetImportRecord {
+  sha256: string;
+  fileName: string;
+  importedAt: string;
+}
+
 export interface PersonPayment {
   id: string;
   personId: string;
@@ -86,6 +92,8 @@ export interface Invoice {
   paidAt?: string | undefined;
   /** Resultado imutável da revisão, incluindo linhas incluídas e ignoradas. */
   importHistory?: InvoiceImportBatch[];
+  /** Arquivos Excel/CSV importados para esta fatura; usado para avisar sobre reimportação. */
+  spreadsheetImportHistory?: SpreadsheetImportRecord[];
   source: "demo" | "pdf" | "pdf_demo" | "planilha";
 }
 
