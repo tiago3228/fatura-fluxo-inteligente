@@ -20,6 +20,7 @@ import {
   planStatusAt,
   replaceInstallmentReference,
   recurringChargeAppliesAt,
+  stripAllInstallmentReferences,
   stripInstallmentReference,
 } from "./calc";
 import { fmtMonthLong, round2, uid } from "./format";
@@ -80,6 +81,7 @@ export type Action =
   | { type: "setTransactionCategory"; txIds: string[]; category?: string }
   | { type: "setTransactionNote"; txId: string; note: string }
   | { type: "deleteTransaction"; txId: string }
+  | { type: "clearMonthTransactions"; month: string }
   | { type: "addTransaction"; transaction: Transaction }
   | { type: "setTxType"; txId: string; txType: TxType }
   | { type: "upsertPerson"; person: Person }
@@ -516,7 +518,7 @@ const ensureRecurringProjections = (state: FinanceState): FinanceState => {
 };
 
 const transactionDescriptionKey = (description: string) =>
-  stripInstallmentReference(description)
+  stripAllInstallmentReferences(description)
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
@@ -952,6 +954,22 @@ const auditForAction = (
       description = `${actor.name} excluiu a compra “${transaction?.description ?? action.txId}”.`;
       entityType = "transaction";
       entityId = action.txId;
+      undo = undoSnapshot(before, ["invoices", "transactions", "suppressedProjectionSources"]);
+      break;
+    }
+    case "clearMonthTransactions": {
+      const invoiceIds = new Set(
+        before.invoices
+          .filter((invoice) => invoice.month === action.month)
+          .map((invoice) => invoice.id),
+      );
+      const count = before.transactions.filter((transaction) =>
+        invoiceIds.has(transaction.invoiceId),
+      ).length;
+      if (invoiceIds.size === 0) return null;
+      description = `${actor.name} apagou ${invoiceIds.size} fatura(s) e ${count} lançamento(s) de ${fmtMonthLong(action.month)}.`;
+      entityType = "invoice";
+      entityId = action.month;
       undo = undoSnapshot(before, ["invoices", "transactions", "suppressedProjectionSources"]);
       break;
     }
@@ -1412,6 +1430,49 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
             !(transaction.isProjected && transaction.projectionSourceId === projectionRoot),
         ),
         ...(suppressedProjectionSources ? { suppressedProjectionSources } : {}),
+      });
+    }
+    case "clearMonthTransactions": {
+      const monthInvoices = s.invoices.filter((invoice) => invoice.month === a.month);
+      const monthInvoiceIds = new Set(monthInvoices.map((invoice) => invoice.id));
+      if (monthInvoices.length === 0) return s;
+      const selectedMonthTransactions = s.transactions.filter((transaction) =>
+        monthInvoiceIds.has(transaction.invoiceId),
+      );
+
+      const removedIds = new Set(selectedMonthTransactions.map((transaction) => transaction.id));
+      const projectionRoots = new Set<string>();
+      const suppressedProjectionSources = new Set(s.suppressedProjectionSources ?? []);
+      selectedMonthTransactions.forEach((transaction) => {
+        projectionRoots.add(transaction.id);
+        if (transaction.projectionSourceId) projectionRoots.add(transaction.projectionSourceId);
+        if (transaction.isProjected || transaction.projectionSourceId) {
+          suppressedProjectionSources.add(transaction.projectionSourceId ?? transaction.id);
+        }
+      });
+
+      const invoiceById = new Map(s.invoices.map((invoice) => [invoice.id, invoice]));
+      let addedProjection = true;
+      while (addedProjection) {
+        addedProjection = false;
+        s.transactions.forEach((transaction) => {
+          if (removedIds.has(transaction.id) || transaction.type === "pagamento") return;
+          const sourceId = transaction.projectionSourceId;
+          if (!sourceId || !projectionRoots.has(sourceId)) return;
+          const invoice = invoiceById.get(transaction.invoiceId);
+          if (!transaction.isProjected && (!invoice || !isForecastInvoice(invoice))) return;
+          removedIds.add(transaction.id);
+          projectionRoots.add(transaction.id);
+          suppressedProjectionSources.add(sourceId);
+          addedProjection = true;
+        });
+      }
+
+      return recalculateForecastTotals({
+        ...s,
+        invoices: s.invoices.filter((invoice) => invoice.month !== a.month),
+        transactions: s.transactions.filter((transaction) => !removedIds.has(transaction.id)),
+        suppressedProjectionSources: [...suppressedProjectionSources],
       });
     }
     case "addTransaction": {

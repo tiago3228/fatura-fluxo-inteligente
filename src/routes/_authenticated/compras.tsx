@@ -8,6 +8,7 @@ import {
   Scissors,
   Search,
   SlidersHorizontal,
+  Trash2,
   UserCheck,
   UserX,
   X,
@@ -30,6 +31,16 @@ import {
 } from "@/components/ui/select";
 import { FilterSelect, ALL } from "@/components/app/FilterSelect";
 import { PURCHASE_CATEGORIES } from "@/lib/finance/categories";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 type Search = {
   status?: string;
@@ -83,7 +94,11 @@ function Compras() {
   const [selected, setSelected] = useState<string[]>([]);
   const [showPersonTotals, setShowPersonTotals] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [clearMonthOpen, setClearMonthOpen] = useState(false);
   const month = search.month ?? state.settings.month;
+  const clearableInvoices =
+    month === ALL ? [] : state.invoices.filter((invoice) => invoice.month === month);
+  const clearableTransactions = month === ALL ? [] : monthTxs(state, month);
   const set = (patch: Partial<Search>) =>
     navigate({ search: (s: Search) => ({ ...s, ...patch }), replace: true });
 
@@ -148,9 +163,23 @@ function Compras() {
         title="Compras"
         description="Selecione lançamentos e direcione para a pessoa responsável"
         actions={
-          <Button onClick={openCreate}>
-            <Plus className="size-4" /> Nova compra
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setClearMonthOpen(true)}
+              disabled={
+                month === ALL ||
+                (clearableInvoices.length === 0 && clearableTransactions.length === 0)
+              }
+              title={month === ALL ? "Selecione um único mês para limpar" : undefined}
+            >
+              <Trash2 className="size-4" /> Limpar mês
+            </Button>
+            <Button onClick={openCreate}>
+              <Plus className="size-4" /> Nova compra
+            </Button>
+          </div>
         }
       />
 
@@ -505,6 +534,34 @@ function Compras() {
           ações
         </p>
       </Panel>
+      <AlertDialog open={clearMonthOpen} onOpenChange={setClearMonthOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Apagar os dados de {fmtMonthLong(month)}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Serão apagadas {clearableInvoices.length} fatura(s) completas e{" "}
+              {clearableTransactions.length} lançamento(s) de todos os cartões desse mês, mesmo os
+              ocultos pelos filtros. Isso remove totais oficiais, status e pagamentos registrados
+              nessas faturas, além de categorias, responsáveis, observações e projeções futuras
+              diretamente derivadas. Os pagamentos pessoais registrados no módulo Finanças serão
+              mantidos.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                dispatch({ type: "clearMonthTransactions", month });
+                setSelected([]);
+                toast.success(`Faturas e lançamentos de ${fmtMonthLong(month)} apagados.`);
+              }}
+            >
+              Apagar faturas e lançamentos
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

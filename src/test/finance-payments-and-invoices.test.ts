@@ -1982,8 +1982,9 @@ describe("pagamentos e competências", () => {
       (transaction) => transaction.invoiceId === november.id && transaction.type === "parcela",
     );
     expect(repairedInstallments.length).toBeGreaterThan(0);
+    // Inclui as parcelas ClubeW 4/12 e 2/9 detectadas nos códigos concatenados.
     expect(repaired.invoices.find((invoice) => invoice.id === november.id)?.officialTotal).toBe(
-      3176.77,
+      3283.51,
     );
   });
 });

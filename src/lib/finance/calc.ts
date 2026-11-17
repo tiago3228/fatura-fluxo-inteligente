@@ -59,18 +59,22 @@ type InstallmentDescriptionMatch = InstallmentReference & {
 };
 
 const installmentPattern = /(?:^|([^\d]))(\d{1,2})\s*\/\s*(\d{1,2})(?!\d)/g;
+const concatenatedInstallmentPattern = /(?:^|([^\d]))(\d{4,})\s*\/\s*(\d{1,2})(?!\d)/g;
 
 const findInstallmentDescriptionMatch = (
   description: string,
 ): InstallmentDescriptionMatch | null => {
   let found: InstallmentDescriptionMatch | null = null;
+  const record = (candidate: InstallmentDescriptionMatch) => {
+    if (!found || candidate.index >= found.index) found = candidate;
+  };
   const pattern = new RegExp(installmentPattern.source, "g");
   let match: RegExpExecArray | null;
   while ((match = pattern.exec(description)) !== null) {
     const number = Number(match[2]);
     const total = Number(match[3]);
     if (number >= 1 && total >= number) {
-      found = {
+      record({
         number,
         total,
         index: match.index,
@@ -78,9 +82,32 @@ const findInstallmentDescriptionMatch = (
         separator: match[1] ?? "",
         numberWidth: match[2]?.length ?? 0,
         totalWidth: match[3]?.length ?? 0,
-      };
+      });
     }
     if (match[0].length === 0) pattern.lastIndex += 1;
+  }
+
+  // Algumas faturas juntam o código da compra e a parcela, como 611304/12:
+  // nesse caso o sufixo 4/12 é a referência e o prefixo 61130 faz parte do código.
+  const concatenatedPattern = new RegExp(concatenatedInstallmentPattern.source, "g");
+  while ((match = concatenatedPattern.exec(description)) !== null) {
+    const digits = match[2] ?? "";
+    const total = Number(match[3]);
+    const twoDigitNumber = Number(digits.slice(-2));
+    const numberWidth = twoDigitNumber >= 10 && twoDigitNumber <= total ? 2 : 1;
+    const number = Number(digits.slice(-numberWidth));
+    if (number >= 1 && total >= number) {
+      record({
+        number,
+        total,
+        index: match.index + (match[1]?.length ?? 0) + digits.length - numberWidth,
+        end: concatenatedPattern.lastIndex,
+        separator: "",
+        numberWidth,
+        totalWidth: match[3]?.length ?? 0,
+      });
+    }
+    if (match[0].length === 0) concatenatedPattern.lastIndex += 1;
   }
   return found;
 };
@@ -98,6 +125,16 @@ export const stripInstallmentReference = (description: string) => {
   return match
     ? `${description.slice(0, match.index)}${match.separator}${description.slice(match.end)}`.trim()
     : description;
+};
+
+/** Remove também referências duplicadas em descrições antigas (código/parcela + n/total). */
+export const stripAllInstallmentReferences = (description: string) => {
+  let result = description;
+  while (true) {
+    const stripped = stripInstallmentReference(result);
+    if (stripped === result) return result;
+    result = stripped;
+  }
 };
 
 export const replaceInstallmentReference = (
