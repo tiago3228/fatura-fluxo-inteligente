@@ -107,24 +107,24 @@ export function PdfImportDialog({
   const [dueDate, setDueDate] = useState("");
   const [cardId, setCardId] = useState(state.cards[0]?.id ?? "");
   const input = useRef<HTMLInputElement>(null);
+  const resetDraft = () => {
+    setFile(null);
+    setRawPdfText("");
+    setError(null);
+    setWarning([]);
+    setStep("select");
+    setStage(0);
+    setRows([]);
+    setOfficial("");
+    setCardOfficialTotals({});
+    setManualCardTotals({});
+    setAcceptedDiscrepancySignature("");
+    setReferenceMonth(state.settings.month);
+    setReferenceMonthWasChosen(false);
+    setDueDate("");
+  };
   const close = () => {
     onOpenChange(false);
-    setTimeout(() => {
-      setFile(null);
-      setRawPdfText("");
-      setError(null);
-      setWarning([]);
-      setStep("select");
-      setStage(0);
-      setRows([]);
-      setOfficial("");
-      setCardOfficialTotals({});
-      setManualCardTotals({});
-      setAcceptedDiscrepancySignature("");
-      setReferenceMonth(state.settings.month);
-      setReferenceMonthWasChosen(false);
-      setDueDate("");
-    }, 200);
   };
   const pick = (next?: File | null) => {
     if (!next) return;
@@ -459,6 +459,7 @@ export function PdfImportDialog({
     toast.success("Faturas separadas por cartão para conferência", {
       description: `${cardGroups.length} cartão(ões), ${includedCount} linha(s) incluída(s), ${ignoredCount} ignorada(s). Atribuições compatíveis foram reaproveitadas; histórico por linha registrado.`,
     });
+    resetDraft();
     close();
   };
   return (
@@ -585,6 +586,10 @@ export function PdfImportDialog({
         )}
         {step === "review" && (
           <div className="space-y-4">
+            <p className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm text-muted-foreground">
+              Esta revisão fica preservada se você fechar a janela. Reabra a importação para
+              continuar de onde parou.
+            </p>
             <div className="grid gap-3 sm:grid-cols-4">
               {!consolidated ? (
                 <label className="text-sm">
