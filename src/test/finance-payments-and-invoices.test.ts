@@ -30,7 +30,12 @@ import {
 } from "@/lib/finance/calc";
 import { createDemoState } from "@/lib/finance/mock";
 import { reducer } from "@/lib/finance/store";
-import type { FinanceState, InstallmentPlan, Transaction } from "@/lib/finance/types";
+import type {
+  FinanceState,
+  InstallmentPlan,
+  RecurringCharge,
+  Transaction,
+} from "@/lib/finance/types";
 
 const personId = "p_tiago";
 
@@ -1283,6 +1288,119 @@ describe("pagamentos e competências", () => {
     expect(novemberTransactions[0]?.id).toBe("actual_november_installment");
     expect(novemberTransactions[0]?.planId).toBe("plan_twelve");
     expect(novemberTransactions[0]?.installmentNumber).toBe(11);
+  });
+
+  it("mantém Wesley 03/10 em novembro, limpa recorrência antiga e projeta 04/10 em dezembro", () => {
+    const base = stateWithSinglePurchase(1117.9);
+    const october = base.invoices[0]!;
+    const card = base.cards.find((item) => item.id === october.cardId);
+    if (!card) throw new Error("A fixture precisa do cartão de outubro");
+    const charge: RecurringCharge = {
+      id: "rec_totalpass_test",
+      description: "TOTALPASS",
+      cardId: card.id,
+      amount: 119.9,
+      startMonth: "2026-11",
+      shares: [{ personId, pct: 100 }],
+    };
+    const prepared = reducer(
+      { ...base, recurringCharges: [charge] },
+      { type: "prepareNextInvoice", invoiceId: october.id },
+    );
+    const provisional = prepared.invoices.find(
+      (invoice) => invoice.cardId === card.id && invoice.month === "2026-11",
+    );
+    if (!provisional) throw new Error("A previsão de novembro não foi criada");
+    const recurringProjection = prepared.transactions.find(
+      (transaction) => transaction.invoiceId === provisional.id && transaction.recurringChargeId,
+    );
+    if (!recurringProjection) throw new Error("A projeção recorrente não foi criada");
+    expect(recurringProjection.isProjected).toBe(true);
+
+    const legacyRecurringProjection: Transaction = {
+      ...recurringProjection,
+      isProjected: undefined,
+      projectionSourceId: undefined,
+    };
+    const wesleyProjection: Transaction = {
+      id: "projected_wesley_03_of_10",
+      invoiceId: provisional.id,
+      date: "2026-11-16",
+      description: "WesleyFranci-CT 03/10",
+      amount: 1117.9,
+      type: "parcela",
+      installmentNumber: 3,
+      installmentTotal: 10,
+      isProjected: true,
+      allocations: [{ personId, amount: 1117.9 }],
+    };
+    const beforeImport: FinanceState = {
+      ...prepared,
+      transactions: [
+        ...prepared.transactions.filter((transaction) => transaction.id !== recurringProjection.id),
+        legacyRecurringProjection,
+        wesleyProjection,
+      ],
+    };
+    const imported = reducer(beforeImport, {
+      type: "importInvoice",
+      invoice: {
+        ...provisional,
+        id: "sheet_wesley_november",
+        officialTotal: 1117.9,
+        source: "planilha",
+        status: "em_revisao",
+        spreadsheetImportHistory: [
+          { sha256: "wesley-test", fileName: "novembro.xlsx", importedAt: "2026-11-17T00:00:00Z" },
+        ],
+      },
+      transactions: [
+        {
+          id: "actual_wesley_november",
+          invoiceId: "sheet_wesley_november",
+          date: "2026-09-10",
+          description: "WesleyFranci-CT 03/10",
+          amount: 1117.9,
+          type: "parcela",
+          installmentNumber: 3,
+          installmentTotal: 10,
+          allocations: [{ personId, amount: 1117.9 }],
+        },
+      ],
+    });
+
+    const november = imported.invoices.find(
+      (invoice) => invoice.cardId === card.id && invoice.month === "2026-11",
+    );
+    if (!november) throw new Error("A fatura de novembro não foi encontrada");
+    const novemberRows = imported.transactions.filter(
+      (transaction) => transaction.invoiceId === november.id,
+    );
+    expect(novemberRows).toHaveLength(1);
+    expect(novemberRows[0]).toMatchObject({
+      id: "actual_wesley_november",
+      date: "2026-09-10",
+      description: "WesleyFranci-CT 03/10",
+      installmentNumber: 3,
+      installmentTotal: 10,
+    });
+    expect(novemberRows[0]?.isProjected).toBeUndefined();
+
+    const december = imported.invoices.find(
+      (invoice) => invoice.cardId === card.id && invoice.month === "2026-12",
+    );
+    if (!december) throw new Error("A projeção de dezembro não foi criada");
+    const decemberWesley = imported.transactions.find(
+      (transaction) =>
+        transaction.invoiceId === december.id &&
+        transaction.description.startsWith("WesleyFranci-CT"),
+    );
+    expect(decemberWesley).toMatchObject({
+      description: "WesleyFranci-CT 04/10",
+      installmentNumber: 4,
+      installmentTotal: 10,
+      isProjected: true,
+    });
   });
 
   it("não projeta parcela posterior sobre fatura de planilha importada", () => {

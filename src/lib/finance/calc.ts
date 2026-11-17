@@ -54,6 +54,8 @@ type InstallmentDescriptionMatch = InstallmentReference & {
   index: number;
   end: number;
   separator: string;
+  numberWidth: number;
+  totalWidth: number;
 };
 
 const installmentPattern = /(?:^|([^\d]))(\d{1,2})\s*\/\s*(\d{1,2})(?!\d)/g;
@@ -74,6 +76,8 @@ const findInstallmentDescriptionMatch = (
         index: match.index,
         end: pattern.lastIndex,
         separator: match[1] ?? "",
+        numberWidth: match[2]?.length ?? 0,
+        totalWidth: match[3]?.length ?? 0,
       };
     }
     if (match[0].length === 0) pattern.lastIndex += 1;
@@ -101,8 +105,10 @@ export const replaceInstallmentReference = (
   reference: InstallmentReference,
 ) => {
   const match = findInstallmentDescriptionMatch(description);
-  const replacement = `${reference.number}/${reference.total}`;
-  if (!match) return `${description} ${replacement}`;
+  if (!match) return `${description} ${reference.number}/${reference.total}`;
+  const replacement = `${String(reference.number).padStart(match.numberWidth, "0")}/${String(
+    reference.total,
+  ).padStart(match.totalWidth, "0")}`;
   const prefix = `${description.slice(0, match.index)}${match.separator}`;
   return `${prefix}${replacement}${description.slice(match.end)}`;
 };

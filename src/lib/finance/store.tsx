@@ -328,6 +328,7 @@ const prepareNextInvoice = (
           amount: charge.amount,
           type: "compra" as const,
           recurringChargeId: charge.id,
+          isProjected: true,
           allocations: allocateByPercent(charge.amount, charge.shares),
         }))
     : [];
@@ -1625,6 +1626,14 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
       const existing = s.invoices.find(
         (invoice) => invoice.cardId === a.invoice.cardId && invoice.month === a.invoice.month,
       );
+      const targetInvoiceIds = new Set(
+        s.invoices
+          .filter(
+            (item) => item.cardId === a.invoice.cardId && item.month === a.invoice.month,
+          )
+          .map((item) => item.id),
+      );
+      targetInvoiceIds.add(a.invoice.id);
       const invoice: Invoice = existing
         ? {
             ...a.invoice,
@@ -1645,8 +1654,29 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
         : {
             ...a.invoice,
             importHistory: a.invoice.importHistory ?? [],
-            spreadsheetImportHistory: a.invoice.spreadsheetImportHistory ?? [],
-          };
+          spreadsheetImportHistory: a.invoice.spreadsheetImportHistory ?? [],
+        };
+      const card = s.cards.find((item) => item.id === invoice.cardId);
+      const recurringProjectionDate = card ? dateInMonth(invoice.month, card.closingDay) : null;
+      const legacyRecurringProjectionIds = new Set(
+        s.transactions
+          .filter(
+            (transaction) =>
+              targetInvoiceIds.has(transaction.invoiceId) &&
+              !transaction.isProjected &&
+              transaction.recurringChargeId !== undefined &&
+              transaction.date === recurringProjectionDate &&
+              s.recurringCharges.some(
+                (charge) =>
+                  charge.id === transaction.recurringChargeId &&
+                  charge.cardId === invoice.cardId &&
+                  charge.description === transaction.description &&
+                  Math.abs(charge.amount - transaction.amount) < 0.01 &&
+                  recurringChargeAppliesAt(charge, invoice.month),
+              ),
+          )
+          .map((transaction) => transaction.id),
+      );
       const categoryRules = learnFromTransactions(
         s.categoryRules ?? DEFAULT_CATEGORY_RULES,
         a.transactions,
@@ -1673,11 +1703,14 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
         ),
         transactions: [
           ...s.transactions.filter((transaction) => {
-            if (transaction.invoiceId !== invoice.id && transaction.invoiceId !== a.invoice.id)
-              return true;
+            if (!targetInvoiceIds.has(transaction.invoiceId)) return true;
             // Substitui projeções e linhas correspondentes, mantendo lançamentos
             // existentes sem correspondência quando a importação for parcial.
-            return !transaction.isProjected && !replacedTargetIds.has(transaction.id);
+            return (
+              !transaction.isProjected &&
+              !replacedTargetIds.has(transaction.id) &&
+              !legacyRecurringProjectionIds.has(transaction.id)
+            );
           }),
           ...reconciled,
         ],
