@@ -5,9 +5,71 @@ import type { Transaction } from "@/lib/finance/types";
 import {
   compareInvoiceRows,
   compareInvoiceRowsAcrossCards,
+  extractInvoiceFileText,
   parseInvoiceText,
   shouldImportPdfRow,
 } from "@/lib/finance/pdf";
+
+const uint16 = (value: number) => [value & 255, (value >>> 8) & 255];
+const uint32 = (value: number) => [
+  value & 255,
+  (value >>> 8) & 255,
+  (value >>> 16) & 255,
+  (value >>> 24) & 255,
+];
+const concatBytes = (...parts: number[][]) => Uint8Array.from(parts.flat());
+const storedZipFile = (name: string, content: string) => {
+  const encoder = new TextEncoder();
+  const nameBytes = [...encoder.encode(name)];
+  const contentBytes = [...encoder.encode(content)];
+  const localHeader = concatBytes(
+    uint32(0x04034b50),
+    uint16(20),
+    uint16(0),
+    uint16(0),
+    uint16(0),
+    uint16(0),
+    uint32(0),
+    uint32(contentBytes.length),
+    uint32(contentBytes.length),
+    uint16(nameBytes.length),
+    uint16(0),
+    nameBytes,
+    contentBytes,
+  );
+  const directory = concatBytes(
+    uint32(0x02014b50),
+    uint16(20),
+    uint16(20),
+    uint16(0),
+    uint16(0),
+    uint16(0),
+    uint16(0),
+    uint32(0),
+    uint32(contentBytes.length),
+    uint32(contentBytes.length),
+    uint16(nameBytes.length),
+    uint16(0),
+    uint16(0),
+    uint16(0),
+    uint16(0),
+    uint32(0),
+    uint32(0),
+    nameBytes,
+  );
+  const end = concatBytes(
+    uint32(0x06054b50),
+    uint16(0),
+    uint16(0),
+    uint16(1),
+    uint16(1),
+    uint32(directory.length),
+    uint32(localHeader.length),
+    uint16(0),
+  );
+  const bytes = concatBytes([...localHeader], [...directory], [...end]);
+  return { name: "fatura.docx", arrayBuffer: async () => bytes.slice().buffer } as File;
+};
 
 describe("leitura local de fatura", () => {
   it("reconhece n/total colado ao nome do estabelecimento", () => {
@@ -41,6 +103,27 @@ describe("leitura local de fatura", () => {
       installmentTotal: 6,
       amount: 71.02,
     });
+  });
+
+  it("lê TXT tabular mesmo sem os títulos de seção do PDF", async () => {
+    const file = {
+      name: "fatura.txt",
+      text: async () => "Vencimento: 23/11/2026\n10/11 MERCADO DO BAIRRO 42,50",
+    } as File;
+    const parsed = parseInvoiceText(await extractInvoiceFileText(file), "2026-11");
+
+    expect(parsed.rows).toHaveLength(1);
+    expect(parsed.rows[0]).toMatchObject({ description: "MERCADO DO BAIRRO", amount: 42.5 });
+  });
+
+  it("extrai parágrafos e linhas de tabela de um documento Word DOCX", async () => {
+    const documentXml =
+      '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Vencimento: 23/11/2026</w:t></w:r></w:p><w:tbl><w:tr><w:tc><w:p><w:r><w:t>10/11</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>MERCADO DO BAIRRO</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>42,50</w:t></w:r></w:p></w:tc></w:tr></w:tbl></w:body></w:document>';
+    const text = await extractInvoiceFileText(storedZipFile("word/document.xml", documentXml));
+    const parsed = parseInvoiceText(text, "2026-11");
+
+    expect(parsed.rows).toHaveLength(1);
+    expect(parsed.rows[0]).toMatchObject({ description: "MERCADO DO BAIRRO", amount: 42.5 });
   });
 
   it("recalcula datas sem ano quando a competência inferida muda de ano", () => {

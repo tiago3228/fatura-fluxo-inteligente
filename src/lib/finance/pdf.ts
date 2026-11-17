@@ -312,7 +312,11 @@ export function parseInvoiceText(rawText: string, fallbackMonth: string): Extrac
   const latestAllowedDate =
     dueDate ?? `${fallbackMonth}-${String(lastDayOfReferenceMonth).padStart(2, "0")}`;
   const rows: ExtractedPdfRow[] = [];
-  const inTransactionSection = [false, false];
+  const hasTransactionSections = lines.some((line) =>
+    /lançamentos:\s*(?:compras e saques|produtos e serviços)/i.test(line),
+  );
+  // Arquivos TXT e DOCX podem conter apenas linhas tabulares, sem os títulos de seção do PDF.
+  const inTransactionSection = [!hasTransactionSections, !hasTransactionSections];
   const cardLast4ByColumn: (string | undefined)[] = [undefined, undefined];
   lines.forEach((rawLine, index) => {
     const columnMatch = rawLine.match(/^\[\[COL:([01])\]\]\s?(.*)$/);
@@ -407,7 +411,7 @@ export function parseInvoiceText(rawText: string, fallbackMonth: string): Extrac
     .filter((value): value is number => value !== null);
   if (rows.length === 0)
     warnings.push(
-      "Não foi encontrado texto tabular com data e valor. Este PDF pode ser escaneado ou ter um layout não reconhecido.",
+      "Não foi encontrado texto tabular com data e valor. O arquivo pode ser escaneado, estar vazio ou usar um layout não reconhecido.",
     );
   if (rows.length > 0 && !totalCandidates.length)
     warnings.push(
@@ -477,4 +481,98 @@ export async function extractPdfText(file: File) {
     );
   }
   return pages.join("\n");
+}
+
+async function extractDocxText(file: File) {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const endOfDirectorySignature = 0x06054b50;
+  const centralDirectorySignature = 0x02014b50;
+  const localFileSignature = 0x04034b50;
+  const searchStart = Math.max(0, bytes.length - 65_557);
+  let directoryEnd = -1;
+  for (let offset = bytes.length - 22; offset >= searchStart; offset -= 1) {
+    if (view.getUint32(offset, true) === endOfDirectorySignature) {
+      directoryEnd = offset;
+      break;
+    }
+  }
+  if (directoryEnd < 0) throw new Error("O arquivo não parece ser um documento Word .docx válido.");
+
+  const entries = view.getUint16(directoryEnd + 10, true);
+  let entryOffset = view.getUint32(directoryEnd + 16, true);
+  let documentEntry: { method: number; compressedSize: number; localOffset: number } | undefined;
+  const decoder = new TextDecoder();
+  for (let entry = 0; entry < entries; entry += 1) {
+    if (view.getUint32(entryOffset, true) !== centralDirectorySignature) break;
+    const method = view.getUint16(entryOffset + 10, true);
+    const compressedSize = view.getUint32(entryOffset + 20, true);
+    const nameLength = view.getUint16(entryOffset + 28, true);
+    const extraLength = view.getUint16(entryOffset + 30, true);
+    const commentLength = view.getUint16(entryOffset + 32, true);
+    const localOffset = view.getUint32(entryOffset + 42, true);
+    const nameStart = entryOffset + 46;
+    const name = decoder.decode(bytes.subarray(nameStart, nameStart + nameLength));
+    if (name === "word/document.xml") {
+      documentEntry = { method, compressedSize, localOffset };
+      break;
+    }
+    entryOffset = nameStart + nameLength + extraLength + commentLength;
+  }
+  if (!documentEntry) throw new Error("Não encontrei o conteúdo principal do documento Word.");
+  const { method, compressedSize, localOffset } = documentEntry;
+  if (view.getUint32(localOffset, true) !== localFileSignature)
+    throw new Error("O documento Word está malformado.");
+  const fileNameLength = view.getUint16(localOffset + 26, true);
+  const extraLength = view.getUint16(localOffset + 28, true);
+  const dataStart = localOffset + 30 + fileNameLength + extraLength;
+  const compressed = bytes.subarray(dataStart, dataStart + compressedSize);
+  let xmlBytes: ArrayBuffer;
+  if (method === 0) {
+    xmlBytes = compressed.slice().buffer;
+  } else if (method === 8 && typeof DecompressionStream !== "undefined") {
+    const stream = new Blob([compressed])
+      .stream()
+      .pipeThrough(new DecompressionStream("deflate-raw"));
+    xmlBytes = await new Response(stream).arrayBuffer();
+  } else {
+    throw new Error("Este tipo de compactação do Word não é compatível com o navegador.");
+  }
+
+  const xml = new DOMParser().parseFromString(decoder.decode(xmlBytes), "application/xml");
+  if (xml.getElementsByTagName("parsererror").length > 0)
+    throw new Error("Não foi possível interpretar o conteúdo do documento Word.");
+  const body = xml.getElementsByTagNameNS("*", "body").item(0);
+  if (!body) throw new Error("O documento Word não contém texto para importar.");
+  const paragraphText = (paragraph: Element) =>
+    Array.from(paragraph.getElementsByTagNameNS("*", "t"))
+      .map((node) => node.textContent ?? "")
+      .join("");
+  const extracted: string[] = [];
+  for (const child of Array.from(body.children)) {
+    if (child.localName === "p") extracted.push(paragraphText(child));
+    if (child.localName === "tbl") {
+      for (const row of Array.from(child.getElementsByTagNameNS("*", "tr"))) {
+        const cells = Array.from(row.children)
+          .filter((cell) => cell.localName === "tc")
+          .map((cell) =>
+            Array.from(cell.getElementsByTagNameNS("*", "p"))
+              .map(paragraphText)
+              .filter(Boolean)
+              .join(" "),
+          );
+        if (cells.some(Boolean)) extracted.push(cells.join("  "));
+      }
+    }
+  }
+  return extracted.join("\n");
+}
+
+/** Extrai o texto localmente, sem enviar o arquivo a um servidor. */
+export async function extractInvoiceFileText(file: File) {
+  const extension = file.name.split(".").pop()?.toLowerCase();
+  if (extension === "pdf") return extractPdfText(file);
+  if (extension === "txt") return file.text();
+  if (extension === "docx") return extractDocxText(file);
+  throw new Error("Formato não compatível. Use PDF, Word (.docx) ou texto (.txt).");
 }

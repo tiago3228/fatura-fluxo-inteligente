@@ -5,7 +5,7 @@ import { useFinance } from "@/lib/finance/store";
 import {
   compareInvoiceRows,
   compareInvoiceRowsAcrossCards,
-  extractPdfText,
+  extractInvoiceFileText,
   parseInvoiceText,
   shouldImportPdfRow,
   type ExtractedPdfRow,
@@ -128,8 +128,8 @@ export function PdfImportDialog({
   };
   const pick = (next?: File | null) => {
     if (!next) return;
-    if (!next.name.toLowerCase().endsWith(".pdf")) {
-      setError("Selecione um arquivo com extensão .pdf");
+    if (!/\.(pdf|docx|txt)$/i.test(next.name)) {
+      setError("Selecione uma fatura PDF, Word (.docx) ou texto (.txt).");
       return;
     }
     if (next.size > 20 * 1024 * 1024) {
@@ -163,7 +163,7 @@ export function PdfImportDialog({
     setStep("processing");
     setStage(1);
     try {
-      const text = await extractPdfText(file);
+      const text = await extractInvoiceFileText(file);
       setRawPdfText(text);
       const initialParse = parseInvoiceText(text, referenceMonth);
       const selectedReferenceMonth = referenceMonthWasChosen
@@ -214,8 +214,8 @@ export function PdfImportDialog({
       setStep("select");
       setError(
         e instanceof Error
-          ? `Não foi possível ler este PDF: ${e.message}`
-          : "Não foi possível ler este PDF.",
+          ? `Não foi possível ler este arquivo: ${e.message}`
+          : "Não foi possível ler este arquivo.",
       );
     }
   };
@@ -471,11 +471,11 @@ export function PdfImportDialog({
         )}
       >
         <DialogHeader>
-          <DialogTitle>Importar fatura PDF</DialogTitle>
+          <DialogTitle>Importar fatura</DialogTitle>
           <DialogDescription>
-            O PDF é lido localmente no navegador. Os lançamentos reconhecidos sempre passam por
-            revisão antes de serem adicionados; compras novas ficam sem responsável para atribuição
-            manual.
+            PDF, Word (.docx) e texto (.txt) são lidos localmente no navegador. Os lançamentos
+            reconhecidos sempre passam por revisão antes de serem adicionados. Planilhas continuam
+            disponíveis no botão "Importar planilha Excel".
           </DialogDescription>
         </DialogHeader>
         <ol className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
@@ -537,17 +537,15 @@ export function PdfImportDialog({
               )}
             >
               <Upload className="size-6 text-muted-foreground" />
-              <p className="font-semibold">Arraste o PDF aqui ou clique para selecionar</p>
-              <p className="text-xs text-muted-foreground">
-                PDF com texto selecionável · até 20 MB
-              </p>
+              <p className="font-semibold">Arraste uma fatura ou clique para selecionar</p>
+              <p className="text-xs text-muted-foreground">PDF, Word (.docx) ou TXT · até 20 MB</p>
               <input
                 ref={input}
                 type="file"
-                accept="application/pdf,.pdf"
+                accept="application/pdf,.pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.docx,text/plain,.txt"
                 className="hidden"
                 onChange={(e) => pick(e.target.files?.[0])}
-                aria-label="Arquivo PDF da fatura"
+                aria-label="Arquivo PDF, Word ou TXT da fatura"
               />
             </div>
             {file && (
@@ -570,7 +568,7 @@ export function PdfImportDialog({
                 Cancelar
               </Button>
               <Button onClick={process} disabled={!file}>
-                Ler PDF
+                Ler documento
               </Button>
             </DialogFooter>
           </>

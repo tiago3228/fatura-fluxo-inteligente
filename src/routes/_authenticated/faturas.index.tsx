@@ -92,7 +92,7 @@ function Faturas() {
               <FileSpreadsheet className="size-4" /> Importar planilha Excel
             </Button>
             <Button onClick={() => setPdf(true)}>
-              <FileUp className="size-4" /> Importar fatura PDF
+              <FileUp className="size-4" /> Importar fatura (PDF, Word ou TXT)
             </Button>
           </>
         }
@@ -178,7 +178,11 @@ function Faturas() {
           <EmptyState
             title="Nenhuma fatura encontrada"
             description={hasF ? "Altere os filtros." : "Importe sua primeira fatura."}
-            action={!hasF && <Button onClick={() => setPdf(true)}>Importar fatura PDF</Button>}
+            action={
+              !hasF && (
+                <Button onClick={() => setPdf(true)}>Importar fatura (PDF, Word ou TXT)</Button>
+              )
+            }
           />
         ) : (
           <div className="overflow-x-auto">
@@ -222,18 +226,29 @@ function Faturas() {
                           </span>
                         )}
                       </td>
-                      <td data-label="Final" className="num">•••• {c?.last4}</td>
-                      <td data-label="Emissor" className="text-muted-foreground">{c?.issuer}</td>
+                      <td data-label="Final" className="num">
+                        •••• {c?.last4}
+                      </td>
+                      <td data-label="Emissor" className="text-muted-foreground">
+                        {c?.issuer}
+                      </td>
                       <td data-label="Mês">{fmtMonth(i.month)}</td>
-                      <td data-label="Vencimento" className="num">{fmtDate(i.dueDate)}</td>
+                      <td data-label="Vencimento" className="num">
+                        {fmtDate(i.dueDate)}
+                      </td>
                       <td data-label="Total oficial" className="num text-right font-semibold">
                         {fmtBRL(i.officialTotal)}
                         {diff !== 0 && (
                           <div className="text-xs font-medium text-danger">dif. {fmtBRL(diff)}</div>
                         )}
                       </td>
-                      <td data-label="Compras" className="num text-right">{invoiceTxs(state, i.id).length}</td>
-                      <td data-label="Pendentes" className={cn("num text-right", pend > 0 && "font-bold text-warning")}>
+                      <td data-label="Compras" className="num text-right">
+                        {invoiceTxs(state, i.id).length}
+                      </td>
+                      <td
+                        data-label="Pendentes"
+                        className={cn("num text-right", pend > 0 && "font-bold text-warning")}
+                      >
                         {pend}
                       </td>
                       <td data-label="Status">

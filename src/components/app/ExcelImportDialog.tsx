@@ -29,26 +29,26 @@ import {
 import { Field } from "./common";
 import { cn } from "@/lib/utils";
 import { PURCHASE_CATEGORIES } from "@/lib/finance/categories";
+import {
+  ContextMenu,
+  ContextMenuCheckboxItem,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuLabel,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
+import {
+  guessSpreadsheetColumns,
+  matchSpreadsheetPeople,
+  resolveSpreadsheetCard,
+  SPREADSHEET_FIELDS,
+  splitAmountAcrossPeople,
+  type SpreadsheetFieldKey,
+} from "@/lib/finance/spreadsheet-import";
 
-type FieldKey = "date" | "description" | "amount" | "person" | "card" | "category";
-const FIELDS: { key: FieldKey; label: string; required: boolean; guess: RegExp }[] = [
-  { key: "date", label: "Data", required: true, guess: /data|date|dia/i },
-  {
-    key: "description",
-    label: "Descrição",
-    required: true,
-    guess: /desc|estabelec|hist|compra|loja/i,
-  },
-  { key: "amount", label: "Valor", required: true, guess: /valor|amount|preço|preco|r\$/i },
-  {
-    key: "person",
-    label: "Pessoa responsável",
-    required: false,
-    guess: /pessoa|quem|respons|nome/i,
-  },
-  { key: "card", label: "Cartão (final)", required: false, guess: /cart|final/i },
-  { key: "category", label: "Categoria", required: false, guess: /categ|categoria|category/i },
-];
+type FieldKey = SpreadsheetFieldKey;
+const FIELDS = SPREADSHEET_FIELDS;
 const NONE = "__none";
 type DuplicateSpreadsheetPrompt = {
   rows: unknown[][];
@@ -56,15 +56,16 @@ type DuplicateSpreadsheetPrompt = {
   sha256: string;
   previousImportedAt: string;
 };
+type SpreadsheetAllocationOverride = { personIds: string[]; split: boolean };
 
 const SAMPLE: unknown[][] = [
   ["Data", "Estabelecimento", "Valor (R$)", "Quem", "Final"],
-  ["05/08/2026", "Padaria Real", "32,50", "Tiago", "7432"],
-  ["07/08/2026", "Posto Shell", "200,00", "Pedro", "1058"],
-  ["10/08/2026", "Farmácia São João", "", "Mariana", "7432"],
-  ["12/08/2026", "Cinemark", "120,00", "Pedro", "1058"],
-  ["12/08/2026", "Cinemark", "120,00", "Pedro", "1058"],
-  ["15/08/2026", "Livraria Cultura", "89,90", "Joana", "7432"],
+  ["05/08/2026", "Padaria Real", "32,50", "Tiago", ""],
+  ["07/08/2026", "Posto Shell", "200,00", "Pedro", ""],
+  ["10/08/2026", "Farmácia São João", "", "Mariana", ""],
+  ["12/08/2026", "Cinemark", "120,00", "Pedro", ""],
+  ["12/08/2026", "Cinemark", "120,00", "Pedro", ""],
+  ["15/08/2026", "Livraria Cultura", "89,90", "Joana", ""],
   ["31/02/2026", "Data inválida", "10,00", "", ""],
 ];
 
@@ -98,6 +99,12 @@ export function ExcelImportDialog({
   const [duplicatePrompt, setDuplicatePrompt] = useState<DuplicateSpreadsheetPrompt | null>(null);
   const [rows, setRows] = useState<unknown[][] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [confirmedDuplicateRows, setConfirmedDuplicateRows] = useState<Set<number>>(
+    () => new Set(),
+  );
+  const [allocationOverrides, setAllocationOverrides] = useState<
+    Record<number, SpreadsheetAllocationOverride>
+  >({});
   const [map, setMap] = useState<Record<FieldKey, number | null>>({
     date: null,
     description: null,
@@ -119,6 +126,8 @@ export function ExcelImportDialog({
     setDuplicatePrompt(null);
     setRows(null);
     setError(null);
+    setConfirmedDuplicateRows(new Set());
+    setAllocationOverrides({});
     setStep(1);
   };
   const close = () => {
@@ -133,12 +142,10 @@ export function ExcelImportDialog({
       return;
     }
     const headers = clean[0].map((h) => String(h ?? ""));
-    const guess = {} as Record<FieldKey, number | null>;
-    FIELDS.forEach((f) => {
-      const i = headers.findIndex((h) => f.guess.test(h));
-      guess[f.key] = i >= 0 ? i : null;
-    });
+    const guess = guessSpreadsheetColumns(headers);
     setMap(guess);
+    setConfirmedDuplicateRows(new Set());
+    setAllocationOverrides({});
     setRows(clean);
     setFileName(name);
     setFileHash(sha256);
@@ -205,13 +212,17 @@ export function ExcelImportDialog({
     const amount = typeof rawAmt === "number" ? rawAmt : parseBRL(String(rawAmt ?? ""));
     const description = String(get(r, "description") ?? "").trim();
     const personName = String(get(r, "person") ?? "").trim();
-    const person = personName
-      ? state.people.find(
-          (p) =>
-            p.name.toLowerCase().startsWith(personName.toLowerCase()) ||
-            p.name.toLowerCase() === personName.toLowerCase(),
-        )
-      : undefined;
+    const peopleMatch = matchSpreadsheetPeople(personName, state.people);
+    const allocationOverride = allocationOverrides[idx + 2];
+    const people = allocationOverride
+      ? allocationOverride.personIds
+          .map((personId) => state.people.find((person) => person.id === personId))
+          .filter((person): person is (typeof state.people)[number] => Boolean(person))
+      : peopleMatch.unmatched.length === 0
+        ? peopleMatch.matched
+        : [];
+    const isSplit = allocationOverride?.split ?? people.length > 1;
+    const resolvedCard = resolveSpreadsheetCard(get(r, "card"), state.cards, cardId);
     const categoryName = String(get(r, "category") ?? "").trim();
     const category = categoryName
       ? PURCHASE_CATEGORIES.find((item) => item.toLowerCase() === categoryName.toLowerCase())
@@ -220,8 +231,14 @@ export function ExcelImportDialog({
     if (!date) issues.push("data inválida ou ausente");
     if (amount === null) issues.push("valor ausente");
     if (!description) issues.push("descrição ausente");
-    if (personName && !person)
-      issues.push(`pessoa "${personName}" não cadastrada — ficará pendente`);
+    if (!allocationOverride && peopleMatch.unmatched.length)
+      issues.push(
+        `pessoa(s) "${peopleMatch.unmatched.join(", ")}" não cadastrada(s) — ficará(ão) pendente(s)`,
+      );
+    if (isSplit && people.length < 2)
+      issues.push("Compra dividida: associe pelo menos duas pessoas pelo botão direito");
+    if (resolvedCard.error) issues.push(resolvedCard.error);
+    if (!resolvedCard.card) issues.push("selecione um cartão de destino");
     if (categoryName && !category)
       issues.push(`categoria "${categoryName}" não reconhecida — ficará sem categoria`);
     return {
@@ -229,11 +246,15 @@ export function ExcelImportDialog({
       date,
       amount,
       description,
-      person,
+      people,
+      isSplit,
       personName,
+      card: resolvedCard.card,
+      cardLast4: resolvedCard.card?.last4 ?? "",
       category,
       categoryName,
       issues,
+      reviewedDuplicate: confirmedDuplicateRows.has(idx + 2),
       dup: false as boolean,
     };
   });
@@ -246,66 +267,145 @@ export function ExcelImportDialog({
         (b) =>
           b.date === a.date &&
           b.amount === a.amount &&
-          b.description.toLowerCase() === a.description.toLowerCase(),
+          b.description.toLowerCase() === a.description.toLowerCase() &&
+          b.card?.id === a.card?.id,
       );
     const inApp = state.transactions.some(
       (t) =>
         t.date === a.date &&
         t.amount === a.amount &&
-        t.description.toLowerCase() === a.description.toLowerCase(),
+        t.description.toLowerCase() === a.description.toLowerCase() &&
+        state.invoices.find((invoice) => invoice.id === t.invoiceId)?.cardId === a.card?.id,
     );
-    if (state.settings.duplicateCheck && (inFile || inApp)) a.dup = true;
+    if (state.settings.duplicateCheck && !a.reviewedDuplicate && (inFile || inApp)) a.dup = true;
   });
-  const blocking = analyzed.filter((a) => !a.date || a.amount === null || !a.description);
+  const blocking = analyzed.filter(
+    (a) =>
+      !a.date ||
+      a.amount === null ||
+      !a.description ||
+      !a.card ||
+      (a.isSplit && a.people.length < 2),
+  );
   const importable = analyzed.filter((a) => !blocking.includes(a));
   const total = round2(importable.reduce((s, a) => s + (a.amount ?? 0), 0));
-  const card = state.cards.find((c) => c.id === cardId);
 
   const confirm = () => {
-    if (!card) return;
-    const invoiceId = uid("inv_pl");
+    if (importable.length === 0) {
+      setError("Não há linhas válidas para importar. Confira os avisos na tabela.");
+      return;
+    }
+    const rowsByCard = new Map<string, typeof importable>();
+    for (const row of importable) {
+      if (!row.card) continue;
+      rowsByCard.set(row.card.id, [...(rowsByCard.get(row.card.id) ?? []), row]);
+    }
+    if (rowsByCard.size === 0) {
+      setError("Não foi possível associar as linhas aos cartões cadastrados.");
+      return;
+    }
     const importedAt = new Date().toISOString();
-    const txs: Transaction[] = importable.map((a) => {
-      const installment = installmentReferenceFromDescription(a.description);
+    try {
+      for (const [groupCardId, groupRows] of rowsByCard) {
+        const groupCard = state.cards.find((item) => item.id === groupCardId);
+        if (!groupCard) continue;
+        const invoiceId = uid("inv_pl");
+        const txs: Transaction[] = groupRows.map((a) => {
+          const installment = installmentReferenceFromDescription(a.description);
+          const allocations = splitAmountAcrossPeople(a.amount!, a.people.length).map(
+            (share, index) => ({ personId: a.people[index]!.id, amount: share }),
+          );
+          return {
+            id: uid("tx"),
+            invoiceId,
+            date: a.date!,
+            description: a.description,
+            ...(a.category ? { category: a.category } : {}),
+            amount: a.amount!,
+            type: a.amount! < 0 ? "credito" : installment ? "parcela" : "compra",
+            ...(installment
+              ? {
+                  installmentNumber: installment.number,
+                  installmentTotal: installment.total,
+                }
+              : {}),
+            allocations,
+          };
+        });
+        dispatch({
+          type: "importInvoice",
+          invoice: {
+            id: invoiceId,
+            cardId: groupCard.id,
+            month,
+            dueDate: dateInMonth(month, groupCard.dueDay),
+            officialTotal: round2(groupRows.reduce((sum, row) => sum + (row.amount ?? 0), 0)),
+            status: "em_revisao",
+            source: "planilha",
+            ...(fileHash && fileName
+              ? {
+                  spreadsheetImportHistory: [{ sha256: fileHash, fileName, importedAt }],
+                }
+              : {}),
+          },
+          transactions: txs,
+        });
+      }
+      toast.success("Importação da planilha concluída", {
+        description: `${importable.length} lançamento(s) distribuídos em ${rowsByCard.size} cartão(ões) · ${fmtMonthLong(month)}. ${blocking.length} linha(s) com erro não foram importadas.`,
+      });
+      close();
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : "Erro inesperado na importação.";
+      setError(`Não foi possível concluir a importação: ${message}`);
+      toast.error("A importação não foi concluída", { description: message });
+    }
+  };
+
+  const setDuplicateReview = (rowIndex: number, reviewed: boolean) => {
+    setConfirmedDuplicateRows((current) => {
+      const next = new Set(current);
+      if (reviewed) next.add(rowIndex);
+      else next.delete(rowIndex);
+      return next;
+    });
+  };
+  const setRowSplit = (rowIndex: number, split: boolean) => {
+    const row = analyzed.find((item) => item.idx === rowIndex);
+    if (!row) return;
+    setAllocationOverrides((current) => {
+      const previous = current[rowIndex] ?? {
+        personIds: row.people.map((person) => person.id),
+        split: row.isSplit,
+      };
       return {
-        id: uid("tx"),
-        invoiceId,
-        date: a.date!,
-        description: a.description,
-        ...(a.category ? { category: a.category } : {}),
-        amount: a.amount!,
-        type: a.amount! < 0 ? "credito" : installment ? "parcela" : "compra",
-        ...(installment
-          ? {
-              installmentNumber: installment.number,
-              installmentTotal: installment.total,
-            }
-          : {}),
-        allocations: a.person ? [{ personId: a.person.id, amount: a.amount! }] : [],
+        ...current,
+        [rowIndex]: {
+          personIds: split ? previous.personIds : previous.personIds.slice(0, 1),
+          split,
+        },
       };
     });
-    dispatch({
-      type: "importInvoice",
-      invoice: {
-        id: invoiceId,
-        cardId: card.id,
-        month,
-        dueDate: dateInMonth(month, card.dueDay),
-        officialTotal: total,
-        status: "em_revisao",
-        source: "planilha",
-        ...(fileHash && fileName
-          ? {
-              spreadsheetImportHistory: [{ sha256: fileHash, fileName, importedAt }],
-            }
-          : {}),
-      },
-      transactions: txs,
+  };
+  const setRowPerson = (rowIndex: number, personId: string, selected: boolean) => {
+    const row = analyzed.find((item) => item.idx === rowIndex);
+    if (!row) return;
+    setAllocationOverrides((current) => {
+      const previous = current[rowIndex] ?? {
+        personIds: row.people.map((person) => person.id),
+        split: row.isSplit,
+      };
+      const personIds = selected
+        ? [...new Set([...previous.personIds, personId])]
+        : previous.personIds.filter((id) => id !== personId);
+      return {
+        ...current,
+        [rowIndex]: {
+          personIds,
+          split: personIds.length > 1 ? true : personIds.length === 0 ? false : previous.split,
+        },
+      };
     });
-    toast.success("Importação demonstrativa da planilha concluída", {
-      description: `${txs.length} lançamento(s) adicionados em ${card.name} · ${fmtMonthLong(month)}. ${blocking.length} linha(s) com erro não foram importadas e continuam listadas na planilha original.`,
-    });
-    close();
   };
 
   return (
@@ -316,7 +416,8 @@ export function ExcelImportDialog({
         <DialogHeader>
           <DialogTitle>Importar planilha Excel</DialogTitle>
           <DialogDescription>
-            A planilha é lida no seu navegador. Os dados ficam apenas nesta demonstração local.
+            A planilha é lida localmente. Se houver uma coluna de final do cartão, cada linha será
+            importada para o cartão correspondente; caso contrário, será usado o cartão padrão.
           </DialogDescription>
         </DialogHeader>
 
@@ -441,7 +542,7 @@ export function ExcelImportDialog({
                         </Select>
                       </Field>
                     ))}
-                    <Field label="Cartão de destino" required>
+                    <Field label="Cartão padrão para linhas sem final" required>
                       <Select value={cardId} onValueChange={setCardId}>
                         <SelectTrigger aria-label="Cartão de destino">
                           <SelectValue />
@@ -504,12 +605,17 @@ export function ExcelImportDialog({
                     <p className="num font-bold">{blocking.length}</p>
                   </div>
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  Clique com o botão direito em uma linha para marcar compra dividida, associar
+                  pessoas ou resolver um aviso de duplicidade.
+                </p>
                 <div className="overflow-x-auto rounded-lg border">
                   <table className="w-full min-w-[680px] text-sm">
                     <thead className="bg-muted/60 text-left text-xs uppercase text-muted-foreground">
                       <tr className="[&_th]:px-3 [&_th]:py-2">
                         <th>Linha</th>
                         <th>Data</th>
+                        <th>Cartão</th>
                         <th>Descrição</th>
                         <th>Categoria</th>
                         <th className="text-right">Valor</th>
@@ -519,58 +625,117 @@ export function ExcelImportDialog({
                     </thead>
                     <tbody className="divide-y">
                       {analyzed.map((a) => (
-                        <tr
-                          key={a.idx}
-                          className={cn(
-                            "[&_td]:px-3 [&_td]:py-1.5",
-                            blocking.includes(a)
-                              ? "bg-danger-soft/50"
-                              : (a.dup || a.issues.length) && "bg-warning-soft/50",
-                          )}
-                        >
-                          <td className="num text-muted-foreground">{a.idx}</td>
-                          <td className="num">{a.date ? fmtDate(a.date) : "—"}</td>
-                          <td>{a.description || "—"}</td>
-                          <td>{a.category ?? (a.categoryName ? "Sem categoria" : "—")}</td>
-                          <td className="num text-right">
-                            {a.amount !== null ? fmtBRL(a.amount) : "—"}
-                          </td>
-                          <td>
-                            {a.person?.name ??
-                              (a.personName ? (
-                                <span className="text-muted-foreground">{a.personName}</span>
-                              ) : (
-                                "—"
-                              ))}
-                          </td>
-                          <td className="text-xs">
-                            {a.dup && <p className="text-warning">Possível duplicidade — revise</p>}
-                            {a.issues.map((i) => (
-                              <p
-                                key={i}
-                                className={blocking.includes(a) ? "text-danger" : "text-warning"}
+                        <ContextMenu key={a.idx}>
+                          <ContextMenuTrigger asChild>
+                            <tr
+                              className={cn(
+                                "[&_td]:px-3 [&_td]:py-1.5",
+                                blocking.includes(a)
+                                  ? "bg-danger-soft/50"
+                                  : (a.dup || a.issues.length) && "bg-warning-soft/50",
+                              )}
+                            >
+                              <td className="num text-muted-foreground">{a.idx}</td>
+                              <td className="num">{a.date ? fmtDate(a.date) : "—"}</td>
+                              <td>{a.card ? `•••• ${a.card.last4}` : "—"}</td>
+                              <td>{a.description || "—"}</td>
+                              <td>{a.category ?? (a.categoryName ? "Sem categoria" : "—")}</td>
+                              <td className="num text-right">
+                                {a.amount !== null ? fmtBRL(a.amount) : "—"}
+                              </td>
+                              <td>
+                                {a.people.length ? (
+                                  a.people.map((person) => person.name).join(", ")
+                                ) : a.personName ? (
+                                  <span className="text-muted-foreground">{a.personName}</span>
+                                ) : (
+                                  "—"
+                                )}
+                              </td>
+                              <td className="text-xs">
+                                {a.dup && (
+                                  <p className="text-warning">Possível duplicidade — revise</p>
+                                )}
+                                {a.dup && (
+                                  <Button
+                                    variant="link"
+                                    size="sm"
+                                    className="h-auto p-0 text-xs"
+                                    onClick={() => setDuplicateReview(a.idx, true)}
+                                  >
+                                    Confirmar que são distintas
+                                  </Button>
+                                )}
+                                {a.reviewedDuplicate && (
+                                  <p className="text-success">Revisada: compra diferente</p>
+                                )}
+                                {a.issues.map((i) => (
+                                  <p
+                                    key={i}
+                                    className={
+                                      blocking.includes(a) ? "text-danger" : "text-warning"
+                                    }
+                                  >
+                                    {i}
+                                  </p>
+                                ))}
+                              </td>
+                            </tr>
+                          </ContextMenuTrigger>
+                          <ContextMenuContent>
+                            <ContextMenuCheckboxItem
+                              checked={a.isSplit}
+                              onCheckedChange={(checked) => setRowSplit(a.idx, checked === true)}
+                            >
+                              Marcar como compra dividida
+                            </ContextMenuCheckboxItem>
+                            <ContextMenuSeparator />
+                            <ContextMenuLabel>Associar pessoas</ContextMenuLabel>
+                            {state.people.map((person) => (
+                              <ContextMenuCheckboxItem
+                                key={person.id}
+                                checked={a.people.some((item) => item.id === person.id)}
+                                onCheckedChange={(checked) =>
+                                  setRowPerson(a.idx, person.id, checked === true)
+                                }
                               >
-                                {i}
-                              </p>
+                                {person.name}
+                              </ContextMenuCheckboxItem>
                             ))}
-                          </td>
-                        </tr>
+                            <ContextMenuSeparator />
+                            {a.dup ? (
+                              <ContextMenuItem onSelect={() => setDuplicateReview(a.idx, true)}>
+                                Marcar como não duplicidade
+                              </ContextMenuItem>
+                            ) : a.reviewedDuplicate ? (
+                              <ContextMenuItem onSelect={() => setDuplicateReview(a.idx, false)}>
+                                Restaurar aviso de duplicidade
+                              </ContextMenuItem>
+                            ) : (
+                              <ContextMenuItem disabled>
+                                Sem aviso de duplicidade nesta linha
+                              </ContextMenuItem>
+                            )}
+                          </ContextMenuContent>
+                        </ContextMenu>
                       ))}
                     </tbody>
                   </table>
                 </div>
                 {analyzed.some((a) => a.dup) && (
                   <p className="flex gap-2 rounded-lg bg-warning-soft p-3 text-sm text-warning">
-                    <AlertTriangle className="size-4 shrink-0" /> Linhas suspeitas de duplicidade
-                    serão importadas para que você revise. Exclua-as manualmente se forem repetidas.
+                    <AlertTriangle className="size-4 shrink-0" /> Se confirmar que alguma linha é
+                    uma compra diferente, use “Confirmar que são distintas” nessa linha. Linhas não
+                    revistas ainda serão importadas com o aviso.
                   </p>
                 )}
+                {error && <p className="text-sm font-medium text-danger">{error}</p>}
                 <DialogFooter>
                   <Button variant="outline" onClick={() => setStep(2)}>
                     Voltar
                   </Button>
                   <Button onClick={confirm} disabled={importable.length === 0}>
-                    Confirmar importação demonstrativa
+                    Confirmar importação da planilha
                   </Button>
                 </DialogFooter>
               </>
