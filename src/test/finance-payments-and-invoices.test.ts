@@ -1307,7 +1307,32 @@ describe("pagamentos e competências", () => {
     );
     if (!provisional) throw new Error("A previsão de novembro não foi criada");
 
-    const imported = reducer(prepared, {
+    const preloadedAdidas: Transaction = {
+      ...previousInstallment,
+      id: "preloaded_adidas_2_of_10",
+      invoiceId: provisional.id,
+      date: "2026-11-16",
+      description: "adidas FO Be-CT or02/10",
+      installmentNumber: 2,
+      allocations: [{ personId, amount: 87.06 }],
+    };
+    const staleDuplicate: Transaction = {
+      ...preloadedAdidas,
+      id: "stale_adidas_4_of_10",
+      description: "adidas FO Be-CT or04/10",
+      installmentNumber: 4,
+      note: undefined,
+    };
+    const beforeImport: FinanceState = {
+      ...prepared,
+      transactions: [
+        ...prepared.transactions.filter((item) => item.invoiceId !== provisional.id),
+        preloadedAdidas,
+        staleDuplicate,
+      ],
+    };
+
+    const imported = reducer(beforeImport, {
       type: "importInvoice",
       invoice: {
         id: "sheet_november_adidas",

@@ -774,7 +774,16 @@ const reconcileImportedTransactions = (
       candidates.find((candidate) => matches(candidate, true));
     if (!match) return transaction;
     used.add(match.id);
-    if (match.invoiceId === prepared?.id) replacedTargetIds.add(match.id);
+    if (match.invoiceId === prepared?.id) {
+      replacedTargetIds.add(match.id);
+      candidates.forEach((candidate) => {
+        if (
+          candidate.invoiceId === prepared?.id &&
+          sameInstallmentFamily(candidate, transaction)
+        )
+          replacedTargetIds.add(candidate.id);
+      });
+    }
     const restored: Transaction = {
       ...transaction,
       allocations: match.allocations,
