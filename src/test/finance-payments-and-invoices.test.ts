@@ -1403,6 +1403,126 @@ describe("pagamentos e competências", () => {
     });
   });
 
+  it("substitui previsões 11/12 e 06/12 pelas parcelas reais da fatura de novembro", () => {
+    const base = stateWithSinglePurchase(986.14);
+    const october = base.invoices[0]!;
+    const previousRows: Transaction[] = [
+      {
+        ...base.transactions[0]!,
+        id: "source_barbearia_10_of_12",
+        invoiceId: october.id,
+        date: "2025-12-30",
+        description: "BARBEARIA JO-CT 10/12",
+        type: "parcela",
+        installmentNumber: 10,
+        installmentTotal: 12,
+      },
+      {
+        ...base.transactions[0]!,
+        id: "source_htm_05_of_12",
+        invoiceId: october.id,
+        date: "2026-05-08",
+        description: "HTM*CENTRO DE ESTU05/12",
+        amount: 103.11,
+        type: "parcela",
+        installmentNumber: 5,
+        installmentTotal: 12,
+      },
+    ];
+    const prepared = reducer(
+      { ...base, transactions: previousRows },
+      { type: "prepareNextInvoice", invoiceId: october.id },
+    );
+    const provisional = prepared.invoices.find(
+      (invoice) => invoice.cardId === october.cardId && invoice.month === "2026-11",
+    );
+    if (!provisional) throw new Error("A projeção de novembro não foi criada");
+    expect(
+      prepared.transactions.some(
+        (transaction) =>
+          transaction.invoiceId === provisional.id &&
+          transaction.description === "BARBEARIA JO-CT 11/12" &&
+          transaction.isProjected,
+      ),
+    ).toBe(true);
+    expect(
+      prepared.transactions.some(
+        (transaction) =>
+          transaction.invoiceId === provisional.id &&
+          transaction.description === "HTM*CENTRO DE ESTU06/12" &&
+          transaction.isProjected,
+      ),
+    ).toBe(true);
+
+    const imported = reducer(prepared, {
+      type: "importInvoice",
+      invoice: {
+        ...provisional,
+        id: "sheet_real_november",
+        officialTotal: 1089.25,
+        status: "em_revisao",
+        spreadsheetImportHistory: [
+          { sha256: "user-example", fileName: "novembro.xlsx", importedAt: "2026-11-17T00:00:00Z" },
+        ],
+      },
+      transactions: [
+        {
+          id: "actual_barbearia_november",
+          invoiceId: "sheet_real_november",
+          date: "2025-12-30",
+          description: "BARBEARIA JO-CT 11/12",
+          amount: 986.14,
+          type: "parcela",
+          installmentNumber: 11,
+          installmentTotal: 12,
+          allocations: [{ personId, amount: 986.14 }],
+        },
+        {
+          id: "actual_htm_november",
+          invoiceId: "sheet_real_november",
+          date: "2026-05-08",
+          description: "HTM*CENTRO DE ESTU07/12",
+          amount: 103.11,
+          type: "parcela",
+          installmentNumber: 7,
+          installmentTotal: 12,
+          allocations: [{ personId, amount: 103.11 }],
+        },
+      ],
+    });
+
+    const november = imported.invoices.find(
+      (invoice) => invoice.cardId === october.cardId && invoice.month === "2026-11",
+    );
+    if (!november) throw new Error("A fatura real de novembro não foi encontrada");
+    const novemberRows = imported.transactions.filter(
+      (transaction) => transaction.invoiceId === november.id,
+    );
+    expect(novemberRows).toHaveLength(2);
+    expect(novemberRows.map((transaction) => transaction.id).sort()).toEqual([
+      "actual_barbearia_november",
+      "actual_htm_november",
+    ]);
+    expect(novemberRows.every((transaction) => !transaction.isProjected)).toBe(true);
+
+    const december = imported.invoices.find(
+      (invoice) => invoice.cardId === october.cardId && invoice.month === "2026-12",
+    );
+    if (!december) throw new Error("As projeções de dezembro não foram criadas");
+    const decemberRows = imported.transactions.filter(
+      (transaction) => transaction.invoiceId === december.id,
+    );
+    expect(
+      decemberRows.find((transaction) => transaction.description === "BARBEARIA JO-CT 12/12"),
+    ).toMatchObject({ installmentNumber: 12, isProjected: true });
+    expect(
+      decemberRows.find((transaction) => transaction.description === "HTM*CENTRO DE ESTU08/12"),
+    ).toMatchObject({ installmentNumber: 8, isProjected: true });
+    expect(
+      decemberRows.some((transaction) => transaction.description === "HTM*CENTRO DE ESTU07/12"),
+    ).toBe(false);
+  });
+
   it("não projeta parcela posterior sobre fatura de planilha importada", () => {
     const base = stateWithSinglePurchase(87.06);
     const october = base.invoices[0]!;

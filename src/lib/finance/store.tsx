@@ -737,6 +737,7 @@ const reconcileImportedTransactions = (
   );
   const used = new Set<string>();
   const replacedTargetIds = new Set<string>();
+  const supersededProjectionSourceIds = new Set<string>();
   const transactions = incoming.map((transaction) => {
     const matches = (candidate: Transaction, allowSequenceDrift: boolean) => {
       if (used.has(candidate.id)) return false;
@@ -785,6 +786,15 @@ const reconcileImportedTransactions = (
           replacedTargetIds.add(candidate.id);
       });
     }
+    const matchedReference = installmentReferenceOf(match);
+    const incomingReference = installmentReferenceOf(transaction);
+    const correctedProjectionSequence =
+      match.invoiceId === prepared?.id &&
+      matchedReference !== null &&
+      incomingReference !== null &&
+      matchedReference.number !== incomingReference.number;
+    if (correctedProjectionSequence && match.projectionSourceId)
+      supersededProjectionSourceIds.add(match.projectionSourceId);
     const restored: Transaction = {
       ...transaction,
       allocations: match.allocations,
@@ -795,9 +805,10 @@ const reconcileImportedTransactions = (
     delete restored.isProjected;
     if (match.planId !== undefined) restored.planId = match.planId;
     if (match.recurringChargeId !== undefined) restored.recurringChargeId = match.recurringChargeId;
-    if (match.projectionSourceId !== undefined)
+    if (correctedProjectionSequence) restored.projectionSourceId = transaction.id;
+    else if (match.projectionSourceId !== undefined)
       restored.projectionSourceId = match.projectionSourceId;
-    else if (installmentReferenceOf(match))
+    else if (matchedReference)
       restored.projectionSourceId = match.invoiceId === prepared?.id ? transaction.id : match.id;
     if (transaction.installmentNumber === undefined && match.installmentNumber !== undefined)
       restored.installmentNumber = match.installmentNumber;
@@ -805,7 +816,7 @@ const reconcileImportedTransactions = (
       restored.installmentTotal = match.installmentTotal;
     return restored;
   });
-  return { transactions, replacedTargetIds };
+  return { transactions, replacedTargetIds, supersededProjectionSourceIds };
 };
 
 type AuditActor = { id: string; name: string };
@@ -1688,10 +1699,20 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
         })),
         categoryRules,
       );
-      const { transactions: reconciled, replacedTargetIds } = reconcileImportedTransactions(
-        s,
-        invoice,
-        incoming,
+      const {
+        transactions: reconciled,
+        replacedTargetIds,
+        supersededProjectionSourceIds,
+      } = reconcileImportedTransactions(s, invoice, incoming);
+      const futureForecastInvoiceIds = new Set(
+        s.invoices
+          .filter(
+            (item) =>
+              item.cardId === invoice.cardId &&
+              item.month > invoice.month &&
+              isForecastInvoice(item),
+          )
+          .map((item) => item.id),
       );
       const imported = {
         ...s,
@@ -1703,6 +1724,13 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
         ),
         transactions: [
           ...s.transactions.filter((transaction) => {
+            if (
+              futureForecastInvoiceIds.has(transaction.invoiceId) &&
+              transaction.isProjected &&
+              transaction.projectionSourceId !== undefined &&
+              supersededProjectionSourceIds.has(transaction.projectionSourceId)
+            )
+              return false;
             if (!targetInvoiceIds.has(transaction.invoiceId)) return true;
             // Substitui projeções e linhas correspondentes, mantendo lançamentos
             // existentes sem correspondência quando a importação for parcial.
