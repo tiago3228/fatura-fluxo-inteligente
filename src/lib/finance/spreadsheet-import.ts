@@ -82,3 +82,47 @@ export function splitAmountAcrossPeople(amount: number, peopleCount: number) {
     (_, index) => (baseCents + (index < Math.abs(remainder) ? Math.sign(remainder) : 0)) / 100,
   );
 }
+
+const MONTH_NUMBER_BY_NAME: Record<string, number> = {
+  janeiro: 1,
+  fevereiro: 2,
+  marco: 3,
+  abril: 4,
+  maio: 5,
+  junho: 6,
+  julho: 7,
+  agosto: 8,
+  setembro: 9,
+  outubro: 10,
+  novembro: 11,
+  dezembro: 12,
+};
+
+export function detectSpreadsheetInvoiceMonth(sheets: unknown[][][]) {
+  for (const sheet of sheets) {
+    for (const row of sheet) {
+      const text = row
+        .map((cell) => String(cell ?? ""))
+        .join(" ")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase();
+      if (!/\b(?:fatura|competencia)\b/.test(text)) continue;
+
+      const namedMonth = text.match(
+        /\b(janeiro|fevereiro|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\b\s*(?:de\s*)?(?:[/-]\s*)?(20\d{2})\b/,
+      );
+      if (namedMonth) {
+        const month = MONTH_NUMBER_BY_NAME[namedMonth[1]!];
+        if (month) return `${namedMonth[2]}-${String(month).padStart(2, "0")}`;
+      }
+
+      const yearMonth = text.match(/\b(20\d{2})[-/](0[1-9]|1[0-2])\b/);
+      if (yearMonth) return `${yearMonth[1]}-${yearMonth[2]}`;
+
+      const monthYear = text.match(/\b(0?[1-9]|1[0-2])\s*\/\s*(20\d{2})\b/);
+      if (monthYear) return `${monthYear[2]}-${monthYear[1]!.padStart(2, "0")}`;
+    }
+  }
+  return null;
+}

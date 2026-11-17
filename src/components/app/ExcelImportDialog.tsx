@@ -39,6 +39,7 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import {
+  detectSpreadsheetInvoiceMonth,
   guessSpreadsheetColumns,
   matchSpreadsheetPeople,
   resolveSpreadsheetCard,
@@ -55,6 +56,7 @@ type DuplicateSpreadsheetPrompt = {
   fileName: string;
   sha256: string;
   previousImportedAt: string;
+  invoiceMonth: string | null;
 };
 type SpreadsheetAllocationOverride = { personIds: string[]; split: boolean };
 
@@ -117,6 +119,7 @@ export function ExcelImportDialog({
   const [month, setMonth] = useState(
     addMonths(availableMonths(state).at(-1) ?? state.settings.month, -1),
   );
+  const [detectedInvoiceMonth, setDetectedInvoiceMonth] = useState<string | null>(null);
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const input = useRef<HTMLInputElement>(null);
 
@@ -128,6 +131,7 @@ export function ExcelImportDialog({
     setError(null);
     setConfirmedDuplicateRows(new Set());
     setAllocationOverrides({});
+    setDetectedInvoiceMonth(null);
     setStep(1);
   };
   const close = () => {
@@ -135,7 +139,12 @@ export function ExcelImportDialog({
     setTimeout(reset, 200);
   };
 
-  const load = (data: unknown[][], name: string, sha256: string | null = null) => {
+  const load = (
+    data: unknown[][],
+    name: string,
+    sha256: string | null = null,
+    invoiceMonth: string | null = null,
+  ) => {
     const clean = data.filter((r) => r.some((c) => String(c ?? "").trim() !== ""));
     if (clean.length < 2 || !clean[0]) {
       setError("A planilha não tem linhas de dados.");
@@ -149,6 +158,8 @@ export function ExcelImportDialog({
     setRows(clean);
     setFileName(name);
     setFileHash(sha256);
+    setDetectedInvoiceMonth(invoiceMonth);
+    if (invoiceMonth) setMonth(invoiceMonth);
     setError(null);
     setStep(2);
   };
@@ -172,13 +183,17 @@ export function ExcelImportDialog({
       const wb = XLSX.read(fileData, { type: "array" });
       const firstSheet = wb.SheetNames[0];
       if (!firstSheet) throw new Error("planilha vazia");
-      const ws = wb.Sheets[firstSheet];
-      if (!ws) throw new Error("planilha vazia");
-      const data = XLSX.utils.sheet_to_json<unknown[]>(ws, {
-        header: 1,
-        raw: true,
-        defval: "",
-      }) as unknown[][];
+      const workbookSheets = wb.SheetNames.map((sheetName) => {
+        const sheet = wb.Sheets[sheetName];
+        if (!sheet) return [];
+        return XLSX.utils.sheet_to_json<unknown[]>(sheet, {
+          header: 1,
+          raw: true,
+          defval: "",
+        }) as unknown[][];
+      });
+      const data = workbookSheets[0] ?? [];
+      const invoiceMonth = detectSpreadsheetInvoiceMonth(workbookSheets);
       const previousImport = state.invoices
         .flatMap((invoice) => invoice.spreadsheetImportHistory ?? [])
         .find((record) => record.sha256 === sha256);
@@ -188,10 +203,11 @@ export function ExcelImportDialog({
           fileName: f.name,
           sha256,
           previousImportedAt: previousImport.importedAt,
+          invoiceMonth,
         });
         return;
       }
-      load(data, f.name, sha256);
+      load(data, f.name, sha256, invoiceMonth);
     } catch (cause) {
       setError(
         cause instanceof Error && cause.message.includes("não permite verificar")
@@ -205,6 +221,11 @@ export function ExcelImportDialog({
   const body = rows?.slice(1) ?? [];
   const get = (r: unknown[], k: FieldKey) => (map[k] === null ? "" : r[map[k]!]);
   const missingMap = FIELDS.filter((f) => f.required && map[f.key] === null);
+  const invoiceMonthOptions = Array.from({ length: 12 }, (_, i) =>
+    addMonths(state.settings.month, -i),
+  );
+  if (detectedInvoiceMonth && !invoiceMonthOptions.includes(detectedInvoiceMonth))
+    invoiceMonthOptions.unshift(detectedInvoiceMonth);
 
   const analyzed = body.map((r, idx) => {
     const date = parseDate(get(r, "date"));
@@ -562,9 +583,7 @@ export function ExcelImportDialog({
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {Array.from({ length: 12 }, (_, i) =>
-                            addMonths(state.settings.month, -i),
-                          ).map((m) => (
+                          {invoiceMonthOptions.map((m) => (
                             <SelectItem key={m} value={m}>
                               {fmtMonthLong(m)}
                             </SelectItem>
@@ -572,6 +591,23 @@ export function ExcelImportDialog({
                         </SelectContent>
                       </Select>
                     </Field>
+                    <p
+                      className={cn(
+                        "sm:col-span-3 rounded-lg px-3 py-2 text-xs",
+                        detectedInvoiceMonth && detectedInvoiceMonth !== month
+                          ? "bg-warning-soft text-warning"
+                          : "bg-muted text-muted-foreground",
+                      )}
+                      role={
+                        detectedInvoiceMonth && detectedInvoiceMonth !== month ? "alert" : undefined
+                      }
+                    >
+                      {detectedInvoiceMonth
+                        ? detectedInvoiceMonth === month
+                          ? `Competência encontrada na planilha: ${fmtMonthLong(detectedInvoiceMonth)}. A importação será gravada nesse mês; as datas das linhas são as datas das compras.`
+                          : `Atenção: a planilha indica ${fmtMonthLong(detectedInvoiceMonth)}, mas o destino selecionado é ${fmtMonthLong(month)}.`
+                        : `Mês de destino da fatura: ${fmtMonthLong(month)}. Ele pode ser diferente das datas originais das compras; confira antes de continuar.`}
+                    </p>
                   </div>
                 </div>
                 <DialogFooter>
@@ -604,6 +640,24 @@ export function ExcelImportDialog({
                     <p className="text-xs">Com erro (não importadas)</p>
                     <p className="num font-bold">{blocking.length}</p>
                   </div>
+                </div>
+                <div
+                  className={cn(
+                    "rounded-lg px-3 py-2 text-sm",
+                    detectedInvoiceMonth && detectedInvoiceMonth !== month
+                      ? "bg-warning-soft text-warning"
+                      : "bg-muted",
+                  )}
+                  role={
+                    detectedInvoiceMonth && detectedInvoiceMonth !== month ? "alert" : undefined
+                  }
+                >
+                  <p className="font-semibold">Competência de destino: {fmtMonthLong(month)}</p>
+                  {detectedInvoiceMonth && (
+                    <p className="text-xs">
+                      Competência identificada no arquivo: {fmtMonthLong(detectedInvoiceMonth)}.
+                    </p>
+                  )}
                 </div>
                 <p className="text-xs text-muted-foreground">
                   Clique com o botão direito em uma linha para marcar compra dividida, associar
@@ -768,7 +822,12 @@ export function ExcelImportDialog({
               <Button
                 onClick={() => {
                   if (duplicatePrompt) {
-                    load(duplicatePrompt.rows, duplicatePrompt.fileName, duplicatePrompt.sha256);
+                    load(
+                      duplicatePrompt.rows,
+                      duplicatePrompt.fileName,
+                      duplicatePrompt.sha256,
+                      duplicatePrompt.invoiceMonth,
+                    );
                   }
                   setDuplicatePrompt(null);
                 }}
