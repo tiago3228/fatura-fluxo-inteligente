@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { AppBackgroundLayer } from "@/components/app/AppBackground";
+import { APP_VERSION } from "@/lib/app-version";
 import { Link, useRouter, useRouterState } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQueryClient } from "@tanstack/react-query";
@@ -138,9 +139,17 @@ function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
-        <p className="px-2 pb-1 text-[11px] leading-snug opacity-60 group-data-[collapsible=icon]:hidden">
-          O indicador no topo mostra o estado real da sincronização.
-        </p>
+        <div className="space-y-1">
+          <p className="px-2 pb-1 text-[11px] leading-snug opacity-60 group-data-[collapsible=icon]:hidden">
+            O indicador no topo mostra o estado real da sincronização.
+          </p>
+          <p
+            className="px-2 pb-1 text-[10px] leading-none opacity-50 group-data-[collapsible=icon]:hidden"
+            aria-label={`Versão do aplicativo ${APP_VERSION}`}
+          >
+            versão {APP_VERSION}
+          </p>
+        </div>
       </SidebarFooter>
     </Sidebar>
   );

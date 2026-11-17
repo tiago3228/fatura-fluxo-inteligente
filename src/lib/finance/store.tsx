@@ -734,6 +734,9 @@ const reconcileImportedTransactions = (
   const candidates = state.transactions.filter(
     (transaction) =>
       transaction.invoiceId === prepared?.id || transaction.invoiceId === previous?.id,
+  ).sort(
+    (left, right) =>
+      Number(right.invoiceId === prepared?.id) - Number(left.invoiceId === prepared?.id),
   );
   const used = new Set<string>();
   const replacedTargetIds = new Set<string>();

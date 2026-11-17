@@ -1454,7 +1454,15 @@ describe("pagamentos e competências", () => {
       ),
     ).toBe(true);
 
-    const imported = reducer(prepared, {
+    const legacyPrepared: FinanceState = {
+      ...prepared,
+      transactions: prepared.transactions.map((transaction) =>
+        transaction.invoiceId === provisional.id && transaction.isProjected
+          ? { ...transaction, isProjected: undefined }
+          : transaction,
+      ),
+    };
+    const imported = reducer(legacyPrepared, {
       type: "importInvoice",
       invoice: {
         ...provisional,
