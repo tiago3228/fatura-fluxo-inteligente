@@ -506,6 +506,8 @@ const ensureRecurringProjections = (state: FinanceState): FinanceState => {
 
 const transactionDescriptionKey = (description: string) =>
   stripInstallmentReference(description)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
@@ -525,6 +527,7 @@ const sameInstallmentSeries = (
     !previousReference ||
     !incomingReference ||
     previousReference.total !== incomingReference.total ||
+    Math.abs(previous.amount - incoming.amount) >= 0.01 ||
     transactionDescriptionKey(previous.description) !==
       transactionDescriptionKey(incoming.description)
   )
@@ -582,20 +585,36 @@ const ensure0548 = (state: FinanceState): FinanceState => {
 };
 
 /** Preenche somente lançamentos ainda sem atribuição usando o titular cadastrado do cartão. */
-const assignInitialCardholders = (state: FinanceState): FinanceState => ({
-  ...state,
-  transactions: state.transactions.map((transaction) => {
-    if (transaction.allocations.length > 0 || transaction.type === "pagamento") return transaction;
-    const invoice = state.invoices.find((item) => item.id === transaction.invoiceId);
-    const card = invoice ? state.cards.find((item) => item.id === invoice.cardId) : undefined;
-    const holder = card
-      ? state.people.find((person) => person.cardIds.includes(card.id))
-      : undefined;
-    return holder
-      ? { ...transaction, allocations: [{ personId: holder.id, amount: transaction.amount }] }
-      : transaction;
-  }),
-});
+const assignInitialCardholders = (state: FinanceState): FinanceState => {
+  const pdfInvoiceIds = new Set(
+    state.invoices.filter((invoice) => invoice.source === "pdf").map((invoice) => invoice.id),
+  );
+  const pdfTransactionIds = new Set(
+    state.transactions
+      .filter((transaction) => pdfInvoiceIds.has(transaction.invoiceId))
+      .map((transaction) => transaction.id),
+  );
+  return {
+    ...state,
+    transactions: state.transactions.map((transaction) => {
+      if (transaction.allocations.length > 0 || transaction.type === "pagamento")
+        return transaction;
+      const invoice = state.invoices.find((item) => item.id === transaction.invoiceId);
+      if (
+        invoice?.source === "pdf" ||
+        (transaction.projectionSourceId && pdfTransactionIds.has(transaction.projectionSourceId))
+      )
+        return transaction;
+      const card = invoice ? state.cards.find((item) => item.id === invoice.cardId) : undefined;
+      const holder = card
+        ? state.people.find((person) => person.cardIds.includes(card.id))
+        : undefined;
+      return holder
+        ? { ...transaction, allocations: [{ personId: holder.id, amount: transaction.amount }] }
+        : transaction;
+    }),
+  };
+};
 
 const assignmentKey = (value: string) =>
   value

@@ -802,10 +802,18 @@ describe("pagamentos e competências", () => {
     ]);
   });
 
-  it("atribui imediatamente as parcelas importadas por PDF à titular cadastrada do cartão", () => {
-    const initial = createDemoState();
-    const sourceInvoice = initial.invoices.find((invoice) => invoice.cardId === "c_7264");
+  it("mantém parcelas novas importadas por PDF sem atribuição para revisão manual", () => {
+    const base = createDemoState();
+    const sourceInvoice = base.invoices.find((invoice) => invoice.cardId === "c_7264");
     if (!sourceInvoice) throw new Error("A fixture precisa da fatura do cartão da Atena");
+    const initial = {
+      ...base,
+      invoices: [sourceInvoice],
+      transactions: [],
+      plans: [],
+      recurringCharges: [],
+      payments: [],
+    };
     const invoice = {
       ...sourceInvoice,
       id: "invoice_atena_pdf_import",
@@ -832,12 +840,12 @@ describe("pagamentos e competências", () => {
     });
     const saved = imported.transactions.find((item) => item.id === transaction.id);
 
-    expect(saved?.allocations).toEqual([{ personId: "p_atena", amount: 50 }]);
+    expect(saved?.allocations).toEqual([]);
     expect(
       detectedInstallmentPlans(imported).some(({ plan }) =>
         plan.shares.some((share) => share.personId === "p_atena"),
       ),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it("agrupa parcelas importadas da mesma compra entre faturas e estima as parcelas ausentes", () => {
@@ -1356,7 +1364,7 @@ describe("pagamentos e competências", () => {
       imported.transactions.find((item) => item.id === "tx_new_purchase_same_description_amount"),
     ).toMatchObject({
       type: "compra",
-      allocations: [{ personId: "p_tiago", amount: 10 }],
+      allocations: [],
     });
     expect(
       imported.transactions.find((item) => item.id === "tx_installment_november_7_of_12"),

@@ -261,9 +261,14 @@ function isoDate(value: string, fallbackMonth: string) {
   const d = parts[0] ?? NaN;
   const m = parts[1] ?? NaN;
   const y = parts[2];
-  const year = y && y > 2000 ? y : Number(fallbackMonth.slice(0, 4));
   const month = m || Number(fallbackMonth.slice(5, 7));
   if (!(d >= 1 && d <= 31) || !(month >= 1 && month <= 12)) return null;
+  let year = y && y > 2000 ? y : Number(fallbackMonth.slice(0, 4));
+  if (!y || y <= 2000) {
+    const monthDifference = month - Number(fallbackMonth.slice(5, 7));
+    if (monthDifference > 6) year -= 1;
+    else if (monthDifference < -6) year += 1;
+  }
   return `${year}-${String(month).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
 
@@ -368,14 +373,22 @@ export function parseInvoiceText(rawText: string, fallbackMonth: string): Extrac
       ...(description.length < 3 ? { review: "Descrição curta — confira" } : {}),
     });
   });
+  const isPreviousStatementTotal = (line: string) =>
+    /\b(?:fatura|saldo)\s+(?:do\s+m[eê]s\s+)?anterior\b/i.test(line);
   const preferredTotal = lines
-    .filter((line) =>
-      /total desta fatura|total da sua fatura|total da fatura(?! anterior)/i.test(line),
+    .filter(
+      (line) =>
+        !isPreviousStatementTotal(line) &&
+        /total desta fatura|total da sua fatura|total da fatura/i.test(line),
     )
     .map(amountAtEnd)
     .find((value): value is number => value !== null);
   const totalCandidates = lines
-    .filter((line) => /total da fatura|total fatura|valor total|total a pagar/i.test(line))
+    .filter(
+      (line) =>
+        !isPreviousStatementTotal(line) &&
+        /total da fatura|total fatura|valor total|total a pagar/i.test(line),
+    )
     .map(amountAtEnd)
     .filter((value): value is number => value !== null);
   const dueLine = lines.find((l) => /vencimento|vence em/i.test(l));

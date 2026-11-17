@@ -40,15 +40,38 @@ type Row = ExtractedPdfRow & {
   assignedCardId: string;
   included: boolean;
   personChoice: string;
-  previousPersonIds: string[];
   ignoreReason: string;
 };
 const normalizedMatchDescription = (value: string) =>
   value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
-    .replace(/\b\d{1,2}\s*\/\s*\d{1,2}\b/g, "")
+    .replace(/\d{1,2}\s*\/\s*\d{1,2}/g, "")
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
+const installmentReference = (transaction: {
+  description: string;
+  installmentNumber?: number;
+  installmentTotal?: number;
+}) => {
+  if (
+    Number.isInteger(transaction.installmentNumber) &&
+    Number.isInteger(transaction.installmentTotal) &&
+    transaction.installmentNumber! >= 1 &&
+    transaction.installmentTotal! >= transaction.installmentNumber!
+  )
+    return {
+      number: transaction.installmentNumber!,
+      total: transaction.installmentTotal!,
+    };
+  const reference = transaction.description.match(/(\d{1,2})\s*\/\s*(\d{1,2})(?!\d)/);
+  if (!reference) return null;
+  const number = Number(reference[1]);
+  const total = Number(reference[2]);
+  return number >= 1 && total >= number ? { number, total } : null;
+};
+const isValidMonth = (value: string) => /^\d{4}-(0[1-9]|1[0-2])$/.test(value);
 const COMPARISON_LABELS: Record<PdfComparisonStatus, string> = {
   possible_duplicate: "Possível duplicidade — confira",
   already_imported: "Já presente nesta fatura",
@@ -68,6 +91,7 @@ export function PdfImportDialog({
 }) {
   const { state, dispatch } = useFinance();
   const [file, setFile] = useState<File | null>(null);
+  const [rawPdfText, setRawPdfText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string[]>([]);
   const [step, setStep] = useState<Step>("select");
@@ -78,6 +102,8 @@ export function PdfImportDialog({
   const [cardOfficialTotals, setCardOfficialTotals] = useState<Record<string, number>>({});
   const [manualCardTotals, setManualCardTotals] = useState<Record<string, string>>({});
   const [acceptedDiscrepancySignature, setAcceptedDiscrepancySignature] = useState("");
+  const [referenceMonth, setReferenceMonth] = useState(state.settings.month);
+  const [referenceMonthWasChosen, setReferenceMonthWasChosen] = useState(false);
   const [dueDate, setDueDate] = useState("");
   const [cardId, setCardId] = useState(state.cards[0]?.id ?? "");
   const input = useRef<HTMLInputElement>(null);
@@ -85,6 +111,7 @@ export function PdfImportDialog({
     onOpenChange(false);
     setTimeout(() => {
       setFile(null);
+      setRawPdfText("");
       setError(null);
       setWarning([]);
       setStep("select");
@@ -94,6 +121,8 @@ export function PdfImportDialog({
       setCardOfficialTotals({});
       setManualCardTotals({});
       setAcceptedDiscrepancySignature("");
+      setReferenceMonth(state.settings.month);
+      setReferenceMonthWasChosen(false);
       setDueDate("");
     }, 200);
   };
@@ -110,17 +139,41 @@ export function PdfImportDialog({
     setError(null);
     setFile(next);
   };
+  const changeReferenceMonth = (nextMonth: string) => {
+    setReferenceMonth(nextMonth);
+    setReferenceMonthWasChosen(true);
+    if (!rawPdfText || !isValidMonth(nextMonth)) return;
+    const rowsWithUpdatedDates = parseInvoiceText(rawPdfText, nextMonth).rows;
+    setRows((current) =>
+      current.map((row, index) => ({
+        ...row,
+        date: rowsWithUpdatedDates[index]?.date ?? row.date,
+      })),
+    );
+  };
   const process = async () => {
     if (!file) {
       setError("Nenhum arquivo selecionado.");
+      return;
+    }
+    if (!isValidMonth(referenceMonth)) {
+      setError("Selecione uma competência válida para a fatura.");
       return;
     }
     setStep("processing");
     setStage(1);
     try {
       const text = await extractPdfText(file);
-      const month = state.settings.month;
-      const parsed = parseInvoiceText(text, month);
+      setRawPdfText(text);
+      const initialParse = parseInvoiceText(text, referenceMonth);
+      const selectedReferenceMonth = referenceMonthWasChosen
+        ? referenceMonth
+        : (initialParse.dueDate?.slice(0, 7) ?? referenceMonth);
+      const parsed =
+        selectedReferenceMonth === referenceMonth
+          ? initialParse
+          : parseInvoiceText(text, selectedReferenceMonth);
+      setReferenceMonth(selectedReferenceMonth);
       const detectedCards = [...new Set(parsed.rows.map((row) => row.cardLast4).filter(Boolean))];
       const matchingCard =
         detectedCards.length === 1
@@ -137,25 +190,12 @@ export function PdfImportDialog({
             : detectedCards.length <= 1
               ? defaultCardId
               : "";
-          const previous = assignedCardId
-            ? state.transactions.find((transaction) => {
-                const invoice = state.invoices.find((item) => item.id === transaction.invoiceId);
-                return (
-                  invoice?.cardId === assignedCardId &&
-                  invoice.month <= month &&
-                  Math.abs(transaction.amount - row.amount) < 0.01 &&
-                  normalizedMatchDescription(transaction.description) ===
-                    normalizedMatchDescription(row.description)
-                );
-              })
-            : undefined;
           return {
             ...row,
             amountStr: row.amount.toFixed(2).replace(".", ","),
             assignedCardId,
             included: true,
             personChoice: "auto",
-            previousPersonIds: previous?.allocations.map((item) => item.personId) ?? [],
             ignoreReason: "Ignorada na revisão pelo usuário",
           };
         }),
@@ -183,7 +223,44 @@ export function PdfImportDialog({
   const sum = round2(parsed.reduce((total, row) => total + (row.value ?? 0), 0));
   const officialValue = parseBRL(official);
   const selectedRows = parsed.filter((row) => row.included);
-  const month = (dueDate || state.settings.month).slice(0, 7);
+  const month = referenceMonth;
+  const previousInstallmentFor = (row: Row) => {
+    const reference = installmentReference(row);
+    if (!reference || !row.assignedCardId) return undefined;
+    const rowAmount = parseBRL(row.amountStr) ?? row.amount;
+    const invoiceForMonth = state.invoices.find(
+      (invoice) => invoice.cardId === row.assignedCardId && invoice.month === month,
+    );
+    const matches = (transaction: Transaction, expectedNumber: number) => {
+      const transactionReference = installmentReference(transaction);
+      return (
+        transactionReference?.number === expectedNumber &&
+        transactionReference.total === reference.total &&
+        Math.abs(transaction.amount - rowAmount) < 0.01 &&
+        normalizedMatchDescription(transaction.description) ===
+          normalizedMatchDescription(row.description)
+      );
+    };
+    const existing = invoiceForMonth
+      ? state.transactions.find(
+          (transaction) =>
+            transaction.invoiceId === invoiceForMonth.id && matches(transaction, reference.number),
+        )
+      : undefined;
+    if (existing) return existing;
+    const previousInvoice = state.invoices
+      .filter((invoice) => invoice.cardId === row.assignedCardId && invoice.month < month)
+      .sort((a, b) => b.month.localeCompare(a.month))[0];
+    return previousInvoice
+      ? state.transactions.find(
+          (transaction) =>
+            transaction.invoiceId === previousInvoice.id &&
+            matches(transaction, reference.number - 1),
+        )
+      : undefined;
+  };
+  const previousPersonIdsFor = (row: Row) =>
+    previousInstallmentFor(row)?.allocations.map((allocation) => allocation.personId) ?? [];
   const diff = officialValue === null ? null : round2(officialValue - sum);
   const cardLast4s = [...new Set(parsed.map((row) => row.cardLast4).filter(Boolean))];
   const multiCardStatement = cardLast4s.length > 1;
@@ -227,8 +304,8 @@ export function PdfImportDialog({
   const missingInstallments = perCardComparisons.flatMap((item) =>
     item.result.missingInstallments.map((missing) => ({ ...missing, cardId: item.id })),
   );
-  const includedRows = parsed.filter(
-    (row) => shouldImportPdfRow(row.included, comparisonStatus.get(row.id)),
+  const includedRows = parsed.filter((row) =>
+    shouldImportPdfRow(row.included, comparisonStatus.get(row.id)),
   );
   const invalid = includedRows.filter((row) => row.value === null || !row.description.trim());
   const comparisonCount = (status: PdfComparisonStatus) =>
@@ -255,6 +332,7 @@ export function PdfImportDialog({
   const discrepancyAccepted = acceptedDiscrepancySignature === discrepancySignature;
   const canConfirm =
     parsed.length > 0 &&
+    isValidMonth(month) &&
     invalid.length === 0 &&
     unassignedRows.length === 0 &&
     cardGroups.length > 0 &&
@@ -264,11 +342,7 @@ export function PdfImportDialog({
   const resolvedPersonIds = (row: Row) => {
     if (row.personChoice === "none") return [];
     if (row.personChoice !== "auto") return [row.personChoice];
-    if (row.previousPersonIds.length) return row.previousPersonIds;
-    const holder = state.people.find(
-      (person) => person.active && person.cardIds.includes(row.assignedCardId),
-    );
-    return holder ? [holder.id] : [];
+    return previousPersonIdsFor(row);
   };
 
   const confirm = () => {
@@ -279,8 +353,8 @@ export function PdfImportDialog({
     let ignoredCount = 0;
     for (const groupCardId of cardGroups) {
       const groupRows = parsed.filter((row) => row.assignedCardId === groupCardId);
-      const groupIncluded = groupRows.filter(
-        (row) => shouldImportPdfRow(row.included, comparisonStatus.get(row.id)),
+      const groupIncluded = groupRows.filter((row) =>
+        shouldImportPdfRow(row.included, comparisonStatus.get(row.id)),
       );
       const groupIgnored = groupRows.filter(
         (row) => !shouldImportPdfRow(row.included, comparisonStatus.get(row.id)),
@@ -399,7 +473,8 @@ export function PdfImportDialog({
           <DialogTitle>Importar fatura PDF</DialogTitle>
           <DialogDescription>
             O PDF é lido localmente no navegador. Os lançamentos reconhecidos sempre passam por
-            revisão antes de serem adicionados.
+            revisão antes de serem adicionados; compras novas ficam sem responsável para atribuição
+            manual.
           </DialogDescription>
         </DialogHeader>
         <ol className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
@@ -426,6 +501,19 @@ export function PdfImportDialog({
         </ol>
         {step === "select" && (
           <>
+            <label className="block space-y-1 text-sm">
+              <span className="font-medium">Competência da fatura</span>
+              <Input
+                type="month"
+                value={referenceMonth}
+                onChange={(event) => changeReferenceMonth(event.target.value)}
+                aria-label="Mês de referência da fatura"
+              />
+              <span className="block text-xs text-muted-foreground">
+                Informe o mês em que as compras devem ser lançadas. O vencimento será mantido à
+                parte.
+              </span>
+            </label>
             <div
               role="button"
               tabIndex={0}
@@ -520,11 +608,11 @@ export function PdfImportDialog({
                 </p>
               )}
               <label className="text-sm">
-                Mês
+                Competência
                 <Input
                   type="month"
-                  value={month}
-                  onChange={(e) => setDueDate(`${e.target.value}-01`)}
+                  value={referenceMonth}
+                  onChange={(event) => changeReferenceMonth(event.target.value)}
                 />
               </label>
               <label className="text-sm">
@@ -540,6 +628,10 @@ export function PdfImportDialog({
                 />
               </label>
             </div>
+            <p className="text-xs text-muted-foreground">
+              A competência selecionada define em qual mês as compras entram; ela não altera a data
+              de vencimento.
+            </p>
             {warning.map((w) => (
               <p key={w} className="flex gap-2 rounded-lg bg-warning-soft p-3 text-sm text-warning">
                 <AlertTriangle className="size-4 shrink-0" />
@@ -597,9 +689,8 @@ export function PdfImportDialog({
                           : " · extraído do resumo do cartão"}
                       </span>
                       <span className="block text-xs text-muted-foreground">
-                        Soma considerada para comparação (inclui linhas já cadastradas): {fmtBRL(
-                          cardDiffs.find((item) => item.id === groupId)?.included ?? 0,
-                        )}
+                        Soma considerada para comparação (inclui linhas já cadastradas):{" "}
+                        {fmtBRL(cardDiffs.find((item) => item.id === groupId)?.included ?? 0)}
                       </span>
                       {cardDiff !== null && cardDiff !== undefined && cardDiff !== 0 && (
                         <span className="block text-xs font-medium text-danger">
@@ -638,8 +729,9 @@ export function PdfImportDialog({
             )}
             <p className="text-sm text-muted-foreground">
               {parsed.length} lançamento(s) reconhecido(s); {selectedRows.length} selecionado(s),{" "}
-              {includedRows.length} novo(s) será(ão) gravado(s) e {parsed.length - includedRows.length}{" "}
-              ignorado(s) ou já presente(s). Linhas sem gravação ficam no histórico da importação.
+              {includedRows.length} novo(s) será(ão) gravado(s) e{" "}
+              {parsed.length - includedRows.length} ignorado(s) ou já presente(s). Linhas sem
+              gravação ficam no histórico da importação.
             </p>
             <p className="rounded-lg border p-3 text-sm">
               Comparação: {comparisonCount("already_imported")} já cadastrada(s),{" "}
@@ -747,12 +839,12 @@ export function PdfImportDialog({
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="auto">
-                              {r.previousPersonIds.length
+                              {previousPersonIdsFor(r).length
                                 ? `Preservar: ${state.people
-                                    .filter((person) => r.previousPersonIds.includes(person.id))
+                                    .filter((person) => previousPersonIdsFor(r).includes(person.id))
                                     .map((person) => person.name)
                                     .join(", ")}`
-                                : "Reaproveitar se houver correspondência"}
+                                : "Sem responsável — atribuir manualmente"}
                             </SelectItem>
                             <SelectItem value="none">Sem responsável</SelectItem>
                             {state.people

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createDemoState } from "@/lib/finance/mock";
+import { reducer } from "@/lib/finance/store";
+import type { Transaction } from "@/lib/finance/types";
 import {
   compareInvoiceRows,
   compareInvoiceRowsAcrossCards,
@@ -10,10 +12,7 @@ import {
 describe("leitura local de fatura", () => {
   it("reconhece n/total colado ao nome do estabelecimento", () => {
     const parsed = parseInvoiceText(
-      [
-        "Lançamentos: compras e saques",
-        "07/10 GOL LINHAS A*EWQKW01/04 329,88",
-      ].join("\n"),
+      ["Lançamentos: compras e saques", "07/10 GOL LINHAS A*EWQKW01/04 329,88"].join("\n"),
       "2026-10",
     );
 
@@ -44,10 +43,37 @@ describe("leitura local de fatura", () => {
     });
   });
 
+  it("recalcula datas sem ano quando a competência inferida muda de ano", () => {
+    const text = [
+      "Vencimento: 23/11/2027",
+      "Lançamentos: compras e saques",
+      "16/11 COMPRA DE TESTE 10,00",
+    ].join("\n");
+    const initial = parseInvoiceText(text, "2026-10");
+    const corrected = parseInvoiceText(text, initial.dueDate!.slice(0, 7));
+
+    expect(initial.rows[0]?.date).toBe("2026-11-16");
+    expect(corrected.rows[0]?.date).toBe("2027-11-16");
+  });
+
+  it("atribui o ano anterior a uma compra de dezembro em fatura de janeiro", () => {
+    const parsed = parseInvoiceText(
+      [
+        "Vencimento: 23/01/2027",
+        "Lançamentos: compras e saques",
+        "16/12 COMPRA DE DEZEMBRO 10,00",
+      ].join("\n"),
+      "2027-01",
+    );
+
+    expect(parsed.rows[0]?.date).toBe("2026-12-16");
+    expect(parsed.dueDate).toBe("2027-01-23");
+  });
+
   it("reconhece lançamentos em colunas lado a lado e seleciona o total atual", () => {
     const parsed = parseInvoiceText(
       [
-        "Total da fatura anterior 15.163,45",
+        "Total da sua fatura anterior 15.163,45",
         "Total desta fatura 15.928,73",
         "Vencimento: 23/10/2026",
         "Lançamentos: compras e saques",
@@ -63,6 +89,42 @@ describe("leitura local de fatura", () => {
     expect(parsed.rows[0]?.installmentTotal).toBe(12);
     expect(parsed.officialTotal).toBe(15928.73);
     expect(parsed.dueDate).toBe("2026-10-23");
+  });
+
+  it("atualiza o total oficial exibido para o valor do PDF ao reimportar a competência", () => {
+    const base = createDemoState();
+    const sourceInvoice = base.invoices.find(
+      (invoice) => invoice.cardId === "c_7432" && invoice.month === "2026-10",
+    );
+    if (!sourceInvoice) throw new Error("A fixture precisa da fatura de outubro do cartão 7432");
+    const initial = {
+      ...base,
+      invoices: [{ ...sourceInvoice, officialTotal: 12345.67, source: "pdf" as const }],
+      transactions: [],
+      plans: [],
+      recurringCharges: [],
+      payments: [],
+    };
+
+    const imported = reducer(initial, {
+      type: "importInvoice",
+      invoice: {
+        id: "invoice_reimport_total",
+        cardId: "c_7432",
+        month: "2026-10",
+        dueDate: sourceInvoice.dueDate,
+        officialTotal: 15928.73,
+        status: "em_revisao",
+        source: "pdf",
+      },
+      transactions: [],
+    });
+
+    expect(
+      imported.invoices.find(
+        (invoice) => invoice.cardId === "c_7432" && invoice.month === "2026-10",
+      )?.officialTotal,
+    ).toBe(15928.73);
   });
 
   it("mantém o estado separado por coluna, inclui TOTALPASS/IOF e encerra na seção futura", () => {
@@ -191,5 +253,169 @@ describe("leitura local de fatura", () => {
     expect(shouldImportPdfRow(true, "already_imported")).toBe(false);
     expect(shouldImportPdfRow(false, "new_purchase")).toBe(false);
     expect(shouldImportPdfRow(true, "possible_duplicate")).toBe(true);
+  });
+
+  it("importa 12/12 preservando a pessoa e não projeta uma parcela 13/12", () => {
+    const base = createDemoState();
+    const october = base.invoices.find(
+      (invoice) => invoice.cardId === "c_7432" && invoice.month === "2026-10",
+    );
+    if (!october) throw new Error("A fixture precisa da fatura de outubro do cartão 7432");
+    const personId = "p_tiago";
+    const previousInvoice = { ...october, id: "invoice_previous_pdf", source: "pdf" as const };
+    const previousTransaction: Transaction = {
+      id: "transaction_installment_11_of_12",
+      invoiceId: previousInvoice.id,
+      date: "2026-10-16",
+      description: "MERCADOLIVRE*MERCA11/12",
+      amount: 274.77,
+      type: "parcela",
+      installmentNumber: 11,
+      installmentTotal: 12,
+      allocations: [{ personId, amount: 274.77 }],
+    };
+    const initial = {
+      ...base,
+      invoices: [previousInvoice],
+      transactions: [previousTransaction],
+      plans: [],
+      recurringCharges: [],
+      payments: [],
+    };
+    const imported = reducer(initial, {
+      type: "importInvoice",
+      invoice: {
+        id: "invoice_november_pdf",
+        cardId: "c_7432",
+        month: "2026-11",
+        dueDate: "2026-11-23",
+        officialTotal: 274.77,
+        status: "em_revisao",
+        source: "pdf",
+      },
+      transactions: [
+        {
+          id: "transaction_installment_12_of_12",
+          invoiceId: "invoice_november_pdf",
+          date: "2026-10-16",
+          description: "MERCADOLIVRE*MERCA12/12",
+          amount: 274.77,
+          type: "parcela",
+          installmentNumber: 12,
+          installmentTotal: 12,
+          allocations: [],
+        },
+      ],
+    });
+
+    expect(
+      imported.transactions.find(
+        (transaction) => transaction.id === "transaction_installment_12_of_12",
+      ),
+    ).toMatchObject({
+      installmentNumber: 12,
+      installmentTotal: 12,
+      amount: 274.77,
+      allocations: [{ personId, amount: 274.77 }],
+    });
+    expect(
+      imported.transactions.some(
+        (transaction) =>
+          transaction.description.startsWith("MERCADOLIVRE*MERCA") &&
+          transaction.installmentNumber === 13,
+      ),
+    ).toBe(false);
+  });
+
+  it("mantém compra nova e parcela de valor divergente sem atribuição automática", () => {
+    const base = createDemoState();
+    const newPurchaseInvoice = {
+      id: "invoice_new_purchase_pdf",
+      cardId: "c_7432",
+      month: "2026-11",
+      dueDate: "2026-11-23",
+      officialTotal: 20,
+      status: "em_revisao" as const,
+      source: "pdf" as const,
+    };
+    const newPurchaseState = reducer(
+      {
+        ...base,
+        invoices: [],
+        transactions: [],
+        plans: [],
+        recurringCharges: [],
+        payments: [],
+      },
+      {
+        type: "importInvoice",
+        invoice: newPurchaseInvoice,
+        transactions: [
+          {
+            id: "transaction_new_purchase",
+            invoiceId: newPurchaseInvoice.id,
+            date: "2026-11-05",
+            description: "COMPRA NOVA DO CLIENTE",
+            amount: 20,
+            type: "compra",
+            allocations: [],
+          },
+        ],
+      },
+    );
+    expect(
+      newPurchaseState.transactions.find(
+        (transaction) => transaction.id === "transaction_new_purchase",
+      )?.allocations,
+    ).toEqual([]);
+
+    const october = base.invoices.find(
+      (invoice) => invoice.cardId === "c_7432" && invoice.month === "2026-10",
+    );
+    if (!october) throw new Error("A fixture precisa da fatura de outubro do cartão 7432");
+    const previousInvoice = { ...october, id: "invoice_previous_amount", source: "pdf" as const };
+    const previousTransaction: Transaction = {
+      id: "transaction_previous_amount",
+      invoiceId: previousInvoice.id,
+      date: "2026-10-16",
+      description: "LOJA EXEMPLO 11/12",
+      amount: 10,
+      type: "parcela",
+      installmentNumber: 11,
+      installmentTotal: 12,
+      allocations: [{ personId: "p_tiago", amount: 10 }],
+    };
+    const mismatchedAmount = reducer(
+      {
+        ...base,
+        invoices: [previousInvoice],
+        transactions: [previousTransaction],
+        plans: [],
+        recurringCharges: [],
+        payments: [],
+      },
+      {
+        type: "importInvoice",
+        invoice: { ...newPurchaseInvoice, id: "invoice_amount_mismatch" },
+        transactions: [
+          {
+            id: "transaction_amount_mismatch",
+            invoiceId: "invoice_amount_mismatch",
+            date: "2026-10-16",
+            description: "LOJA EXEMPLO 12/12",
+            amount: 11,
+            type: "parcela",
+            installmentNumber: 12,
+            installmentTotal: 12,
+            allocations: [],
+          },
+        ],
+      },
+    );
+    expect(
+      mismatchedAmount.transactions.find(
+        (transaction) => transaction.id === "transaction_amount_mismatch",
+      )?.allocations,
+    ).toEqual([]);
   });
 });
