@@ -70,6 +70,20 @@ describe("leitura local de fatura", () => {
     expect(parsed.dueDate).toBe("2027-01-23");
   });
 
+  it("não projeta para depois do vencimento datas sem ano em uma fatura de novembro", () => {
+    const parsed = parseInvoiceText(
+      [
+        "Vencimento: 23/11/2026",
+        "Lançamentos: compras e saques",
+        "25/01 COMPRA DE JANEIRO 10,00",
+        "22/12 COMPRA DE DEZEMBRO 20,00",
+      ].join("\n"),
+      "2026-11",
+    );
+
+    expect(parsed.rows.map((row) => row.date)).toEqual(["2026-01-25", "2025-12-22"]);
+  });
+
   it("reconhece lançamentos em colunas lado a lado e seleciona o total atual", () => {
     const parsed = parseInvoiceText(
       [

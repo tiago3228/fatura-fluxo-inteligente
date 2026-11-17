@@ -255,7 +255,7 @@ export function compareInvoiceRowsAcrossCards(
   };
 }
 
-function isoDate(value: string, fallbackMonth: string) {
+function isoDate(value: string, fallbackMonth: string, latestAllowedDate?: string) {
   const parts = value.split(/[\x2f.-]/).map(Number);
   if (parts.length < 2 || parts.some((x) => !Number.isFinite(x))) return null;
   const d = parts[0] ?? NaN;
@@ -268,6 +268,12 @@ function isoDate(value: string, fallbackMonth: string) {
     const monthDifference = month - Number(fallbackMonth.slice(5, 7));
     if (monthDifference > 6) year -= 1;
     else if (monthDifference < -6) year += 1;
+    while (
+      latestAllowedDate &&
+      year > 1900 &&
+      `${year}-${String(month).padStart(2, "0")}-${String(d).padStart(2, "0")}` > latestAllowedDate
+    )
+      year -= 1;
   }
   return `${year}-${String(month).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
@@ -297,6 +303,14 @@ export function parseInvoiceText(rawText: string, fallbackMonth: string): Extrac
     .filter(Boolean);
   const datePattern = /\b\d{2}[\x2f.-]\d{2}(?:[\x2f.-]\d{2,4})?\b/;
   const transactionDatePattern = /^\d{1,2}[\x2f.-]\d{2}(?:[\x2f.-]\d{2,4})?\b/;
+  const dueLine = lines.find((line) => /vencimento|vence em/i.test(line));
+  const dueDateText = dueLine?.match(datePattern)?.[0];
+  const dueDate = dueDateText ? isoDate(dueDateText, fallbackMonth) : null;
+  const fallbackYear = Number(fallbackMonth.slice(0, 4));
+  const fallbackMonthNumber = Number(fallbackMonth.slice(5, 7));
+  const lastDayOfReferenceMonth = new Date(fallbackYear, fallbackMonthNumber, 0).getDate();
+  const latestAllowedDate =
+    dueDate ?? `${fallbackMonth}-${String(lastDayOfReferenceMonth).padStart(2, "0")}`;
   const rows: ExtractedPdfRow[] = [];
   const inTransactionSection = [false, false];
   const cardLast4ByColumn: (string | undefined)[] = [undefined, undefined];
@@ -336,7 +350,7 @@ export function parseInvoiceText(rawText: string, fallbackMonth: string): Extrac
       return;
     }
     if (!dateMatch || amount === null || Math.abs(amount) > 10000000) return;
-    const date = isoDate(dateMatch[0], fallbackMonth);
+    const date = isoDate(dateMatch[0], fallbackMonth, latestAllowedDate);
     if (!date) return;
     const description = normalizeDescription(line, dateMatch[0]);
     if (
@@ -391,10 +405,6 @@ export function parseInvoiceText(rawText: string, fallbackMonth: string): Extrac
     )
     .map(amountAtEnd)
     .filter((value): value is number => value !== null);
-  const dueLine = lines.find((l) => /vencimento|vence em/i.test(l));
-  const dueDate = dueLine?.match(datePattern)?.[0]
-    ? isoDate(dueLine.match(datePattern)![0], fallbackMonth)
-    : null;
   if (rows.length === 0)
     warnings.push(
       "Não foi encontrado texto tabular com data e valor. Este PDF pode ser escaneado ou ter um layout não reconhecido.",
