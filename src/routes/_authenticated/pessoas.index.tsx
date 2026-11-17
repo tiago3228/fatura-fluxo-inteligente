@@ -17,6 +17,7 @@ import {
   buildPersonReceiptPayments,
   limitMessage,
   limitStatus,
+  personAccountBalance,
   personCreditBalance,
   personDebtTotal,
   personMonthApplied,
@@ -25,6 +26,7 @@ import {
   personMonthReceivedTotal,
   personMonthReceipts,
   personMonthRemaining,
+  personMonthSurplus,
   personMonthTotal,
   personPaymentStatus,
 } from "@/lib/finance/calc";
@@ -133,10 +135,12 @@ function Pessoas() {
                 const paid = personMonthPaid(state, p.id, m);
                 const applied = personMonthApplied(state, p.id, m);
                 const received = personMonthReceivedTotal(state, p.id, m);
+                const monthSurplus = personMonthSurplus(state, p.id, m);
                 const receipts = personMonthReceipts(state, p.id, m);
                 const remaining = personMonthRemaining(state, p.id, m);
                 const debt = personDebtTotal(state, p.id);
                 const credit = personCreditBalance(state, p.id);
+                const accountBalance = personAccountBalance(state, p.id);
                 const paymentStatus = personPaymentStatus(state, p.id, m);
                 const msg = limitMessage(p.name, total, p.limit, state.settings.warnPct);
                 const budgetStatus = limitStatus(total, p.limit, state.settings.warnPct);
@@ -282,6 +286,10 @@ function Pessoas() {
                           {fmtBRL(remaining)}
                         </p>
                       </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Saldo da conta</p>
+                        <AccountBalance amount={accountBalance} align="left" />
+                      </div>
                     </div>
                     {(receipts.length > 0 || applied > 0 || credit > 0) && (
                       <div className="mt-2 space-y-1 rounded-lg border border-success/20 bg-success/5 px-3 py-2 text-xs">
@@ -303,6 +311,12 @@ function Pessoas() {
                         ))}
                         {applied > 0 && (
                           <p className="font-medium">Aplicado à fatura: {fmtBRL(applied)}</p>
+                        )}
+                        {monthSurplus > 0 && (
+                          <p className="break-words font-semibold text-success">
+                            Sobra do mês: {fmtBRL(received)} − {fmtBRL(applied)} = +
+                            {fmtBRL(monthSurplus)}
+                          </p>
                         )}
                         {credit > 0 && (
                           <p className="font-semibold text-success">
@@ -394,7 +408,7 @@ function Pessoas() {
               })}
             </div>
             <div className="hidden overflow-x-auto md:block">
-              <table className="w-full min-w-[900px] text-sm">
+              <table className="w-full min-w-[1080px] text-sm">
                 <thead className="border-b bg-muted/60 text-left text-xs uppercase tracking-wide text-muted-foreground">
                   <tr className="[&_th]:px-4 [&_th]:py-2.5">
                     <th>Nome</th>
@@ -403,6 +417,7 @@ function Pessoas() {
                     <th className="text-right">Fatura do mês</th>
                     <th className="text-right">Recebido no mês</th>
                     <th className="text-right">Falta pagar</th>
+                    <th className="text-right">Saldo da conta</th>
                     <th>Status</th>
                     <th className="w-12" />
                   </tr>
@@ -413,10 +428,12 @@ function Pessoas() {
                     const paid = personMonthPaid(state, p.id, m);
                     const applied = personMonthApplied(state, p.id, m);
                     const received = personMonthReceivedTotal(state, p.id, m);
+                    const monthSurplus = personMonthSurplus(state, p.id, m);
                     const receipts = personMonthReceipts(state, p.id, m);
                     const remaining = personMonthRemaining(state, p.id, m);
                     const debt = personDebtTotal(state, p.id);
                     const credit = personCreditBalance(state, p.id);
+                    const accountBalance = personAccountBalance(state, p.id);
                     const paymentStatus = personPaymentStatus(state, p.id, m);
                     const msg = limitMessage(p.name, total, p.limit, state.settings.warnPct);
                     const budgetStatus = limitStatus(total, p.limit, state.settings.warnPct);
@@ -528,6 +545,12 @@ function Pessoas() {
                                   Aplicado à fatura: {fmtBRL(applied)}
                                 </div>
                               )}
+                              {monthSurplus > 0 && (
+                                <div className="text-xs font-semibold text-success">
+                                  Sobra: {fmtBRL(received)} − {fmtBRL(applied)} = +
+                                  {fmtBRL(monthSurplus)}
+                                </div>
+                              )}
                             </td>
                             <td
                               className={cn(
@@ -536,6 +559,9 @@ function Pessoas() {
                               )}
                             >
                               {fmtBRL(remaining)}
+                            </td>
+                            <td>
+                              <AccountBalance amount={accountBalance} />
                             </td>
                             <td>
                               {p.active ? (
@@ -736,6 +762,25 @@ function Pessoas() {
         </AlertDialogContent>
       </AlertDialog>
     </>
+  );
+}
+
+function AccountBalance({ amount, align = "right" }: { amount: number; align?: "left" | "right" }) {
+  const tone = amount > 0 ? "text-success" : amount < 0 ? "text-danger" : "text-muted-foreground";
+  const description =
+    amount > 0
+      ? "Crédito para compras futuras"
+      : amount < 0
+        ? "Total ainda em aberto"
+        : "Conta quitada";
+  const signedAmount =
+    amount > 0 ? `+ ${fmtBRL(amount)}` : amount < 0 ? `− ${fmtBRL(Math.abs(amount))}` : fmtBRL(0);
+
+  return (
+    <div className={align === "right" ? "text-right" : "text-left"}>
+      <div className={cn("num font-semibold", tone)}>{signedAmount}</div>
+      <div className={cn("text-xs", tone)}>{description}</div>
+    </div>
   );
 }
 

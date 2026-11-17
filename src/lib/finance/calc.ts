@@ -350,6 +350,15 @@ export const personMonthReceipts = (s: FinanceState, personId: string, month: st
 export const personMonthReceivedTotal = (s: FinanceState, personId: string, month: string) =>
   round2(personMonthReceipts(s, personId, month).reduce((sum, receipt) => sum + receipt.amount, 0));
 
+/** Sobra positiva dos recebimentos feitos no mês após o valor aplicado à fatura. */
+export const personMonthSurplus = (s: FinanceState, personId: string, month: string) =>
+  round2(
+    Math.max(
+      0,
+      personMonthReceivedTotal(s, personId, month) - personMonthApplied(s, personId, month),
+    ),
+  );
+
 export const personMonthRemaining = (s: FinanceState, personId: string, month: string) =>
   personMonthBalance(s, personId, month).remaining;
 
@@ -428,6 +437,10 @@ export const personTotalDue = (s: FinanceState, personId: string) =>
 
 /** Compatibilidade com relatórios e integrações que ainda usam o nome anterior. */
 export const personDebtTotal = personTotalDue;
+
+/** Saldo líquido da conta: positivo é crédito futuro disponível; negativo é valor ainda devido. */
+export const personAccountBalance = (s: FinanceState, personId: string) =>
+  round2(personCreditBalance(s, personId) - personDebtTotal(s, personId));
 
 export type PersonPaymentStatus = "pendente" | "parcial" | "pago";
 export const personPaymentStatus = (
