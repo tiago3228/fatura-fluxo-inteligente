@@ -246,6 +246,7 @@ const prepareNextInvoice = (
   const existing = state.invoices.find(
     (invoice) => invoice.cardId === current.cardId && invoice.month === nextMonth,
   );
+  if (existing && hasInvoiceImportHistory(existing) && !isForecastInvoice(existing)) return state;
   const card = state.cards.find((item) => item.id === current.cardId);
   if (!card) return state;
   const nextId = existing?.id ?? `${current.id}_next_${nextMonth}`;
@@ -298,6 +299,10 @@ const prepareNextInvoice = (
         date: dateInMonth(nextMonth, card.closingDay),
         description,
         category: transaction.category,
+        ...(transaction.adjustmentNote !== undefined
+          ? { adjustmentNote: transaction.adjustmentNote }
+          : {}),
+        ...(transaction.note !== undefined ? { note: transaction.note } : {}),
         amount: transaction.amount,
         type: "parcela" as const,
         installmentNumber: reference.number + 1,
@@ -386,8 +391,13 @@ const prepareNextInvoice = (
   };
 };
 
+const hasInvoiceImportHistory = (invoice: Invoice) =>
+  (invoice.importHistory?.length ?? 0) > 0 || (invoice.spreadsheetImportHistory?.length ?? 0) > 0;
+
 const isForecastInvoice = (invoice: Invoice) =>
-  invoice.source === "planilha" && invoice.id.includes("_next_");
+  invoice.source === "planilha" &&
+  invoice.id.includes("_next_") &&
+  !hasInvoiceImportHistory(invoice);
 
 const recalculateForecastTotals = (state: FinanceState): FinanceState => ({
   ...state,
@@ -515,6 +525,22 @@ const transactionDescriptionKey = (description: string) =>
 const transactionMatchKey = (transaction: Pick<Transaction, "description" | "amount">) =>
   `${transactionDescriptionKey(transaction.description)}|${transaction.amount.toFixed(2)}`;
 
+const sameInstallmentFamily = (
+  previous: Pick<Transaction, "description" | "amount" | "installmentNumber" | "installmentTotal">,
+  incoming: Pick<Transaction, "description" | "amount" | "installmentNumber" | "installmentTotal">,
+) => {
+  const previousReference = installmentReferenceOf(previous);
+  const incomingReference = installmentReferenceOf(incoming);
+  return Boolean(
+    previousReference &&
+      incomingReference &&
+      previousReference.total === incomingReference.total &&
+      Math.abs(previous.amount - incoming.amount) < 0.01 &&
+      transactionDescriptionKey(previous.description) ===
+        transactionDescriptionKey(incoming.description),
+  );
+};
+
 const sameInstallmentSeries = (
   previous: Transaction,
   incoming: Transaction,
@@ -523,14 +549,7 @@ const sameInstallmentSeries = (
 ) => {
   const previousReference = installmentReferenceOf(previous);
   const incomingReference = installmentReferenceOf(incoming);
-  if (
-    !previousReference ||
-    !incomingReference ||
-    previousReference.total !== incomingReference.total ||
-    Math.abs(previous.amount - incoming.amount) >= 0.01 ||
-    transactionDescriptionKey(previous.description) !==
-      transactionDescriptionKey(incoming.description)
-  )
+  if (!previousReference || !incomingReference || !sameInstallmentFamily(previous, incoming))
     return false;
   if (previous.invoiceId === preparedInvoiceId)
     return previousReference.number === incomingReference.number;
@@ -716,10 +735,21 @@ const reconcileImportedTransactions = (
       transaction.invoiceId === prepared?.id || transaction.invoiceId === previous?.id,
   );
   const used = new Set<string>();
+  const replacedTargetIds = new Set<string>();
   const transactions = incoming.map((transaction) => {
-    const match = candidates.find((candidate) => {
+    const matches = (candidate: Transaction, allowSequenceDrift: boolean) => {
       if (used.has(candidate.id)) return false;
       if (sameInstallmentSeries(candidate, transaction, prepared?.id, previous?.id)) return true;
+      if (
+        allowSequenceDrift &&
+        candidate.invoiceId === prepared?.id &&
+        sameInstallmentFamily(candidate, transaction) &&
+        (candidate.isProjected ||
+          candidates.filter(
+            (item) => item.invoiceId === prepared?.id && sameInstallmentFamily(item, transaction),
+          ).length === 1)
+      )
+        return true;
 
       // Uma compra comum não pode consumir a correspondência de uma parcela,
       // mesmo que descrição e valor coincidam. Parcelas são conciliadas pela
@@ -738,12 +768,17 @@ const reconcileImportedTransactions = (
             recurringChargeAppliesAt(charge, invoice.month),
         )
       );
-    });
+    };
+    const match =
+      candidates.find((candidate) => matches(candidate, false)) ??
+      candidates.find((candidate) => matches(candidate, true));
     if (!match) return transaction;
     used.add(match.id);
+    if (match.invoiceId === prepared?.id) replacedTargetIds.add(match.id);
     const restored: Transaction = {
       ...transaction,
       allocations: match.allocations,
+      ...(match.category !== undefined ? { category: match.category } : {}),
       ...(match.adjustmentNote !== undefined ? { adjustmentNote: match.adjustmentNote } : {}),
       ...(match.note !== undefined ? { note: match.note } : {}),
     };
@@ -760,7 +795,7 @@ const reconcileImportedTransactions = (
       restored.installmentTotal = match.installmentTotal;
     return restored;
   });
-  return transactions;
+  return { transactions, replacedTargetIds };
 };
 
 type AuditActor = { id: string; name: string };
@@ -1614,7 +1649,11 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
         })),
         categoryRules,
       );
-      const reconciled = reconcileImportedTransactions(s, invoice, incoming);
+      const { transactions: reconciled, replacedTargetIds } = reconcileImportedTransactions(
+        s,
+        invoice,
+        incoming,
+      );
       const imported = {
         ...s,
         categoryRules,
@@ -1627,9 +1666,9 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
           ...s.transactions.filter((transaction) => {
             if (transaction.invoiceId !== invoice.id && transaction.invoiceId !== a.invoice.id)
               return true;
-            // Substitui apenas projeções previstas; lançamentos efetivamente importados/ajustados
-            // permanecem se esta importação incluiu somente linhas novas ou ignorou duplicatas.
-            return !transaction.isProjected;
+            // Substitui projeções e linhas correspondentes, mantendo lançamentos
+            // existentes sem correspondência quando a importação for parcial.
+            return !transaction.isProjected && !replacedTargetIds.has(transaction.id);
           }),
           ...reconciled,
         ],

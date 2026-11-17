@@ -1285,6 +1285,169 @@ describe("pagamentos e competências", () => {
     expect(novemberTransactions[0]?.installmentNumber).toBe(11);
   });
 
+  it("não projeta parcela posterior sobre fatura de planilha importada", () => {
+    const base = stateWithSinglePurchase(87.06);
+    const october = base.invoices[0]!;
+    const previousInstallment: Transaction = {
+      ...base.transactions[0]!,
+      date: "2026-10-16",
+      description: "adidas FO Be-CT or03/10",
+      category: "Empréstimos",
+      type: "parcela",
+      installmentNumber: 3,
+      installmentTotal: 10,
+      note: "tênis adidas",
+    };
+    const prepared = reducer(
+      { ...base, transactions: [previousInstallment] },
+      { type: "prepareNextInvoice", invoiceId: october.id },
+    );
+    const provisional = prepared.invoices.find(
+      (invoice) => invoice.cardId === october.cardId && invoice.month === "2026-11",
+    );
+    if (!provisional) throw new Error("A previsão de novembro não foi criada");
+
+    const imported = reducer(prepared, {
+      type: "importInvoice",
+      invoice: {
+        id: "sheet_november_adidas",
+        cardId: october.cardId,
+        month: "2026-11",
+        dueDate: "2026-11-23",
+        officialTotal: 99.4,
+        status: "em_revisao",
+        source: "planilha",
+        spreadsheetImportHistory: [
+          { sha256: "test-hash", fileName: "novembro.xlsx", importedAt: "2026-11-17T00:00:00Z" },
+        ],
+      },
+      transactions: [
+        {
+          id: "sheet_adidas_2_of_10",
+          invoiceId: "sheet_november_adidas",
+          date: "2026-11-16",
+          description: "adidas FO Be-CT or02/10",
+          amount: 87.06,
+          type: "parcela",
+          installmentNumber: 2,
+          installmentTotal: 10,
+          allocations: [],
+        },
+        {
+          id: "sheet_new_purchase",
+          invoiceId: "sheet_november_adidas",
+          date: "2026-11-12",
+          description: "Compra nova",
+          amount: 12.34,
+          type: "compra",
+          allocations: [],
+        },
+      ],
+    });
+
+    const november = imported.invoices.find(
+      (invoice) => invoice.cardId === october.cardId && invoice.month === "2026-11",
+    );
+    if (!november) throw new Error("A fatura importada de novembro não foi encontrada");
+    expect(november.officialTotal).toBe(99.4);
+    const novemberRows = imported.transactions.filter((item) => item.invoiceId === november.id);
+    expect(novemberRows).toHaveLength(2);
+    const adidas = novemberRows.find((item) => item.description.includes("adidas"));
+    expect(adidas).toMatchObject({
+      description: "adidas FO Be-CT or02/10",
+      installmentNumber: 2,
+      category: "Empréstimos",
+      note: "tênis adidas",
+      allocations: [{ personId, amount: 87.06 }],
+    });
+    expect(adidas?.isProjected).toBeUndefined();
+    expect(novemberRows.some((item) => item.description === "Compra nova")).toBe(true);
+    expect(
+      imported.invoices.find(
+        (invoice) => invoice.cardId === october.cardId && invoice.month === "2026-12",
+      ),
+    ).toBeDefined();
+  });
+
+  it("atualiza a parcela existente sem perder observação, categoria ou responsável", () => {
+    const base = stateWithSinglePurchase(87.06);
+    const october = base.invoices[0]!;
+    const existingNovember = {
+      id: "invoice_november_adidas_existing",
+      cardId: october.cardId,
+      month: "2026-11",
+      dueDate: "2026-11-23",
+      officialTotal: 87.06,
+      status: "em_revisao" as const,
+      source: "planilha" as const,
+      spreadsheetImportHistory: [
+        {
+          sha256: "old-hash",
+          fileName: "novembro-antigo.xlsx",
+          importedAt: "2026-11-16T00:00:00Z",
+        },
+      ],
+    };
+    const existingTransaction: Transaction = {
+      ...base.transactions[0]!,
+      id: "existing_adidas_4_of_10",
+      invoiceId: existingNovember.id,
+      date: "2026-11-16",
+      description: "adidas FO Be-CT or04/10",
+      category: "Empréstimos",
+      type: "parcela",
+      installmentNumber: 4,
+      installmentTotal: 10,
+      note: "tênis adidas",
+    };
+    const initial: FinanceState = {
+      ...base,
+      invoices: [october, existingNovember],
+      transactions: [existingTransaction],
+      plans: [],
+      recurringCharges: [],
+      payments: [],
+    };
+
+    const imported = reducer(initial, {
+      type: "importInvoice",
+      invoice: {
+        ...existingNovember,
+        id: "sheet_november_adidas_corrected",
+        officialTotal: 87.06,
+        spreadsheetImportHistory: [
+          { sha256: "new-hash", fileName: "novembro.xlsx", importedAt: "2026-11-17T00:00:00Z" },
+        ],
+      },
+      transactions: [
+        {
+          id: "sheet_adidas_2_of_10_corrected",
+          invoiceId: "sheet_november_adidas_corrected",
+          date: "2026-11-16",
+          description: "adidas FO Be-CT or02/10",
+          amount: 87.06,
+          type: "parcela",
+          installmentNumber: 2,
+          installmentTotal: 10,
+          allocations: [],
+        },
+      ],
+    });
+
+    const novemberRows = imported.transactions.filter(
+      (transaction) => transaction.invoiceId === existingNovember.id,
+    );
+    expect(novemberRows).toHaveLength(1);
+    expect(novemberRows[0]).toMatchObject({
+      id: "sheet_adidas_2_of_10_corrected",
+      description: "adidas FO Be-CT or02/10",
+      installmentNumber: 2,
+      category: "Empréstimos",
+      note: "tênis adidas",
+      allocations: [{ personId, amount: 87.06 }],
+    });
+  });
+
   it("preserva a pessoa da parcela 6/12 ao importar 7/12 e não confunde uma compra nova semelhante", () => {
     const base = createDemoState();
     const card = base.cards.find((item) => item.id === "c_7432");
