@@ -72,6 +72,7 @@ export type Action =
       patch: {
         description: string;
         category?: string;
+        note?: string;
         date: string;
         amount: number;
         installmentNumber: number | null;
@@ -1386,6 +1387,10 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
         else updated.installmentNumber = a.patch.installmentNumber;
         if (a.patch.installmentTotal === null) delete updated.installmentTotal;
         else updated.installmentTotal = a.patch.installmentTotal;
+        if (a.patch.note !== undefined) {
+          if (a.patch.note.trim()) updated.note = a.patch.note.trim();
+          else delete updated.note;
+        }
         return updated;
       });
       const categoryRules = a.patch.category

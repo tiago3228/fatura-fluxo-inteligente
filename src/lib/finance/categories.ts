@@ -9,6 +9,7 @@ export const PURCHASE_CATEGORIES = [
   "Educação",
   "Empréstimos",
   "Estorno",
+  "Formatação",
   "Gasolina",
   "Lazer",
   "Manutenção Veículo",
@@ -29,6 +30,42 @@ export const PURCHASE_CATEGORIES = [
 ] as const;
 
 export type PurchaseCategory = (typeof PURCHASE_CATEGORIES)[number];
+
+export const CATEGORY_DESCRIPTION_SUGGESTIONS: Record<PurchaseCategory, string> = {
+  Academia: "Mensalidade ou atividade física.",
+  Alimentação: "Refeições, lanches ou alimentos.",
+  Assinaturas: "Assinatura de serviço ou conteúdo digital.",
+  Barbeiro: "Corte de cabelo ou serviço de barbearia.",
+  Casa: "Artigos, móveis ou despesas para a casa.",
+  "Compras pessoais": "Compra de uso pessoal.",
+  Delivery: "Pedido de comida entregue em casa.",
+  Educação: "Curso, material ou serviço educacional.",
+  Empréstimos: "Parcela ou pagamento de empréstimo.",
+  Estorno: "Devolução ou crédito de uma compra.",
+  Formatação: "Formatação de computadores e notebooks.",
+  Gasolina: "Abastecimento ou combustível.",
+  Lazer: "Entretenimento, jogos ou atividade de lazer.",
+  "Manutenção Veículo": "Manutenção, conserto ou peça de veículo.",
+  Outros: "Despesa não classificada em outra categoria.",
+  PETS: "Produto, alimentação ou cuidado de animais.",
+  Presente: "Presente ou lembrança para alguém.",
+  Recorrência: "Cobrança recorrente de serviço.",
+  "Reforma/Construção": "Material ou serviço de reforma e construção.",
+  Remédio: "Medicamento ou produto de farmácia.",
+  "Roupas e Calçados": "Roupa, calçado ou acessório.",
+  Salão: "Cabelo, unhas ou serviço de salão de beleza.",
+  Saúde: "Consulta, exame ou serviço de saúde.",
+  "Serviços e assinaturas": "Serviço contratado ou assinatura digital.",
+  "Shopee/Shein": "Compra feita pela Shopee ou Shein.",
+  Supermercado: "Compras de mercado e itens para casa.",
+  Transporte: "Passagem, aplicativo ou serviço de transporte.",
+  Viagem: "Hospedagem, passagem ou despesa de viagem.",
+};
+
+export const categoryDescriptionSuggestion = (category: string | undefined): string =>
+  category && category in CATEGORY_DESCRIPTION_SUGGESTIONS
+    ? CATEGORY_DESCRIPTION_SUGGESTIONS[category as PurchaseCategory]
+    : "";
 
 export type CategoryRule = {
   merchant: string;
