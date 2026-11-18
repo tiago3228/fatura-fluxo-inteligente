@@ -5,9 +5,16 @@ import {
   categoryForMerchant,
   learnCategoryRule,
   normalizeMerchant,
+  PURCHASE_CATEGORIES,
 } from "@/lib/finance/categories";
 
 describe("categorias aprendidas por estabelecimento", () => {
+  it("inclui as categorias adicionais disponíveis ao editar uma compra", () => {
+    expect(PURCHASE_CATEGORIES).toEqual(
+      expect.arrayContaining(["Delivery", "Remédio", "Presente", "Assinaturas", "Estorno"]),
+    );
+  });
+
   it("ignora variações do número de parcela e identificadores numéricos", () => {
     expect(normalizeMerchant("Petz Digital 3/3")).toBe("petz digital");
     expect(normalizeMerchant("ClubeWPrePago 611303/12 4/12")).toBe("clubewprepago");
