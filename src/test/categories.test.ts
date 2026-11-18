@@ -2,8 +2,6 @@ import { describe, expect, it } from "vitest";
 import { createDemoState } from "@/lib/finance/mock";
 import { reducer } from "@/lib/finance/store";
 import {
-  CATEGORY_DESCRIPTION_SUGGESTIONS,
-  categoryDescriptionSuggestion,
   categoryForMerchant,
   learnCategoryRule,
   normalizeMerchant,
@@ -19,7 +17,6 @@ describe("categorias aprendidas por estabelecimento", () => {
         "Presente",
         "Assinaturas",
         "Estorno",
-        "Formatação",
         "Supermercado",
         "Shopee/Shein",
       ]),
@@ -29,16 +26,6 @@ describe("categorias aprendidas por estabelecimento", () => {
   it("mantém as opções em ordem alfabética", () => {
     const collator = new Intl.Collator("pt-BR", { sensitivity: "base" });
     expect([...PURCHASE_CATEGORIES].sort(collator.compare)).toEqual(PURCHASE_CATEGORIES);
-  });
-
-  it("oferece uma descrição breve para cada categoria", () => {
-    expect(Object.keys(CATEGORY_DESCRIPTION_SUGGESTIONS).sort()).toEqual(
-      [...PURCHASE_CATEGORIES].sort(),
-    );
-    expect(categoryDescriptionSuggestion("Formatação")).toBe(
-      "Formatação de computadores e notebooks.",
-    );
-    expect(categoryDescriptionSuggestion(undefined)).toBe("");
   });
 
   it("ignora variações do número de parcela e identificadores numéricos", () => {
@@ -137,7 +124,6 @@ describe("categorias aprendidas por estabelecimento", () => {
       patch: {
         description: "ClubeWPrePago 611303/12 4/12",
         category: "Delivery",
-        note: "Entrega de refeição no fim de semana.",
         date: sample.date,
         amount: sample.amount,
         installmentNumber: null,
@@ -150,8 +136,5 @@ describe("categorias aprendidas por estabelecimento", () => {
         .filter((transaction) => transaction.id.startsWith("clubew-"))
         .map((transaction) => transaction.category),
     ).toEqual(["Delivery", "Delivery"]);
-    expect(
-      categorized.transactions.find((transaction) => transaction.id === "clubew-selected")?.note,
-    ).toBe("Entrega de refeição no fim de semana.");
   });
 });

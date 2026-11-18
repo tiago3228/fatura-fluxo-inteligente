@@ -34,7 +34,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { LimitBadge } from "./badges";
 import { PersonDialog } from "./PersonDialog";
 import { cn } from "@/lib/utils";
-import { categoryDescriptionSuggestion, PURCHASE_CATEGORIES } from "@/lib/finance/categories";
+import { PURCHASE_CATEGORIES } from "@/lib/finance/categories";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -136,9 +136,6 @@ function EditTransactionDialog({
   const { state, dispatch } = useFinance();
   const [description, setDescription] = useState(tx?.description ?? "");
   const [category, setCategory] = useState(tx?.category ?? "");
-  const [categoryDescription, setCategoryDescription] = useState(
-    tx?.note ?? categoryDescriptionSuggestion(tx?.category),
-  );
   const [date, setDate] = useState(tx?.date ?? `${state.settings.month}-01`);
   const [amount, setAmount] = useState(tx ? tx.amount.toFixed(2).replace(".", ",") : "");
   const [installmentNumber, setInstallmentNumber] = useState(
@@ -181,7 +178,6 @@ function EditTransactionDialog({
         patch: {
           description: description.trim(),
           category: category || undefined,
-          note: categoryDescription,
           date,
           amount: value,
           installmentNumber: number,
@@ -200,7 +196,6 @@ function EditTransactionDialog({
           date,
           description: description.trim(),
           category: category || undefined,
-          note: categoryDescription.trim() || undefined,
           amount: value,
           type: "compra",
           ...(typeof number === "number" ? { installmentNumber: number } : {}),
@@ -261,16 +256,7 @@ function EditTransactionDialog({
             <select
               className="mt-1 flex h-10 w-full rounded-md border bg-background px-3 text-sm"
               value={category}
-              onChange={(event) => {
-                const nextCategory = event.target.value;
-                const currentSuggestion = categoryDescriptionSuggestion(category);
-                setCategory(nextCategory);
-                setCategoryDescription((current) =>
-                  !current.trim() || current === currentSuggestion
-                    ? categoryDescriptionSuggestion(nextCategory)
-                    : current,
-                );
-              }}
+              onChange={(event) => setCategory(event.target.value)}
             >
               <option value="">Sem categoria</option>
               {PURCHASE_CATEGORIES.map((item) => (
@@ -279,15 +265,6 @@ function EditTransactionDialog({
                 </option>
               ))}
             </select>
-          </label>
-          <label className="text-sm font-medium">
-            Descrição breve
-            <Input
-              value={categoryDescription}
-              onChange={(event) => setCategoryDescription(event.target.value)}
-              placeholder="A categoria sugere uma descrição; você pode editar."
-              maxLength={240}
-            />
           </label>
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="text-sm font-medium">
