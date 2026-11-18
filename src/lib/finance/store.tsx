@@ -24,7 +24,7 @@ import {
   stripInstallmentReference,
 } from "./calc";
 import { fmtMonthLong, round2, uid } from "./format";
-import { decideCachedState, stableSerialize } from "./syncMerge";
+import { decideCachedState, mergeConcurrentStates, stableSerialize } from "./syncMerge";
 import { OCTOBER_ASSIGNMENTS } from "./octoberAssignments";
 import {
   categoryForMerchant,
@@ -2104,6 +2104,8 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
   const storageKey = useRef<string | null>(null);
   const revision = useRef(0);
   const saveSequence = useRef(0);
+  const saveInFlight = useRef(false);
+  const pendingSaveJson = useRef<string | null>(null);
   const lastSynced = useRef<string | null>(null);
   const remoteConflict = useRef<RemoteConflict | null>(null);
   const pendingLegacyMigration = useRef<FinanceState | null>(null);
@@ -2208,6 +2210,19 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
           const remote = row.data as FinanceState;
           const json = stableSerialize(remote);
           const localJson = stableSerialize(stateRef.current);
+          if (row.revision < revision.current) return;
+          if (json === pendingSaveJson.current || json === lastSynced.current) {
+            revision.current = row.revision;
+            lastSynced.current = json;
+            if (storageKey.current) writeSyncBaseline(storageKey.current, json);
+            if (json === pendingSaveJson.current) {
+              setSyncStatus({
+                phase: localJson === json ? "synced" : "saving",
+                message: localJson === json ? undefined : "Salvando as alterações mais recentes…",
+              });
+            }
+            return;
+          }
           if (json === localJson) {
             saveSequence.current++;
             revision.current = row.revision;
@@ -2216,9 +2231,27 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
             remoteConflict.current = null;
             setSyncStatus({ phase: "synced" });
           } else if (lastSynced.current !== null && localJson !== lastSynced.current) {
+            if (saveInFlight.current) return;
+            const base = JSON.parse(lastSynced.current) as FinanceState;
+            const merged = mergeConcurrentStates(base, stateRef.current, remote);
+            if (merged.ok) {
+              const mergedJson = stableSerialize(merged.value);
+              saveSequence.current++;
+              revision.current = row.revision;
+              lastSynced.current = json;
+              if (storageKey.current) writeSyncBaseline(storageKey.current, json);
+              remoteConflict.current = null;
+              dispatch({ type: "hydrate", state: merged.value });
+              setSyncStatus(
+                mergedJson === json
+                  ? { phase: "synced", message: "Alterações do outro usuário recebidas." }
+                  : { phase: "saving", message: "Alterações independentes combinadas; sincronizando…" },
+              );
+              return;
+            }
             saveSequence.current++;
             remoteConflict.current = { state: remote, revision: row.revision };
-            setSyncStatus({ phase: "conflict", message: "Outro dispositivo alterou os dados enquanto havia mudanças locais." });
+            setSyncStatus({ phase: "conflict", message: "Os dois usuários alteraram o mesmo dado. Compare as versões antes de escolher." });
           } else {
             saveSequence.current++;
             revision.current = row.revision;
@@ -2445,32 +2478,81 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     const ws = workspaceId.current;
     if (!ws || !state.settings.persist || remoteConflict.current !== null || pendingLegacyMigration.current !== null) return;
     const json = stableSerialize(state);
-    if (json === lastSynced.current) return;
+    if (json === lastSynced.current || saveInFlight.current) return;
     const timer = setTimeout(() => {
       if (workspaceId.current !== ws) return;
       const requestSequence = ++saveSequence.current;
+      saveInFlight.current = true;
+      pendingSaveJson.current = json;
       setSyncStatus({ phase: "saving" });
-      void saveCloudState(ws, state, revision.current).then((result) => {
-        if (workspaceId.current !== ws || requestSequence !== saveSequence.current) return;
-        if (result.kind === "saved") {
-          revision.current = result.revision;
-          lastSynced.current = json;
-          if (storageKey.current) writeSyncBaseline(storageKey.current, json);
-          setSyncStatus(
-            stableSerialize(stateRef.current) === json
-              ? { phase: "synced" }
-              : { phase: "saving", message: "A alteração mais recente ainda está aguardando sincronização." },
-          );
-        } else if (result.kind === "conflict") {
-          remoteConflict.current = { state: result.state, revision: result.revision };
-          setSyncStatus({ phase: "conflict", message: "Há alterações de outro dispositivo. Compare e escolha uma versão." });
-        } else {
-          setSyncStatus({ phase: "error", message: result.message });
-        }
-      }).catch((error: unknown) => {
-        if (workspaceId.current !== ws || requestSequence !== saveSequence.current) return;
-        setSyncStatus({ phase: "error", message: error instanceof Error ? error.message : "Falha ao sincronizar dados." });
-      });
+      const persist = (payload: FinanceState) => {
+        const payloadJson = stableSerialize(payload);
+        pendingSaveJson.current = payloadJson;
+        void saveCloudState(ws, payload, revision.current).then((result) => {
+          if (workspaceId.current !== ws || requestSequence !== saveSequence.current) {
+            saveInFlight.current = false;
+            pendingSaveJson.current = null;
+            return;
+          }
+          if (result.kind === "saved" || (result.kind === "conflict" && stableSerialize(result.state) === payloadJson)) {
+            revision.current = result.revision;
+            lastSynced.current = payloadJson;
+            if (storageKey.current) writeSyncBaseline(storageKey.current, payloadJson);
+            const latest = stateRef.current;
+            if (stableSerialize(latest) !== payloadJson) {
+              setSyncStatus({ phase: "saving", message: "Enviando as alterações mais recentes…" });
+              persist(latest);
+              return;
+            }
+            saveInFlight.current = false;
+            pendingSaveJson.current = null;
+            setSyncStatus({ phase: "synced" });
+          } else if (result.kind === "conflict") {
+            if (lastSynced.current !== null) {
+              const base = JSON.parse(lastSynced.current) as FinanceState;
+              const merged = mergeConcurrentStates(base, stateRef.current, result.state);
+              if (merged.ok) {
+                const mergedJson = stableSerialize(merged.value);
+                const remoteJson = stableSerialize(result.state);
+                if (mergedJson !== remoteJson) {
+                  revision.current = result.revision;
+                  lastSynced.current = remoteJson;
+                  if (storageKey.current) writeSyncBaseline(storageKey.current, remoteJson);
+                  remoteConflict.current = null;
+                  dispatch({ type: "hydrate", state: merged.value });
+                  saveInFlight.current = false;
+                  pendingSaveJson.current = null;
+                  setSyncStatus({ phase: "saving", message: "Alterações independentes combinadas; sincronizando…" });
+                  return;
+                }
+                revision.current = result.revision;
+                lastSynced.current = remoteJson;
+                if (storageKey.current) writeSyncBaseline(storageKey.current, remoteJson);
+                remoteConflict.current = null;
+                dispatch({ type: "hydrate", state: result.state });
+                saveInFlight.current = false;
+                pendingSaveJson.current = null;
+                setSyncStatus({ phase: "synced", message: "Alterações do outro usuário recebidas." });
+                return;
+              }
+            }
+            saveInFlight.current = false;
+            pendingSaveJson.current = null;
+            remoteConflict.current = { state: result.state, revision: result.revision };
+            setSyncStatus({ phase: "conflict", message: "Os dois usuários alteraram o mesmo dado. Compare as versões antes de escolher." });
+          } else {
+            saveInFlight.current = false;
+            pendingSaveJson.current = null;
+            setSyncStatus({ phase: "error", message: result.message });
+          }
+        }).catch((error: unknown) => {
+          if (workspaceId.current !== ws || requestSequence !== saveSequence.current) return;
+          saveInFlight.current = false;
+          pendingSaveJson.current = null;
+          setSyncStatus({ phase: "error", message: error instanceof Error ? error.message : "Falha ao sincronizar dados." });
+        });
+      };
+      persist(state);
     }, 600);
     return () => clearTimeout(timer);
   }, [state]);

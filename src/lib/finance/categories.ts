@@ -18,11 +18,13 @@ export const PURCHASE_CATEGORIES = [
   "Remédio",
   "Roupas e Calçados",
   "Saúde",
+  "Shopee/Shein",
   "Assinaturas",
   "Salão",
   "Serviços e assinaturas",
   "Transporte",
   "Viagem",
+  "Supermercado",
   "Outros",
 ] as const;
 

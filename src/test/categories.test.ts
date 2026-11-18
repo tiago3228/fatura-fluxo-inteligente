@@ -11,7 +11,15 @@ import {
 describe("categorias aprendidas por estabelecimento", () => {
   it("inclui as categorias adicionais disponíveis ao editar uma compra", () => {
     expect(PURCHASE_CATEGORIES).toEqual(
-      expect.arrayContaining(["Delivery", "Remédio", "Presente", "Assinaturas", "Estorno"]),
+      expect.arrayContaining([
+        "Delivery",
+        "Remédio",
+        "Presente",
+        "Assinaturas",
+        "Estorno",
+        "Supermercado",
+        "Shopee/Shein",
+      ]),
     );
   });
 

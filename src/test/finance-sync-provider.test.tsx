@@ -12,8 +12,7 @@ const mocks = vi.hoisted(() => ({
   currentUserId: "user-test",
   authCallback: undefined as ((event: string, session: unknown) => void) | undefined,
   realtimeCallback: undefined as
-    | ((payload: { new?: { data?: unknown; revision?: number } | null }) => void)
-    | undefined,
+    ((payload: { new?: { data?: unknown; revision?: number } | null }) => void) | undefined,
 }));
 
 vi.mock("@/integrations/supabase/client", () => ({
@@ -141,7 +140,9 @@ describe("FinanceProvider com Compare-and-Swap", () => {
     });
 
     renderProvider();
-    await waitFor(() => expect(screen.getByTestId("user-data")).toHaveTextContent("PRIVADO USER 1"));
+    await waitFor(() =>
+      expect(screen.getByTestId("user-data")).toHaveTextContent("PRIVADO USER 1"),
+    );
     mocks.currentUserId = "user-2";
     act(() => mocks.authCallback?.("SIGNED_IN", null));
 
@@ -165,29 +166,42 @@ describe("FinanceProvider com Compare-and-Swap", () => {
     });
   });
 
-  it("mantém a edição local e sinaliza conflito quando CAS encontra revisão mais nova", async () => {
-    const remoteState = createEmptyFinanceState();
-    mocks.maybeSingle.mockResolvedValue({ data: { data: remoteState, revision: 4 }, error: null });
-    mocks.rpc.mockImplementation((procedure: string) =>
-      procedure === "ensure_user_workspace"
-        ? Promise.resolve({ data: "workspace-test", error: null })
-        : Promise.resolve({
-            data: [{ saved: false, revision: 5, data: remoteState }],
-            error: null,
-          }),
-    );
+  it("mescla uma alteração remota independente quando CAS detecta uma revisão mais nova", async () => {
+    const remoteState = {
+      ...createEmptyFinanceState(),
+      people: [{ id: "remote-person", name: "Pessoa remota", limit: 0, active: true, cardIds: [] }],
+    };
+    mocks.maybeSingle.mockResolvedValue({
+      data: { data: createEmptyFinanceState(), revision: 4 },
+      error: null,
+    });
+    let saveIndex = 0;
+    mocks.rpc.mockImplementation((procedure: string) => {
+      if (procedure === "ensure_user_workspace")
+        return Promise.resolve({ data: "workspace-test", error: null });
+      saveIndex++;
+      if (saveIndex === 1)
+        return Promise.resolve({
+          data: [{ saved: false, revision: 5, data: remoteState }],
+          error: null,
+        });
+      return Promise.resolve(savedResponse(6));
+    });
 
     renderProvider();
     await waitFor(() => expect(screen.getByTestId("sync-status")).toHaveTextContent("synced"));
     const initialWarnPct = Number(screen.getByTestId("warn-pct").textContent);
     fireEvent.click(screen.getByRole("button", { name: "Editar estado local" }));
 
-    await waitFor(() => expect(screen.getByTestId("sync-status")).toHaveTextContent("conflict"));
+    await waitFor(() => expect(saveCalls()).toHaveLength(2), { timeout: 2500 });
+    await waitFor(() => expect(screen.getByTestId("sync-status")).toHaveTextContent("synced"));
     expect(screen.getByTestId("warn-pct")).toHaveTextContent(String(initialWarnPct + 1));
+    expect(screen.getByTestId("user-data")).toHaveTextContent("Pessoa remota");
     expect(saveCalls()[0]?.[1]).toMatchObject({ p_expected_revision: 4 });
+    expect(saveCalls()[1]?.[1]).toMatchObject({ p_expected_revision: 5 });
   });
 
-  it("ignora a resposta de uma gravação antiga se uma gravação mais nova detectou conflito", async () => {
+  it("serializa edições rápidas e salva a mais recente com a revisão da primeira gravação", async () => {
     const remoteState = createEmptyFinanceState();
     mocks.maybeSingle.mockResolvedValue({ data: { data: remoteState, revision: 1 }, error: null });
     let resolveFirst: ((value: ReturnType<typeof savedResponse>) => void) | undefined;
@@ -201,10 +215,7 @@ describe("FinanceProvider com Compare-and-Swap", () => {
           resolveFirst = resolve;
         });
       }
-      return Promise.resolve({
-        data: [{ saved: false, revision: 2, data: remoteState }],
-        error: null,
-      });
+      return Promise.resolve(savedResponse(3));
     });
 
     renderProvider();
@@ -212,11 +223,72 @@ describe("FinanceProvider com Compare-and-Swap", () => {
     fireEvent.click(screen.getByRole("button", { name: "Editar estado local" }));
     await waitFor(() => expect(saveCalls()).toHaveLength(1), { timeout: 1500 });
     fireEvent.click(screen.getByRole("button", { name: "Editar estado local" }));
-    await waitFor(() => expect(saveCalls()).toHaveLength(2), { timeout: 1500 });
-    await waitFor(() => expect(screen.getByTestId("sync-status")).toHaveTextContent("conflict"));
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    expect(saveCalls()).toHaveLength(1);
 
     await act(async () => resolveFirst?.(savedResponse(2)));
-    expect(screen.getByTestId("sync-status")).toHaveTextContent("conflict");
+    await waitFor(() => expect(saveCalls()).toHaveLength(2), { timeout: 1500 });
+    expect(saveCalls()[1]?.[1]).toMatchObject({ p_expected_revision: 2 });
+    await waitFor(() => expect(screen.getByTestId("sync-status")).toHaveTextContent("synced"));
     expect(screen.getByTestId("warn-pct")).toHaveTextContent("82");
+  });
+
+  it("não sinaliza conflito quando o evento Realtime corresponde à gravação local pendente", async () => {
+    const remoteState = createEmptyFinanceState();
+    mocks.maybeSingle.mockResolvedValue({ data: { data: remoteState, revision: 1 }, error: null });
+    let resolveSave: ((value: ReturnType<typeof savedResponse>) => void) | undefined;
+    mocks.rpc.mockImplementation((procedure: string) => {
+      if (procedure === "ensure_user_workspace")
+        return Promise.resolve({ data: "workspace-test", error: null });
+      return new Promise((resolve) => {
+        resolveSave = resolve;
+      });
+    });
+
+    renderProvider();
+    await waitFor(() => expect(screen.getByTestId("sync-status")).toHaveTextContent("synced"));
+    fireEvent.click(screen.getByRole("button", { name: "Editar estado local" }));
+    await waitFor(() => expect(saveCalls()).toHaveLength(1), { timeout: 1500 });
+    const savedState = saveCalls()[0]?.[1]?.p_data;
+
+    act(() =>
+      mocks.realtimeCallback?.({
+        new: { data: savedState, revision: 2 },
+      }),
+    );
+    expect(screen.getByTestId("sync-status")).not.toHaveTextContent("conflict");
+
+    await act(async () => resolveSave?.(savedResponse(2)));
+    await waitFor(() => expect(screen.getByTestId("sync-status")).toHaveTextContent("synced"));
+    expect(saveCalls()).toHaveLength(1);
+  });
+
+  it("combina atualização remota independente com edição local e envia o estado combinado", async () => {
+    const base = createEmptyFinanceState();
+    mocks.maybeSingle.mockResolvedValue({ data: { data: base, revision: 1 }, error: null });
+
+    renderProvider();
+    await waitFor(() => expect(screen.getByTestId("sync-status")).toHaveTextContent("synced"));
+    const initialWarnPct = Number(screen.getByTestId("warn-pct").textContent);
+    fireEvent.click(screen.getByRole("button", { name: "Editar estado local" }));
+
+    const remote = {
+      ...base,
+      people: [{ id: "remote-person", name: "Pessoa remota", limit: 0, active: true, cardIds: [] }],
+    };
+    act(() => mocks.realtimeCallback?.({ new: { data: remote, revision: 2 } }));
+
+    expect(screen.getByTestId("warn-pct")).toHaveTextContent(String(initialWarnPct + 1));
+    expect(screen.getByTestId("user-data")).toHaveTextContent("Pessoa remota");
+    expect(screen.getByTestId("sync-status")).not.toHaveTextContent("conflict");
+    await waitFor(() => expect(saveCalls()).toHaveLength(1), { timeout: 1800 });
+    expect(saveCalls()[0]?.[1]).toMatchObject({
+      p_expected_revision: 2,
+      p_data: {
+        settings: { warnPct: initialWarnPct + 1 },
+        people: [{ id: "remote-person", name: "Pessoa remota" }],
+      },
+    });
+    await waitFor(() => expect(screen.getByTestId("sync-status")).toHaveTextContent("synced"));
   });
 });
