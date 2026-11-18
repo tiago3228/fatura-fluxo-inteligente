@@ -107,6 +107,10 @@ function Pessoas() {
     allowCredit?: boolean;
     receipt?: PersonReceiptSummary;
   } | null>(null);
+  const [receiptToDelete, setReceiptToDelete] = useState<{
+    person: Person;
+    receipt: PersonReceiptSummary;
+  } | null>(null);
   const [expanded, setExpanded] = useState<string[]>([]);
 
   return (
@@ -149,6 +153,8 @@ function Pessoas() {
                 const isExpanded = expanded.includes(p.id);
                 const editReceipt = (receipt: PersonReceiptSummary) =>
                   setPaymentPerson({ person: p, remaining: debt, allowCredit: true, receipt });
+                const removeReceipt = (receipt: PersonReceiptSummary) =>
+                  setReceiptToDelete({ person: p, receipt });
                 return (
                   <article
                     key={p.id}
@@ -298,15 +304,26 @@ function Pessoas() {
                             <span>
                               {fmtBRL(receipt.amount)} · {fmtDate(receipt.paidAt.slice(0, 10))}
                             </span>
-                            <button
-                              type="button"
-                              className="inline-flex size-7 items-center justify-center rounded-md hover:bg-muted"
-                              aria-label={`Editar recebimento de ${fmtBRL(receipt.amount)} em ${fmtDate(receipt.paidAt.slice(0, 10))}`}
-                              title="Editar valor ou data do recebimento"
-                              onClick={() => editReceipt(receipt)}
-                            >
-                              <Pencil className="size-3.5" />
-                            </button>
+                            <div className="flex shrink-0 items-center">
+                              <button
+                                type="button"
+                                className="inline-flex size-7 items-center justify-center rounded-md hover:bg-muted"
+                                aria-label={`Editar recebimento de ${fmtBRL(receipt.amount)} em ${fmtDate(receipt.paidAt.slice(0, 10))}`}
+                                title="Editar valor ou data do recebimento"
+                                onClick={() => editReceipt(receipt)}
+                              >
+                                <Pencil className="size-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                className="inline-flex size-7 items-center justify-center rounded-md text-danger hover:bg-danger/10"
+                                aria-label={`Remover recebimento de ${fmtBRL(receipt.amount)} em ${fmtDate(receipt.paidAt.slice(0, 10))}`}
+                                title="Remover este recebimento"
+                                onClick={() => removeReceipt(receipt)}
+                              >
+                                <Trash2 className="size-3.5" />
+                              </button>
+                            </div>
                           </div>
                         ))}
                         {applied > 0 && (
@@ -441,6 +458,8 @@ function Pessoas() {
                     const budgetExceeded = p.limit > 0 ? Math.max(0, round2(total - p.limit)) : 0;
                     const editReceipt = (receipt: PersonReceiptSummary) =>
                       setPaymentPerson({ person: p, remaining: debt, allowCredit: true, receipt });
+                    const removeReceipt = (receipt: PersonReceiptSummary) =>
+                      setReceiptToDelete({ person: p, receipt });
                     return (
                       <ContextMenu key={p.id}>
                         <ContextMenuTrigger asChild>
@@ -537,6 +556,15 @@ function Pessoas() {
                                     onClick={() => editReceipt(receipt)}
                                   >
                                     <Pencil className="size-3" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="inline-flex size-6 items-center justify-center rounded-md text-danger hover:bg-danger/10"
+                                    aria-label={`Remover recebimento de ${fmtBRL(receipt.amount)} em ${fmtDate(receipt.paidAt.slice(0, 10))}`}
+                                    title="Remover este recebimento"
+                                    onClick={() => removeReceipt(receipt)}
+                                  >
+                                    <Trash2 className="size-3" />
                                   </button>
                                 </div>
                               ))}
@@ -757,6 +785,44 @@ function Pessoas() {
               }}
             >
               Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog
+        open={!!receiptToDelete}
+        onOpenChange={(open) => !open && setReceiptToDelete(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Remover recebimento de {receiptToDelete?.person.name}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              O recebimento de {fmtBRL(receiptToDelete?.receipt.amount ?? 0)} em{" "}
+              {receiptToDelete ? fmtDate(receiptToDelete.receipt.paidAt.slice(0, 10)) : ""}
+              {" será removido por completo. O saldo pago e o crédito de "}
+              {receiptToDelete?.person.name}
+              {" serão recalculados; as compras atribuídas a essa pessoa não serão alteradas."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (!receiptToDelete) return;
+                dispatch({
+                  type: "removePersonPaymentBatch",
+                  paymentIds: receiptToDelete.receipt.paymentIds,
+                });
+                toast.success("Recebimento removido", {
+                  description: `${fmtBRL(receiptToDelete.receipt.amount)} foi removido do histórico de pagamentos de ${receiptToDelete.person.name}.`,
+                });
+                setReceiptToDelete(null);
+              }}
+            >
+              Remover recebimento
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -110,6 +110,7 @@ export type Action =
   | { type: "recordPersonPaymentBatch"; payments: PersonPayment[] }
   | { type: "replacePersonPaymentBatch"; paymentIds: string[]; payments: PersonPayment[] }
   | { type: "removePersonPayment"; paymentId: string }
+  | { type: "removePersonPaymentBatch"; paymentIds: string[] }
   | { type: "clearPersonMonthPayments"; personId: string; month: string }
   | { type: "markInvoicePaid"; invoiceId: string; paidAt: string }
   | { type: "markMonthInvoicesPaid"; month: string; paidAt: string }
@@ -1180,6 +1181,17 @@ const auditForAction = (
       entityId = action.paymentId;
       undo = undoSnapshot(before, ["payments"]);
       break;
+    case "removePersonPaymentBatch": {
+      const paymentIds = new Set(action.paymentIds);
+      const removed = (before.payments ?? []).filter((payment) => paymentIds.has(payment.id));
+      if (removed.length === 0) return null;
+      const person = before.people.find((item) => item.id === removed[0]?.personId);
+      description = `${actor.name} removeu um recebimento de ${person?.name ?? "uma pessoa"}.`;
+      entityType = "system";
+      entityId = removed[0]?.receiptId ?? removed[0]?.id;
+      undo = undoSnapshot(before, ["payments"]);
+      break;
+    }
     case "clearPersonMonthPayments": {
       const person = before.people.find((item) => item.id === action.personId);
       const count = (before.payments ?? []).filter(
@@ -1863,6 +1875,13 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
     }
     case "removePersonPayment":
       return { ...s, payments: (s.payments ?? []).filter((payment) => payment.id !== a.paymentId) };
+    case "removePersonPaymentBatch": {
+      const paymentIds = new Set(a.paymentIds);
+      return {
+        ...s,
+        payments: (s.payments ?? []).filter((payment) => !paymentIds.has(payment.id)),
+      };
+    }
     case "clearPersonMonthPayments":
       return {
         ...s,
