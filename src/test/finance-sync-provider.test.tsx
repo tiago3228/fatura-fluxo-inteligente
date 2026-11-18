@@ -30,6 +30,7 @@ vi.mock("@/integrations/supabase/client", () => ({
 
 import { createEmptyFinanceState } from "@/lib/finance/mock";
 import { FinanceProvider, useFinance } from "@/lib/finance/store";
+import { stableSerialize } from "@/lib/finance/syncMerge";
 
 function SyncStatusProbe() {
   const { syncStatus, state, dispatch } = useFinance();
@@ -286,6 +287,44 @@ describe("FinanceProvider com Compare-and-Swap", () => {
       p_expected_revision: 2,
       p_data: {
         settings: { warnPct: initialWarnPct + 1 },
+        people: [{ id: "remote-person", name: "Pessoa remota" }],
+      },
+    });
+    await waitFor(() => expect(screen.getByTestId("sync-status")).toHaveTextContent("synced"));
+  });
+
+  it("concilia automaticamente cache local e nuvem divergentes quando as mudanças são independentes", async () => {
+    const base = createEmptyFinanceState();
+    const local = {
+      ...base,
+      settings: { ...base.settings, warnPct: base.settings.warnPct + 1 },
+    };
+    const remote = {
+      ...base,
+      people: [{ id: "remote-person", name: "Pessoa remota", limit: 0, active: true, cardIds: [] }],
+    };
+    const key = "fatura-organizer-real-itau-v2:user:user-test:workspace:workspace-user-test";
+    localStorage.setItem(key, JSON.stringify(local));
+    localStorage.setItem(`${key}:last-synced`, stableSerialize(base));
+    mocks.maybeSingle.mockResolvedValue({ data: { data: remote, revision: 5 }, error: null });
+    mocks.rpc.mockImplementation((procedure: string) =>
+      procedure === "ensure_user_workspace"
+        ? Promise.resolve({ data: "workspace-user-test", error: null })
+        : Promise.resolve(savedResponse(6)),
+    );
+
+    renderProvider();
+
+    await waitFor(() =>
+      expect(screen.getByTestId("sync-status")).not.toHaveTextContent("conflict"),
+    );
+    expect(screen.getByTestId("warn-pct")).toHaveTextContent(String(base.settings.warnPct + 1));
+    expect(screen.getByTestId("user-data")).toHaveTextContent("Pessoa remota");
+    await waitFor(() => expect(saveCalls()).toHaveLength(1), { timeout: 1800 });
+    expect(saveCalls()[0]?.[1]).toMatchObject({
+      p_expected_revision: 5,
+      p_data: {
+        settings: { warnPct: base.settings.warnPct + 1 },
         people: [{ id: "remote-person", name: "Pessoa remota" }],
       },
     });

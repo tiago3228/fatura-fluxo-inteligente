@@ -133,6 +133,21 @@ const applyCategoryRules = (transactions: Transaction[], rules: FinanceState["ca
     return category ? { ...transaction, category } : transaction;
   });
 
+const applyCategoryToSameMerchant = (
+  transactions: Transaction[],
+  descriptions: string[],
+  category: string | undefined,
+) => {
+  if (!category) return transactions;
+  const merchants = new Set(descriptions.map(normalizeMerchant).filter(Boolean));
+  if (merchants.size === 0) return transactions;
+  return transactions.map((transaction) =>
+    merchants.has(normalizeMerchant(transaction.description))
+      ? { ...transaction, category }
+      : transaction,
+  );
+};
+
 const learnFromTransactions = (
   initialRules: NonNullable<FinanceState["categoryRules"]>,
   transactions: Transaction[],
@@ -1380,7 +1395,11 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
             a.patch.category,
           )
         : (s.categoryRules ?? DEFAULT_CATEGORY_RULES);
-      const categorizedUpdates = applyCategoryRules(updatedTransactions, categoryRules);
+      const categorizedUpdates = applyCategoryToSameMerchant(
+        applyCategoryRules(updatedTransactions, categoryRules),
+        [a.patch.description],
+        a.patch.category,
+      );
       if (original.isProjected) {
         return recalculateForecastTotals({
           ...s,
@@ -1406,7 +1425,11 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
           ...s,
           categoryRules,
           transactions: syncProjectedAllocations(
-            applyCategoryRules(remainingTransactions, categoryRules),
+            applyCategoryToSameMerchant(
+              applyCategoryRules(remainingTransactions, categoryRules),
+              [a.patch.description],
+              a.patch.category,
+            ),
           ),
           suppressedProjectionSources,
         }),
@@ -1928,13 +1951,17 @@ export function reducer(s: FinanceState, a: Action): FinanceState {
       return {
         ...s,
         categoryRules,
-        transactions: applyCategoryRules(
-          s.transactions.map((transaction) =>
-            a.txIds.includes(transaction.id)
-              ? { ...transaction, category: a.category || undefined }
-              : transaction,
+        transactions: applyCategoryToSameMerchant(
+          applyCategoryRules(
+            s.transactions.map((transaction) =>
+              a.txIds.includes(transaction.id)
+                ? { ...transaction, category: a.category || undefined }
+                : transaction,
+            ),
+            categoryRules,
           ),
-          categoryRules,
+          selectedTransactions.map((transaction) => transaction.description),
+          a.category,
         ),
       };
     }
@@ -2355,6 +2382,29 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
             return;
           }
           if (local && decision === "conflict") {
+            if (baseline) {
+              try {
+                const base = JSON.parse(baseline) as FinanceState;
+                const merged = mergeConcurrentStates(base, local, cloud.state);
+                if (merged.ok) {
+                  const mergedJson = stableSerialize(merged.value);
+                  revision.current = cloud.revision;
+                  lastSynced.current = cloudJson;
+                  writeSyncBaseline(key, cloudJson);
+                  remoteConflict.current = null;
+                  hydrated.current = true;
+                  dispatch({ type: "hydrate", state: merged.value });
+                  setSyncStatus(
+                    mergedJson === cloudJson
+                      ? { phase: "synced", message: "Cache local e nuvem foram conciliados." }
+                      : { phase: "saving", message: "Alterações independentes combinadas; sincronizando…" },
+                  );
+                  return;
+                }
+              } catch {
+                // Se o baseline estiver corrompido, preserva o fluxo de comparação manual.
+              }
+            }
             revision.current = cloud.revision;
             remoteConflict.current = { state: cloud.state, revision: cloud.revision };
             hydrated.current = true;

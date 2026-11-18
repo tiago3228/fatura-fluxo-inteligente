@@ -88,4 +88,48 @@ describe("categorias aprendidas por estabelecimento", () => {
       category: "Alimentação",
     });
   });
+
+  it("atualiza as compras de nomenclatura idêntica ao escolher categoria em Editar compra", () => {
+    const base = createDemoState();
+    const sample = base.transactions[0];
+    expect(sample).toBeDefined();
+    if (!sample) return;
+    const state = {
+      ...base,
+      categoryRules: [],
+      transactions: [
+        {
+          ...sample,
+          id: "clubew-selected",
+          description: "ClubeWPrePago 611303/12 4/12",
+          category: undefined,
+        },
+        {
+          ...sample,
+          id: "clubew-sibling",
+          description: "ClubeWPrePago 611304/12",
+          category: "Alimentação",
+        },
+      ],
+    };
+
+    const categorized = reducer(state, {
+      type: "updateTransaction",
+      txId: "clubew-selected",
+      patch: {
+        description: "ClubeWPrePago 611303/12 4/12",
+        category: "Delivery",
+        date: sample.date,
+        amount: sample.amount,
+        installmentNumber: null,
+        installmentTotal: null,
+      },
+    });
+
+    expect(
+      categorized.transactions
+        .filter((transaction) => transaction.id.startsWith("clubew-"))
+        .map((transaction) => transaction.category),
+    ).toEqual(["Delivery", "Delivery"]);
+  });
 });
