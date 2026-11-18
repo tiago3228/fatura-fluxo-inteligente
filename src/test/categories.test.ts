@@ -23,6 +23,11 @@ describe("categorias aprendidas por estabelecimento", () => {
     );
   });
 
+  it("mantém as opções em ordem alfabética", () => {
+    const collator = new Intl.Collator("pt-BR", { sensitivity: "base" });
+    expect([...PURCHASE_CATEGORIES].sort(collator.compare)).toEqual(PURCHASE_CATEGORIES);
+  });
+
   it("ignora variações do número de parcela e identificadores numéricos", () => {
     expect(normalizeMerchant("Petz Digital 3/3")).toBe("petz digital");
     expect(normalizeMerchant("ClubeWPrePago 611303/12 4/12")).toBe("clubewprepago");
